@@ -15,7 +15,7 @@
 
 ### Search (SEARCH)
 
-- [ ] **SEARCH-01**: User can type a query in the search bar and see a list of song results from JioSaavn
+- [ ] **SEARCH-01**: User can type a query in the search bar and see a list of song results — from JioSaavn (Phase 2) and YouTube Music via internal YT Music API (Phase 6); both providers run in parallel when available
 - [ ] **SEARCH-02**: Search input is debounced (300ms) — API is not called on every keystroke
 - [ ] **SEARCH-03**: Search results display song title, artist name, album art thumbnail, and duration
 - [ ] **SEARCH-04**: User can see a loading indicator while search is in progress
@@ -132,9 +132,9 @@
 | Phase | Requirements |
 |-------|-------------|
 | Phase 1: Foundation | SETUP-01 through SETUP-06 |
-| Phase 2: Saavn Search | SEARCH-01 through SEARCH-07 |
+| Phase 2: Saavn Search | SEARCH-01 (partial — Saavn only), SEARCH-02 → SEARCH-07 |
 | Phase 3: Playback & Queue | PLAY-01 through PLAY-11, QUEUE-01 through QUEUE-05 |
 | Phase 4: Library & Persistence | LIB-01 through LIB-08 |
 | Phase 5: Downloads | DL-01 through DL-07 |
-| Phase 6: YouTube Provider | YT-01 through YT-07 |
+| Phase 6: YouTube Provider | SEARCH-01 (completed — adds YouTube Music parallel search), YT-01 → YT-07 |
 | Phase 7: Optimization | PERF-01 through PERF-05 |
