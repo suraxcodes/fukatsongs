@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'models/song.dart';
+import 'features/search/presentation/search_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -11,7 +12,7 @@ void main() async {
   await Hive.initFlutter();
   
   // Register Adapters
-  Hive.registerAdapter(SongAdapter());
+  Hive.registerAdapter(SongImplAdapter());
 
   // Open Core Boxes
   await Future.wait([
@@ -43,14 +44,7 @@ class FukatSongsApp extends StatelessWidget {
           title: 'fukatSongs',
           debugShowCheckedModeBanner: false,
           theme: _buildTheme(),
-          home: const Scaffold(
-            body: Center(
-              child: Text(
-                'fukatSongs Foundation Ready',
-                style: TextStyle(color: Colors.white, fontSize: 24),
-              ),
-            ),
-          ),
+          home: const SearchScreen(),
         );
       },
     );
