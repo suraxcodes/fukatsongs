@@ -6,7 +6,7 @@
 
 | # | Phase | Goal | Requirements | Plans |
 |---|-------|------|--------------|-------|
-| 1 | Foundation | App boots with correct structure, Song model, and Hive initialized | SETUP-01 → SETUP-06 | 3 |
+| 1 | Foundation | App boots with correct structure, Song model, and Hive initialized | Complete    | 2026-05-15 |
 | 2 | Saavn Search | User can search songs via JioSaavn and see normalized results | SEARCH-01 → SEARCH-07 | 3 |
 | 3 | Playback & Queue | Stable background playback with full queue management | PLAY-01 → PLAY-11, QUEUE-01 → QUEUE-05 | 5 |
 | 4 | Library & Persistence | Liked songs, recents, playlists — all persisted in Hive | LIB-01 → LIB-08 | 3 |
@@ -30,7 +30,7 @@
 5. ProviderScope wraps the app and a test provider reads/writes without error
 
 **Plans:**
-- Plan 1: Project setup — rename app, install all dependencies, run `build_runner`
+3/3 plans complete
 - Plan 2: Core models — Song (Freezed), MusicProvider interface, Hive adapters
 - Plan 3: App scaffolding — ProviderScope setup, Hive initialization, folder structure, basic home screen
 

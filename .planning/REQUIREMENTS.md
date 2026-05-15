@@ -4,12 +4,12 @@
 
 ### Setup & Foundation (SETUP)
 
-- [ ] **SETUP-01**: Project runs on Android with correct folder structure, all dependencies installed, and app boots to a home screen
-- [ ] **SETUP-02**: Song model is defined with id, title, artist, imageUrl, duration, source, providers map, primaryProvider, and optional localPath fields
-- [ ] **SETUP-03**: MusicProvider abstract interface is defined with `search()` and `getStreamUrl()` contracts
-- [ ] **SETUP-04**: Hive is initialized at app startup with all required boxes (songs, playlists, liked_songs, recent_songs, queue_state, downloads, settings)
-- [ ] **SETUP-05**: Riverpod ProviderScope wraps the app and core providers are registered
-- [ ] **SETUP-06**: Folder structure matches: `lib/core/`, `lib/features/`, `lib/models/`, `lib/providers/`, `lib/database/`
+- [x] **SETUP-01**: Project runs on Android with correct folder structure, all dependencies installed, and app boots to a home screen
+- [x] **SETUP-02**: Song model is defined with id, title, artist, imageUrl, duration, source, providers map, primaryProvider, and optional localPath fields
+- [x] **SETUP-03**: MusicProvider abstract interface is defined with `search()` and `getStreamUrl()` contracts
+- [x] **SETUP-04**: Hive is initialized at app startup with all required boxes (songs, playlists, liked_songs, recent_songs, queue_state, downloads, settings)
+- [x] **SETUP-05**: Riverpod ProviderScope wraps the app and core providers are registered
+- [x] **SETUP-06**: Folder structure matches: `lib/core/`, `lib/features/`, `lib/models/`, `lib/providers/`, `lib/database/`
 
 ---
 
