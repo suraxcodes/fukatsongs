@@ -44,8 +44,8 @@ Stable, uninterrupted music playback with a reliable queue system — everything
 
 ## Context
 
-- **Stack**: Flutter (Dart), Riverpod (state), just_audio + audio_service + just_audio_background (playback), Hive (local DB), Dio (networking), cached_network_image (images)
-- **Providers**: JioSaavn (unofficial API, primary), YouTube Music (fallback)
+- **Stack**: Flutter (Dart), Riverpod (state), just_audio + audio_service (playback), Hive (local DB), Dio (networking), cached_network_image (images), youtube_explode_dart (YT stream URLs)
+- **Providers**: JioSaavn (unofficial API, primary), YouTube Music (fallback — Dart-native implementation of internal YouTube Music API endpoints, same approach as ytmusicapi but in Dart; stream URLs extracted via `youtube_explode_dart`)
 - **Architecture**: Provider abstraction layer — each music source implements a common `MusicProvider` interface; results are normalized into a single `Song` model
 - **Data strategy**: Never store stream URLs (they expire); store provider IDs and fetch fresh URLs at playback time
 - **Local-only**: No backend, no Firebase, no cloud. All data (playlists, likes, queue state, download metadata) stored in Hive. Audio files stored on device storage.
@@ -69,6 +69,7 @@ Stable, uninterrupted music playback with a reliable queue system — everything
 | just_audio + audio_service | Industry standard for Flutter background audio | — Pending |
 | Dio over http package | Retries, interceptors, better download handling | — Pending |
 | Provider abstraction from day one | APIs break — abstraction allows swapping without rewriting playback | — Pending |
+| YouTube Music via Dart-native API calls | ytmusicapi is Python-only; replicate same internal YT Music HTTP endpoints in Dart via Dio + youtube_explode_dart for stream URLs — no Python server needed | — Pending |
 | Parallel search (asyncio.gather style) | Sequential search is slow and gives bad UX | — Pending |
 | Local-only V1 architecture | Simpler, faster, fewer failure points, no server costs | — Pending |
 
