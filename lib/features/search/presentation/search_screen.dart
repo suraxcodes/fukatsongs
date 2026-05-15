@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'search_notifier.dart';
 import 'widgets/song_card.dart';
+import '../../player/presentation/player_notifier.dart';
+import '../../player/presentation/widgets/mini_player.dart';
 
 class SearchScreen extends ConsumerWidget {
   const SearchScreen({super.key});
@@ -23,7 +25,7 @@ class SearchScreen extends ConsumerWidget {
                   if (songs.isEmpty) {
                     return _buildEmptyState();
                   }
-                  return _buildResults(songs);
+                  return _buildResults(songs, ref);
                 },
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (err, stack) => _buildErrorState(notifier),
@@ -32,6 +34,7 @@ class SearchScreen extends ConsumerWidget {
           ],
         ),
       ),
+      bottomNavigationBar: const MiniPlayer(),
     );
   }
 
@@ -56,7 +59,7 @@ class SearchScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildResults(List songs) {
+  Widget _buildResults(List songs, WidgetRef ref) {
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -85,10 +88,11 @@ class SearchScreen extends ConsumerWidget {
             ),
             itemCount: songs.length,
             itemBuilder: (context, index) {
+              final song = songs[index];
               return SongCard(
-                song: songs[index],
+                song: song,
                 onTap: () {
-                  // TODO: Play song
+                  ref.read(playerNotifierProvider.notifier).playSong(song);
                 },
               );
             },

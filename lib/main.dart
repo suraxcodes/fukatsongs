@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:audio_service/audio_service.dart';
 import 'models/song.dart';
 import 'features/search/presentation/search_screen.dart';
+import 'core/audio/audio_handler.dart';
+import 'core/audio/audio_handler_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,11 +24,25 @@ void main() async {
     Hive.openBox<Song>('liked_songs'),
     Hive.openBox<Song>('recent_songs'),
     Hive.openBox<String>('search_cache'),
+    Hive.openBox('queue_state'),
   ]);
 
+  // Initialize Audio Service
+  final audioHandler = await AudioService.init(
+    builder: () => MusicAudioHandler(),
+    config: const AudioServiceConfig(
+      androidNotificationChannelId: 'com.fukatsongs.app.channel.audio',
+      androidNotificationChannelName: 'Music Playback',
+      androidStopForegroundOnPause: true,
+    ),
+  );
+
   runApp(
-    const ProviderScope(
-      child: FukatSongsApp(),
+    ProviderScope(
+      overrides: [
+        audioHandlerProvider.overrideWithValue(audioHandler),
+      ],
+      child: const FukatSongsApp(),
     ),
   );
 }
