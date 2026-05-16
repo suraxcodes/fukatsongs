@@ -7,7 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:fukat_songs/core/audio/youtube_audio_source.dart';
 import 'package:fukat_songs/models/song.dart';
-import '../../features/library/logic/download_notifier.dart';
+import '../../features/library/logic/song_download_notifier.dart';
 
 class MusicAudioHandler extends BaseAudioHandler
     with QueueHandler, SeekHandler {

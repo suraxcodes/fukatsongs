@@ -8,7 +8,7 @@ import 'package:fukat_songs/features/player/presentation/player_notifier.dart';
 import 'package:fukat_songs/models/song.dart';
 import 'package:fukat_songs/features/library/presentation/song_options_sheet.dart';
 import 'package:fukat_songs/features/library/logic/playlist_notifier.dart';
-import 'package:fukat_songs/features/library/logic/download_notifier.dart';
+import 'package:fukat_songs/features/library/logic/song_download_notifier.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:fukat_songs/core/constants/hive_boxes.dart';
 import 'package:fukat_songs/features/player/logic/lyrics_notifier.dart';

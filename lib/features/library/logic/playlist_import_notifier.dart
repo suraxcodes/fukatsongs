@@ -1,8 +1,11 @@
+import 'package:flutter/foundation.dart';
+import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:fukat_songs/models/song.dart';
 import 'package:fukat_songs/providers/music_repository_provider.dart';
-import 'package:fukat_songs/features/library/logic/download_notifier.dart';
+import 'package:fukat_songs/features/library/logic/song_download_notifier.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'playlist_import_notifier.g.dart';
@@ -56,6 +59,7 @@ class PlaylistImportState {
 @riverpod
 class PlaylistImportNotifier extends _$PlaylistImportNotifier {
   final _yt = YoutubeExplode();
+  bool _shouldStop = false;
 
   @override
   PlaylistImportState build() => PlaylistImportState();
@@ -64,7 +68,19 @@ class PlaylistImportNotifier extends _$PlaylistImportNotifier {
     state = state.copyWith(isAutoDownloadEnabled: enabled);
   }
 
+  void stopImport() {
+    _shouldStop = true;
+    state = state.copyWith(status: ImportStatus.completed);
+    debugPrint('Import stopped by user');
+  }
+
+  void reset() {
+    _shouldStop = false;
+    state = PlaylistImportState();
+  }
+
   Future<void> importFromUrl(String url) async {
+    _shouldStop = false;
     state = state.copyWith(status: ImportStatus.parsing, errorMessage: null, importedSongs: [], failedSongs: []);
 
     try {
@@ -76,7 +92,9 @@ class PlaylistImportNotifier extends _$PlaylistImportNotifier {
         throw Exception('Unsupported URL. Please provide a YouTube or Spotify playlist link.');
       }
     } catch (e) {
-      state = state.copyWith(status: ImportStatus.error, errorMessage: e.toString());
+      if (!_shouldStop) {
+        state = state.copyWith(status: ImportStatus.error, errorMessage: e.toString());
+      }
     }
   }
 
@@ -99,6 +117,7 @@ class PlaylistImportNotifier extends _$PlaylistImportNotifier {
       final List<String> missed = [];
 
       for (int i = 0; i < videos.length; i++) {
+        if (_shouldStop) break;
         final video = videos[i];
         
         try {
@@ -128,9 +147,7 @@ class PlaylistImportNotifier extends _$PlaylistImportNotifier {
           
           found.add(matchedSong);
           
-          // Trigger download ONLY IF enabled in the CURRENT state
           if (state.isAutoDownloadEnabled) {
-            // ignore: unused_result
             ref.read(downloadNotifierProvider.notifier).downloadSong(matchedSong);
           }
 
@@ -147,21 +164,112 @@ class PlaylistImportNotifier extends _$PlaylistImportNotifier {
         }
       }
 
-      state = state.copyWith(
-        status: ImportStatus.completed,
-      );
+      state = state.copyWith(status: ImportStatus.completed);
     } catch (e) {
-      state = state.copyWith(status: ImportStatus.error, errorMessage: 'YouTube Import Error: $e');
+      if (!_shouldStop) {
+        state = state.copyWith(status: ImportStatus.error, errorMessage: 'YouTube Import Error: $e');
+      }
     }
   }
 
   Future<void> _importFromSpotify(String url) async {
-    // Spotify import requires scraping or a specialized API
-    // For now, we'll mark as a placeholder to be implemented or use a simple regex scraper
-    state = state.copyWith(status: ImportStatus.error, errorMessage: 'Spotify import coming soon! Try a YouTube link for now.');
-  }
+    try {
+      debugPrint('Starting Spotify import for: $url');
+      
+      final regExp = RegExp(r'playlist/([a-zA-Z0-9]{15,})');
+      final match = regExp.firstMatch(url);
+      if (match == null) throw Exception('Invalid Spotify Playlist URL');
+      final playlistId = match.group(1);
 
-  void reset() {
-    state = PlaylistImportState();
+      final embedUrl = 'https://open.spotify.com/embed/playlist/$playlistId';
+      final dio = Dio();
+      final response = await dio.get(
+        embedUrl,
+        options: Options(headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        }),
+      );
+
+      final html = response.data.toString();
+      final dataRegExp = RegExp(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>');
+      final dataMatch = dataRegExp.firstMatch(html);
+      
+      Map<String, dynamic> entity;
+      if (dataMatch != null) {
+        final jsonData = jsonDecode(dataMatch.group(1)!);
+        entity = jsonData['props']?['pageProps']?['state']?['data']?['entity'] ??
+                 jsonData['props']?['pageProps']?['entity'] ??
+                 jsonData['props']?['entity'] ??
+                 {};
+      } else {
+        throw Exception('Could not parse Spotify data. Ensure the playlist is public.');
+      }
+
+      final playlistName = entity['title'] ?? entity['name'] ?? 'Spotify Import';
+      final List tracks = entity['trackList'] ?? entity['items'] ?? [];
+
+      if (tracks.isEmpty) {
+        throw Exception('No tracks found in this Spotify playlist.');
+      }
+
+      state = state.copyWith(
+        status: ImportStatus.matching,
+        totalCount: tracks.length,
+        playlistName: playlistName,
+      );
+
+      final musicRepo = ref.read(musicRepositoryProvider);
+      final downloadNotifier = ref.read(downloadNotifierProvider.notifier);
+      final List<Song> found = [];
+      final List<String> missed = [];
+
+      for (int i = 0; i < tracks.length; i++) {
+        if (_shouldStop) break;
+        final track = tracks[i];
+        final title = track['title'] ?? track['name'] as String? ?? 'Unknown Title';
+        
+        String artist = 'Unknown Artist';
+        if (track['subtitle'] != null) {
+          artist = track['subtitle'].toString();
+        } else if (track['artists'] != null && track['artists'] is List && (track['artists'] as List).isNotEmpty) {
+          artist = track['artists'][0]['name'].toString();
+        }
+        
+        try {
+          final cleanTitle = title.toString().replaceAll(RegExp(r'\(.*?\)|\[.*?\]'), '').trim();
+          final cleanArtist = artist.split(',').first.trim();
+          
+          final searchResults = await musicRepo.search('$cleanTitle $cleanArtist');
+          
+          if (searchResults.isNotEmpty) {
+            final matchedSong = searchResults.first;
+            found.add(matchedSong);
+            if (state.isAutoDownloadEnabled) {
+              downloadNotifier.downloadSong(matchedSong);
+            }
+          } else {
+            missed.add('$title - $artist');
+          }
+          
+          state = state.copyWith(
+            currentCount: i + 1,
+            importedSongs: List.from(found),
+            failedSongs: List.from(missed),
+          );
+        } catch (e) {
+          missed.add('$title - $artist');
+          state = state.copyWith(
+            currentCount: i + 1,
+            failedSongs: List.from(missed),
+          );
+        }
+      }
+
+      state = state.copyWith(status: ImportStatus.completed);
+    } catch (e) {
+      if (!_shouldStop) {
+        state = state.copyWith(status: ImportStatus.error, errorMessage: e.toString());
+      }
+    }
   }
 }

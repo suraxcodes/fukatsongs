@@ -6,7 +6,7 @@ import 'package:fukat_songs/models/song.dart';
 import 'package:fukat_songs/models/playlist.dart';
 import 'package:fukat_songs/features/library/logic/playlist_notifier.dart';
 import 'package:fukat_songs/features/player/presentation/player_notifier.dart';
-import 'package:fukat_songs/features/library/logic/download_notifier.dart';
+import 'package:fukat_songs/features/library/logic/song_download_notifier.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:fukat_songs/core/constants/hive_boxes.dart';
 import 'package:fukat_songs/features/player/presentation/widgets/sleep_timer_sheet.dart';
@@ -41,13 +41,15 @@ class SongOptionsSheet extends ConsumerWidget {
     final playlists = ref.watch(playlistNotifierProvider);
     final isLiked = ref.watch(likedSongsNotifierProvider.notifier).isLiked(song.id);
     
-    // Check if song is downloaded by looking at the downloads box
-    final isDownloaded = Hive.box<Song>(HiveBoxes.downloads).containsKey(song.id);
-    final downloadState = ref.watch(downloadNotifierProvider);
-    final isDownloading = downloadState.containsKey(song.id);
-    final progress = downloadState[song.id] ?? 0.0;
+    return ValueListenableBuilder(
+      valueListenable: Hive.box<Song>(HiveBoxes.downloads).listenable(),
+      builder: (context, Box<Song> box, _) {
+        final isDownloaded = box.containsKey(song.id);
+        final downloadState = ref.watch(downloadNotifierProvider);
+        final isDownloading = downloadState.containsKey(song.id);
+        final progress = downloadState[song.id] ?? 0.0;
 
-    return ClipRRect(
+        return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
@@ -121,7 +123,7 @@ class SongOptionsSheet extends ConsumerWidget {
               ),
               const Divider(color: Colors.white10, height: 1),
               // Options List
-              if (isDownloaded)
+              if (isDownloaded) ...[
                 _option(
                   context,
                   icon: Icons.download_done_rounded,
@@ -133,8 +135,53 @@ class SongOptionsSheet extends ConsumerWidget {
                     );
                     Navigator.pop(context);
                   },
-                )
-              else if (isDownloading)
+                ),
+                _option(
+                  context,
+                  icon: Icons.delete_outline_rounded,
+                  color: Colors.redAccent,
+                  label: 'Remove Download',
+                  onTap: () {
+                    final notifier = ref.read(downloadNotifierProvider.notifier);
+                    Navigator.pop(context); // Close sheet
+                    showDialog(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        backgroundColor: const Color(0xFF16142E),
+                        title: const Text('Remove Download?', style: TextStyle(color: Colors.white)),
+                        content: const Text(
+                          'This will delete the audio file from your device.',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              // Close dialog immediately to feel responsive
+                              Navigator.pop(ctx);
+                              
+                              await notifier.removeDownload(song.id);
+                              
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Removed "${song.title}" from downloads'),
+                                    backgroundColor: const Color(0xFF16142E),
+                                  ),
+                                );
+                              }
+                            },
+                            child: const Text('Remove', style: TextStyle(color: Colors.redAccent)),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ] else if (isDownloading)
                 _option(
                   context,
                   icon: Icons.downloading_rounded,
@@ -224,7 +271,10 @@ class SongOptionsSheet extends ConsumerWidget {
         ),
       ),
     );
+  },
+);
   }
+
 
   Widget _option(
     BuildContext context, {

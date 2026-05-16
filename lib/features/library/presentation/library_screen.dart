@@ -15,6 +15,7 @@ import '../../../providers/playlist_repository_provider.dart';
 import '../../main/main_screen_notifier.dart';
 import '../../settings/presentation/settings_screen.dart';
 import 'playlist_import_dialog.dart';
+import 'background_import_indicator.dart';
 
 final librarySearchProvider = StateProvider<String>((ref) => '');
 
@@ -46,93 +47,103 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     return Scaffold(
       backgroundColor: const Color(0xFF0D0B1F),
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
-            // Header
-            Padding(
-              padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Your Library',
-                    style: TextStyle(
-                      fontSize: 28.sp,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Padding(
+                  padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.import_export_rounded, color: Colors.white, size: 28),
-                        onPressed: () => showPlaylistImportDialog(context),
-                        tooltip: 'Import Playlist',
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
-                        onPressed: () => _showCreatePlaylistDialog(context),
-                        tooltip: 'New Playlist',
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.settings_outlined, color: Colors.white70),
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                      Text(
+                        'Your Library',
+                        style: TextStyle(
+                          fontSize: 28.sp,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
+                      ),
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.import_export_rounded, color: Colors.white, size: 28),
+                            onPressed: () => showPlaylistImportDialog(context),
+                            tooltip: 'Import Playlist',
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+                            onPressed: () => _showCreatePlaylistDialog(context),
+                            tooltip: 'New Playlist',
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.settings_outlined, color: Colors.white70),
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            SizedBox(height: 20.h),
-            // Search Bar for Library
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.w),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12.r),
                 ),
-                child: TextField(
-                  onChanged: (val) => ref.read(librarySearchProvider.notifier).state = val,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'Search in library...',
-                    hintStyle: TextStyle(color: Colors.white38, fontSize: 14.sp),
-                    prefixIcon: const Icon(Icons.search_rounded, color: Colors.white38),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: 12.h),
+                SizedBox(height: 20.h),
+                // Search Bar for Library
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16.w),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12.r),
+                    ),
+                    child: TextField(
+                      onChanged: (val) => ref.read(librarySearchProvider.notifier).state = val,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Search in library...',
+                        hintStyle: TextStyle(color: Colors.white38, fontSize: 14.sp),
+                        prefixIcon: const Icon(Icons.search_rounded, color: Colors.white38),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(vertical: 12.h),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-            SizedBox(height: 12.h),
-            // Tabs
-            TabBar(
-              controller: _tabController,
-              isScrollable: true,
-              labelColor: const Color(0xFF6200EE),
-              unselectedLabelColor: Colors.white54,
-              indicatorColor: const Color(0xFF6200EE),
-              indicatorSize: TabBarIndicatorSize.label,
-              tabs: const [
-                Tab(text: 'Downloads'),
-                Tab(text: 'Playlists'),
-                Tab(text: 'Liked'),
+                SizedBox(height: 12.h),
+                // Tabs
+                TabBar(
+                  controller: _tabController,
+                  isScrollable: true,
+                  labelColor: const Color(0xFF6200EE),
+                  unselectedLabelColor: Colors.white54,
+                  indicatorColor: const Color(0xFF6200EE),
+                  indicatorSize: TabBarIndicatorSize.label,
+                  tabs: const [
+                    Tab(text: 'Downloads'),
+                    Tab(text: 'Playlists'),
+                    Tab(text: 'Liked'),
+                  ],
+                ),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _DownloadsTab(),
+                      _PlaylistsTab(onCreatePlaylist: () => _showCreatePlaylistDialog(context)),
+                      _LikedSongsTab(),
+                    ],
+                  ),
+                ),
               ],
             ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _DownloadsTab(),
-                  _PlaylistsTab(onCreatePlaylist: () => _showCreatePlaylistDialog(context)),
-                  _LikedSongsTab(),
-                ],
-              ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0, 
+              child: const BackgroundImportIndicator(),
             ),
           ],
         ),

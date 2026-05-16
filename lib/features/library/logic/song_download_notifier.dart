@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -71,6 +72,32 @@ class DownloadNotifier extends StateNotifier<Map<String, double>> {
     _cancelTokens[songId]?.cancel();
     _cancelTokens.remove(songId);
     state = {...state}..remove(songId);
+  }
+
+  Future<void> removeDownload(String songId) async {
+    debugPrint('removeDownload called for: $songId');
+    final downloadsBox = Hive.box<Song>(HiveBoxes.downloads);
+    final song = downloadsBox.get(songId);
+
+    if (song != null && song.localPath != null) {
+      debugPrint('Found song in box, path: ${song.localPath}');
+      final file = File(song.localPath!);
+      try {
+        if (await file.exists()) {
+          await file.delete();
+          debugPrint('File deleted successfully');
+        } else {
+          debugPrint('File did not exist at path');
+        }
+      } catch (e) {
+        debugPrint('Error deleting file: $e');
+      }
+    } else {
+      debugPrint('Song not found in box or localPath is null');
+    }
+
+    await downloadsBox.delete(songId);
+    debugPrint('Entry deleted from Hive box');
   }
 }
 

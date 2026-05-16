@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:fukat_songs/features/library/logic/playlist_import_notifier.dart';
 import 'package:fukat_songs/features/library/logic/playlist_notifier.dart';
-import 'package:fukat_songs/features/library/logic/download_notifier.dart';
+import 'package:fukat_songs/features/library/logic/song_download_notifier.dart';
 
 class PlaylistImportDialog extends ConsumerStatefulWidget {
   const PlaylistImportDialog({super.key});
@@ -208,27 +208,25 @@ class _PlaylistImportDialogState extends ConsumerState<PlaylistImportDialog> {
                     },
                   ),
                 ),
-                SizedBox(height: 16.h),
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton.icon(
-                    onPressed: () {
-                      ref.read(playlistNotifierProvider.notifier).createPlaylist(
-                        importState.playlistName ?? 'Imported Playlist',
-                        songs: importState.importedSongs,
-                      );
-                      notifier.reset();
-                      Navigator.pop(context);
-                    },
-                    icon: const Icon(Icons.stop_circle_outlined, size: 18),
-                    label: const Text('Save what\'s found & Play'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.greenAccent,
-                      padding: EdgeInsets.symmetric(vertical: 12.h),
-                    ),
-                  ),
-                ),
               ],
+              SizedBox(height: 24.h),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.visibility_off_rounded, size: 18),
+                    label: const Text('Hide'),
+                    style: TextButton.styleFrom(foregroundColor: Colors.white54),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => notifier.stopImport(),
+                    icon: const Icon(Icons.stop_circle_rounded, size: 18),
+                    label: const Text('Stop'),
+                    style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+                  ),
+                ],
+              ),
             ]
  else if (importState.status == ImportStatus.completed) ...[
               Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 48.sp),

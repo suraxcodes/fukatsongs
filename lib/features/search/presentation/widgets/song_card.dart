@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../../models/song.dart';
-import '../../../library/logic/download_notifier.dart';
+import 'package:fukat_songs/features/library/logic/song_download_notifier.dart';
 
 import '../../../../core/widgets/glass_container.dart';
 import '../../../player/presentation/immersive_player_screen.dart';
