@@ -22,22 +22,28 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D0B1F),
-      body: CustomScrollView(
-        slivers: [
-          _buildAppBar(context, ref),
-          homeState.when(
-            data: (state) => _buildCategoryChips(ref, state),
-            loading: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
-            error: (err, stack) => const SliverToBoxAdapter(child: SizedBox.shrink()),
-          ),
-          SliverToBoxAdapter(
-            child: homeState.when(
-              data: (state) => _buildHomeContent(context, state, ref),
-              loading: () => _buildLoadingState(),
-              error: (err, stack) => _buildErrorState(ref),
+      body: RefreshIndicator(
+        color: const Color(0xFFBB86FC),
+        backgroundColor: const Color(0xFF1E1E2C),
+        onRefresh: () => ref.read(homeNotifierProvider.notifier).refresh(),
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(), // Important for RefreshIndicator
+          slivers: [
+            _buildAppBar(context, ref),
+            homeState.when(
+              data: (state) => _buildCategoryChips(ref, state),
+              loading: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
+              error: (err, stack) => const SliverToBoxAdapter(child: SizedBox.shrink()),
             ),
-          ),
-        ],
+            SliverToBoxAdapter(
+              child: homeState.when(
+                data: (state) => _buildHomeContent(context, state, ref),
+                loading: () => _buildLoadingState(),
+                error: (err, stack) => _buildErrorState(ref),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

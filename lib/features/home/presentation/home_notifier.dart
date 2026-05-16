@@ -66,7 +66,8 @@ class HomeNotifier extends _$HomeNotifier {
       debugPrint('Failed to fetch trending: $e');
     }
 
-    final history = historyRepo.getPlaybackHistory();
+    final history = historyRepo.getPlaybackHistory()..shuffle();
+    trendingSongs.shuffle();
     
     // Build Speed Dial: Playlists first, then frequent history
     final List<dynamic> speedDial = [
@@ -76,13 +77,13 @@ class HomeNotifier extends _$HomeNotifier {
 
     // If speed dial is too short, pad with trending
     if (speedDial.length < 6) {
-      speedDial.addAll(trendingSongs.take(6 - speedDial.length));
+      speedDial.addAll(trendingSongs.take(6 - speedDial.length)..toList()..shuffle());
     }
 
     return HomeState(
-      speedDialItems: speedDial,
+      speedDialItems: speedDial..shuffle(),
       trending: trendingSongs,
-      quickPicks: history.isNotEmpty ? history : trendingSongs,
+      quickPicks: history.isNotEmpty ? (history..shuffle()) : (trendingSongs..shuffle()),
       isLoading: false,
     );
   }
