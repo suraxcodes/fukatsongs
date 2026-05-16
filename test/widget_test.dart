@@ -17,6 +17,7 @@ void main() {
     Hive.init(tempDir.path);
     await Hive.openBox<String>('search_cache');
     await Hive.openBox('queue_state');
+    await Hive.openBox('library');
   });
 
   testWidgets('Smoke test', (WidgetTester tester) async {

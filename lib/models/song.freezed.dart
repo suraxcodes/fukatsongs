@@ -14,6 +14,10 @@ T _$identity<T>(T value) => value;
 final _privateConstructorUsedError = UnsupportedError(
     'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
 
+Song _$SongFromJson(Map<String, dynamic> json) {
+  return _Song.fromJson(json);
+}
+
 /// @nodoc
 mixin _$Song {
   @HiveField(0)
@@ -39,6 +43,7 @@ mixin _$Song {
   @HiveField(9)
   String? get localPath => throw _privateConstructorUsedError;
 
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
   $SongCopyWith<Song> get copyWith => throw _privateConstructorUsedError;
 }
@@ -217,7 +222,7 @@ class __$$SongImplCopyWithImpl<$Res>
 }
 
 /// @nodoc
-
+@JsonSerializable()
 @HiveType(typeId: 0)
 class _$SongImpl implements _Song {
   const _$SongImpl(
@@ -232,6 +237,9 @@ class _$SongImpl implements _Song {
       @HiveField(8) required final Map<String, String> providers,
       @HiveField(9) this.localPath})
       : _providers = providers;
+
+  factory _$SongImpl.fromJson(Map<String, dynamic> json) =>
+      _$$SongImplFromJson(json);
 
   @override
   @HiveField(0)
@@ -301,6 +309,7 @@ class _$SongImpl implements _Song {
                 other.localPath == localPath));
   }
 
+  @JsonKey(ignore: true)
   @override
   int get hashCode => Object.hash(
       runtimeType,
@@ -320,6 +329,13 @@ class _$SongImpl implements _Song {
   @pragma('vm:prefer-inline')
   _$$SongImplCopyWith<_$SongImpl> get copyWith =>
       __$$SongImplCopyWithImpl<_$SongImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$SongImplToJson(
+      this,
+    );
+  }
 }
 
 abstract class _Song implements Song {
@@ -334,6 +350,8 @@ abstract class _Song implements Song {
       @HiveField(7) required final String source,
       @HiveField(8) required final Map<String, String> providers,
       @HiveField(9) final String? localPath}) = _$SongImpl;
+
+  factory _Song.fromJson(Map<String, dynamic> json) = _$SongImpl.fromJson;
 
   @override
   @HiveField(0)

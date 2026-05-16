@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../player_notifier.dart';
-import '../player_screen.dart';
+import '../immersive_player_screen.dart';
 
 class MiniPlayer extends ConsumerWidget {
   const MiniPlayer({super.key});
@@ -17,24 +17,19 @@ class MiniPlayer extends ConsumerWidget {
     if (currentSong == null) return const SizedBox.shrink();
 
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const PlayerScreen()),
-        );
-      },
+      onTap: () => openImmersivePlayer(context),
       child: Container(
-        height: 64.h,
+        height: 68.h,
         margin: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
         decoration: BoxDecoration(
-          color: const Color(0xFF16142E).withOpacity(0.9),
+          color: const Color(0xFF16142E).withOpacity(0.95),
           borderRadius: BorderRadius.circular(12.r),
           border: Border.all(color: Colors.white.withOpacity(0.1)),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 10,
-              offset: const Offset(0, -2),
+            const BoxShadow(
+              color: Colors.black45,
+              blurRadius: 12,
+              offset: Offset(0, -2),
             ),
           ],
         ),
@@ -45,13 +40,19 @@ class MiniPlayer extends ConsumerWidget {
               top: 0,
               left: 0,
               right: 0,
-              child: LinearProgressIndicator(
-                value: playerState.totalDuration.inSeconds > 0
-                    ? playerState.position.inSeconds / playerState.totalDuration.inSeconds
-                    : 0,
-                backgroundColor: Colors.white10,
-                valueColor: const AlwaysStoppedAnimation(Color(0xFF6200EE)),
-                minHeight: 2,
+              child: ClipRRect(
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(12.r),
+                  topRight: Radius.circular(12.r),
+                ),
+                child: LinearProgressIndicator(
+                  value: playerState.totalDuration.inSeconds > 0
+                      ? playerState.position.inSeconds / playerState.totalDuration.inSeconds
+                      : 0,
+                  backgroundColor: Colors.white10,
+                  valueColor: const AlwaysStoppedAnimation(Color(0xFF6200EE)),
+                  minHeight: 2,
+                ),
               ),
             ),
             Padding(
@@ -72,6 +73,7 @@ class MiniPlayer extends ConsumerWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           currentSong.title,
@@ -96,13 +98,18 @@ class MiniPlayer extends ConsumerWidget {
                     ),
                   ),
                   IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                     icon: Icon(
                       playerState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                       color: Colors.white,
                     ),
                     onPressed: () => playerState.isPlaying ? notifier.pause() : notifier.resume(),
                   ),
+                  SizedBox(width: 8.w),
                   IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                     icon: const Icon(Icons.skip_next_rounded, color: Colors.white),
                     onPressed: () => notifier.skipToNext(),
                   ),

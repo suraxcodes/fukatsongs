@@ -66,3 +66,34 @@ class SongImplAdapter extends TypeAdapter<_$SongImpl> {
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }
+
+// **************************************************************************
+// JsonSerializableGenerator
+// **************************************************************************
+
+_$SongImpl _$$SongImplFromJson(Map<String, dynamic> json) => _$SongImpl(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      artist: json['artist'] as String,
+      albumName: json['albumName'] as String,
+      year: json['year'] as String,
+      imageUrl: json['imageUrl'] as String,
+      duration: (json['duration'] as num).toInt(),
+      source: json['source'] as String,
+      providers: Map<String, String>.from(json['providers'] as Map),
+      localPath: json['localPath'] as String?,
+    );
+
+Map<String, dynamic> _$$SongImplToJson(_$SongImpl instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'title': instance.title,
+      'artist': instance.artist,
+      'albumName': instance.albumName,
+      'year': instance.year,
+      'imageUrl': instance.imageUrl,
+      'duration': instance.duration,
+      'source': instance.source,
+      'providers': instance.providers,
+      'localPath': instance.localPath,
+    };

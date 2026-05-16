@@ -51,6 +51,7 @@ dependencies:
   connectivity_plus: ^5.0.2
   youtube_explode_dart: ^2.2.2
   hive: ^2.2.3
+  shimmer: ^3.0.0
 
 dev_dependencies:
   flutter_test:
@@ -69,6 +70,14 @@ dev_dependencies:
   riverpod_generator: ^2.4.0
   hive_generator: ^2.0.1
   json_serializable: ^6.7.1
+  flutter_launcher_icons: ^0.13.1
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "Gemini_Generated_Image_vjlmvdvjlmvdvjlm.png"
+  adaptive_icon_background: "#0D0B1F"
+  adaptive_icon_foreground: "Gemini_Generated_Image_vjlmvdvjlmvdvjlm.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

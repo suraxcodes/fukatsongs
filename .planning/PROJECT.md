@@ -4,6 +4,18 @@
 
 fukatSongs is a personal Android music streaming app built in Flutter for learning and personal use. It searches songs from Saavn and YouTube Music in parallel, plays them with a stable queue system, and lets users download songs for offline listening — all stored locally with no backend or cloud dependency.
 
+## Current Milestone: v2.0 Premium Experience & Playlists
+
+**Goal:** Transform fukatSongs into a premium music player with user-defined quality, advanced audio controls, and a robust playlist system.
+
+**Target features:**
+1. **Settings Page**: Global music quality selection (128kbps/320kbps) and persistence.
+2. **Native Equalizer**: Bass, Treble, and Preset support using `just_audio`.
+3. **Smart Home Screen**: Recent Searches and "Recently Played" (Quick Picks) sections.
+4. **Full Immersive Player**: Slide-up UI that opens automatically on playback.
+5. **Advanced Playlist Engine**: Creation, management, and the "Pro" Bottom Sheet menu.
+6. **Liked Music**: Dedicated library section for favorites.
+
 ## Core Value
 
 Stable, uninterrupted music playback with a reliable queue system — everything else is secondary.

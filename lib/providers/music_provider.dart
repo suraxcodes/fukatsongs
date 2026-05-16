@@ -11,7 +11,7 @@ abstract class MusicProvider {
   Future<List<Song>> search(String query);
 
   /// Fetch a fresh stream URL for the given song ID
-  Future<String?> getStreamUrl(String songId);
+  Future<String?> getStreamUrl(String songId, {String quality = '320'});
 
   /// Get trending or recommended songs (optional for V1, but good for abstraction)
   Future<List<Song>> getTrending();

@@ -1,62 +1,68 @@
 import 'dart:async';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../../models/song.dart';
 import '../../../providers/music_repository_provider.dart';
+import '../../../core/services/connectivity_service.dart';
+import '../../../core/repositories/history_repository.dart';
 
 part 'search_notifier.g.dart';
 
 @riverpod
 class SearchNotifier extends _$SearchNotifier {
   Timer? _debounceTimer;
-  late final Box<String> _historyBox;
+  late final Box<String> _cacheBox;
 
   @override
   FutureOr<List<Song>> build() async {
-    _historyBox = Hive.box<String>('search_cache');
-    // Initial state: Trending songs
+    _cacheBox = Hive.box<String>('search_cache');
+    
+    final isConnected = await ref.read(connectivityServiceProvider.notifier).isConnected();
+    if (!isConnected) {
+      return _searchLibrary('');
+    }
+    
     return ref.read(musicRepositoryProvider).getTrending();
   }
 
   Future<void> search(String query) async {
-    if (query.trim().isEmpty) {
-      state = const AsyncValue.loading();
-      state = await AsyncValue.guard(() => ref.read(musicRepositoryProvider).getTrending());
-      return;
-    }
-
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 500), () async {
       state = const AsyncValue.loading();
+      
+      final isConnected = await ref.read(connectivityServiceProvider.notifier).isConnected();
+      
       state = await AsyncValue.guard(() async {
-        final results = await ref.read(musicRepositoryProvider).search(query);
-        if (results.isNotEmpty) {
-          _addToHistory(query);
+        if (!isConnected) {
+          return _searchLibrary(query);
         }
+
+        if (query.trim().isEmpty) {
+          return ref.read(musicRepositoryProvider).getTrending();
+        }
+
+        // Track History
+        ref.read(historyRepositoryProvider).addToSearchHistory(query);
+
+        final results = await ref.read(musicRepositoryProvider).search(query);
         return results;
       });
     });
   }
 
-  void _addToHistory(String query) {
-    final history = _historyBox.values.toList();
-    if (history.contains(query)) {
-      _historyBox.deleteAt(history.indexOf(query));
-    }
-    _historyBox.add(query);
+  List<Song> _searchLibrary(String query) {
+    final libraryBox = Hive.box('library');
+    final songs = libraryBox.values
+        .map((j) => Song.fromJson(Map<String, dynamic>.from(j)))
+        .toList();
 
-    // Keep only last 10
-    if (_historyBox.length > 10) {
-      _historyBox.deleteAt(0);
-    }
-  }
+    if (query.isEmpty) return songs;
 
-  List<String> getHistory() {
-    return _historyBox.values.toList().reversed.toList();
-  }
-
-  void clearHistory() {
-    _historyBox.clear();
-    ref.invalidateSelf();
+    final q = query.toLowerCase();
+    return songs.where((s) => 
+      s.title.toLowerCase().contains(q) || 
+      s.artist.toLowerCase().contains(q)
+    ).toList();
   }
 }

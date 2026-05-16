@@ -19,4 +19,6 @@ class Song with _$Song {
     @HiveField(8) required Map<String, String> providers, // provider_id -> song_id
     @HiveField(9) String? localPath,
   }) = _Song;
+
+  factory Song.fromJson(Map<String, dynamic> json) => _$SongFromJson(json);
 }

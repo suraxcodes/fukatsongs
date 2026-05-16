@@ -4,47 +4,65 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:audio_service/audio_service.dart';
 import 'models/song.dart';
-import 'features/search/presentation/search_screen.dart';
+import 'features/main/main_screen.dart';
 import 'core/audio/audio_handler.dart';
 import 'core/audio/audio_handler_provider.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Hive
-  await Hive.initFlutter();
-  
-  // Register Adapters
-  Hive.registerAdapter(SongImplAdapter());
+    // Initialize Hive
+    await Hive.initFlutter();
+    
+    // Register Adapters
+    if (!Hive.isAdapterRegistered(0)) {
+      Hive.registerAdapter(SongImplAdapter());
+    }
 
-  // Open Core Boxes
-  await Future.wait([
-    Hive.openBox('settings'),
-    Hive.openBox<Song>('songs'),
-    Hive.openBox<Song>('liked_songs'),
-    Hive.openBox<Song>('recent_songs'),
-    Hive.openBox<String>('search_cache'),
-    Hive.openBox('queue_state'),
-  ]);
+    // Open Core Boxes
+    await Future.wait([
+      Hive.openBox('settings'),
+      Hive.openBox<Song>('songs'),
+      Hive.openBox('liked_songs'),
+      Hive.openBox<Song>('recent_songs'),
+      Hive.openBox<String>('search_cache'),
+      Hive.openBox('queue_state'),
+      Hive.openBox('library'),
+      Hive.openBox('playlists'),
+      Hive.openBox<String>('search_history'),
+    ]);
 
-  // Initialize Audio Service
-  final audioHandler = await AudioService.init(
-    builder: () => MusicAudioHandler(),
-    config: const AudioServiceConfig(
-      androidNotificationChannelId: 'com.fukatsongs.app.channel.audio',
-      androidNotificationChannelName: 'Music Playback',
-      androidStopForegroundOnPause: true,
-    ),
-  );
+    // Initialize Audio Service
+    final audioHandler = await AudioService.init(
+      builder: () => MusicAudioHandler(),
+      config: const AudioServiceConfig(
+        androidNotificationChannelId: 'com.fukatsongs.app.channel.audio',
+        androidNotificationChannelName: 'Music Playback',
+        androidStopForegroundOnPause: true,
+      ),
+    );
 
-  runApp(
-    ProviderScope(
-      overrides: [
-        audioHandlerProvider.overrideWithValue(audioHandler),
-      ],
-      child: const FukatSongsApp(),
-    ),
-  );
+    runApp(
+      ProviderScope(
+        overrides: [
+          audioHandlerProvider.overrideWithValue(audioHandler),
+        ],
+        child: const FukatSongsApp(),
+      ),
+    );
+  } catch (e, stackTrace) {
+    debugPrint('FATAL STARTUP ERROR: $e');
+    debugPrint('STACKTRACE: $stackTrace');
+    // Still run the app but show an error screen
+    runApp(MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: Text('Startup Error: $e\n\nPlease check logs.'),
+        ),
+      ),
+    ));
+  }
 }
 
 class FukatSongsApp extends StatelessWidget {
@@ -61,7 +79,7 @@ class FukatSongsApp extends StatelessWidget {
           title: 'fukatSongs',
           debugShowCheckedModeBanner: false,
           theme: _buildTheme(),
-          home: const SearchScreen(),
+          home: const MainScreen(),
         );
       },
     );

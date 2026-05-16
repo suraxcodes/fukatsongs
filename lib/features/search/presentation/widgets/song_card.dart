@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../../models/song.dart';
+import '../../../library/logic/download_notifier.dart';
 
-class SongCard extends StatelessWidget {
+import '../../../../core/widgets/glass_container.dart';
+import '../../../player/presentation/immersive_player_screen.dart';
+import '../../../library/presentation/song_options_sheet.dart';
+
+class SongCard extends ConsumerWidget {
   final Song song;
   final VoidCallback onTap;
 
@@ -14,65 +20,160 @@ class SongCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final downloadState = ref.watch(downloadNotifierProvider);
+    final downloadNotifier = ref.read(downloadNotifierProvider.notifier);
+    
+    final isDownloading = downloadState.containsKey(song.id);
+    final progress = downloadState[song.id] ?? 0.0;
+    final isDownloaded = song.localPath != null;
+
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: EdgeInsets.all(8.w),
-        width: 150.w,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(16.r),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      onTap: () {
+        onTap();
+        // Auto-open immersive player
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (context.mounted) openImmersivePlayer(context);
+        });
+      },
+      onLongPress: () => showSongOptions(context, song),
+      child: GlassContainer(
+        child: Stack(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
-              child: CachedNetworkImage(
-                imageUrl: song.imageUrl,
-                width: 150.w,
-                height: 150.w,
-                fit: BoxFit.cover,
-                placeholder: (context, url) => Container(
-                  color: Colors.white10,
-                  child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
+                    child: CachedNetworkImage(
+                      imageUrl: song.imageUrl,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      // 7-day cache TTL
+                      cacheKey: song.imageUrl,
+                      placeholder: (context, url) => Container(color: Colors.white10),
+                      errorWidget: (context, url, error) => const Icon(Icons.error),
+                    ),
+                  ),
                 ),
-                errorWidget: (context, url, error) => const Icon(Icons.music_note),
+                Padding(
+                  padding: EdgeInsets.all(12.w),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        song.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14.sp,
+                        ),
+                      ),
+                      SizedBox(height: 4.h),
+                      Text(
+                        song.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12.sp,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            // Source Badge(s)
+            Positioned(
+              top: 8,
+              left: 8,
+              child: Row(
+                children: song.providers.keys.map((source) {
+                  return Container(
+                    margin: EdgeInsets.only(right: 4.w),
+                    padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(4.r),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          source == 'youtube' ? Icons.play_circle_fill : Icons.music_note,
+                          color: source == 'youtube' ? Colors.red : Colors.tealAccent,
+                          size: 10.sp,
+                        ),
+                        SizedBox(width: 2.w),
+                        Text(
+                          source == 'youtube' ? 'YT' : 'SN',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 8.sp,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
               ),
             ),
-            Padding(
-              padding: EdgeInsets.all(8.w),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    song.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  SizedBox(height: 4.h),
-                  Text(
-                    song.artist,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12.sp,
-                      color: Colors.white70,
-                    ),
-                  ),
-                ],
+            // Download Overlay
+            Positioned(
+              top: 8,
+              right: 8,
+              child: _buildDownloadIndicator(
+                isDownloading,
+                progress,
+                isDownloaded,
+                () => downloadNotifier.downloadSong(song),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildDownloadIndicator(
+    bool isDownloading,
+    double progress,
+    bool isDownloaded,
+    VoidCallback onDownload,
+  ) {
+    if (isDownloaded) {
+      return Container(
+        padding: const EdgeInsets.all(4),
+        decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+        child: const Icon(Icons.check_rounded, color: Colors.white, size: 16),
+      );
+    }
+
+    if (isDownloading) {
+      return Stack(
+        alignment: Alignment.center,
+        children: [
+          CircularProgressIndicator(
+            value: progress,
+            strokeWidth: 2,
+            color: const Color(0xFF6200EE),
+          ),
+          Text(
+            '${(progress * 100).toInt()}%',
+            style: const TextStyle(fontSize: 10, color: Colors.white),
+          ),
+        ],
+      );
+    }
+
+    return IconButton(
+      icon: const Icon(Icons.cloud_download_rounded, color: Colors.white70),
+      onPressed: onDownload,
     );
   }
 }

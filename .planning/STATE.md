@@ -1,66 +1,41 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: unknown
-last_updated: "2026-05-15T12:44:44.185Z"
+milestone: v2.0
+milestone_name: Premium Experience & Playlists
+status: initialized
+last_updated: "2026-05-16T01:47:00Z"
 progress:
-  total_phases: 7
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_phases: 11
+  completed_phases: 7
 ---
 
 # fukatSongs — Project State
 
-## Project Reference
+## Current Position
 
-See: .planning/PROJECT.md (updated 2026-05-15)
-
-**Core value:** Stable, uninterrupted music playback with a reliable queue system — everything else is secondary.
-**Current focus:** Phase 1 — foundation
-
----
-
-## Status
-
-```
-Phase:     2
-Progress:  [ ] Phase 1 not started
-Mode:      YOLO
-```
-
-## Progress
-
-| Phase | Name | Status | Plans |
-|-------|------|--------|-------|
-| 1 | Foundation | ⬜ Not started | 3 |
-| 2 | Saavn Search | ⬜ Not started | 3 |
-| 3 | Playback & Queue | ⬜ Not started | 5 |
-| 4 | Library & Persistence | ⬜ Not started | 3 |
-| 5 | Downloads | ⬜ Not started | 3 |
-| 6 | YouTube Provider | ⬜ Not started | 4 |
-| 7 | Optimization | ⬜ Not started | 3 |
-
-**Total plans:** 24
+Phase: Phase 8 — Personalization & Audio
+Status: Initializing Phase 8
+Last activity: Milestone v2.0 started. Requirements and Roadmap defined.
 
 ---
 
-## Session Continuity
+## Progress (Milestone v2.0)
 
-Last stopped at: project initialization
-Resume from: `/gsd-discuss-phase 1` or `/gsd-plan-phase 1`
+| Phase | Name | Status |
+|-------|------|--------|
+| 8 | Personalization & Audio | ⬜ Not started |
+| 9 | Smart Main Page | ⬜ Not started |
+| 10 | Immersive Player | ⬜ Not started |
+| 11 | Playlist & Library | ⬜ Not started |
 
 ---
 
-## Decisions
+## Decisions (New)
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
-| 2026-05-15 | Use manual AudioHandler over just_audio_background | Need custom stream URL refresh + provider fallback in playback loop |
-| 2026-05-15 | YouTube Music via Dart-native API + youtube_explode_dart | ytmusicapi is Python-only; replicate same HTTP calls in Dart |
-| 2026-05-15 | Local-only V1 architecture | Simpler, faster, fewer failure points; backend added in V2 only if needed |
-| 2026-05-15 | Hive over Isar for V1 | Simpler, zero native deps; Isar for V2 if query complexity grows |
+| 2026-05-16 | Standardize on YT Music UI Patterns | Matches user's reference image and provides premium feel. |
+| 2026-05-16 | Use Hive for Playlist Persistence | Continuity with existing metadata caching strategy. |
 
 ---
 
