@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../logic/settings_notifier.dart';
+import '../../player/logic/sleep_timer_notifier.dart';
 import '../../player/presentation/widgets/equalizer_sheet.dart';
+import '../../player/presentation/widgets/sleep_timer_sheet.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -52,6 +55,33 @@ class SettingsScreen extends ConsumerWidget {
               );
             },
           ),
+          Consumer(
+            builder: (context, ref, child) {
+              final sleepTimer = ref.watch(sleepTimerProvider);
+              return ListTile(
+                leading: const Icon(Icons.timer_outlined),
+                title: const Text('Sleep Timer'),
+                subtitle: Text(
+                  sleepTimer.isActive 
+                      ? 'Ends in ${sleepTimer.minutesLeft} minutes' 
+                      : 'Automatically stop playback',
+                ),
+                trailing: sleepTimer.isActive 
+                    ? IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Colors.redAccent),
+                        onPressed: () => ref.read(sleepTimerProvider.notifier).cancelTimer(),
+                      )
+                    : const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  showModalBottomSheet(
+                    context: context,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => const SleepTimerSheet(),
+                  );
+                },
+              );
+            },
+          ),
           const Divider(color: Colors.white10),
           _buildSectionHeader(context, 'Appearance'),
           SwitchListTile(
@@ -59,6 +89,45 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: const Text('Force dark theme'),
             value: settings.isDarkMode,
             onChanged: (val) => ref.read(settingsNotifierProvider.notifier).toggleDarkMode(val),
+          ),
+          const Divider(color: Colors.white10),
+          _buildSectionHeader(context, 'Storage'),
+          ListTile(
+            leading: const Icon(Icons.cleaning_services_rounded),
+            title: const Text('Clear Cache'),
+            subtitle: const Text('Clear search history and image thumbnails'),
+            onTap: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  backgroundColor: const Color(0xFF16142E),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  title: const Text('Clear Cache?'),
+                  content: const Text('This will remove your search history and cached images. Downloads will not be affected.'),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true), 
+                      child: const Text('Clear', style: TextStyle(color: Colors.redAccent)),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirmed == true) {
+                await DefaultCacheManager().emptyCache();
+                await Hive.box<String>('search_cache').clear();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Cache cleared successfully!'),
+                      behavior: SnackBarBehavior.floating,
+                      backgroundColor: Color(0xFFBB86FC),
+                    ),
+                  );
+                }
+              }
+            },
           ),
           const Divider(color: Colors.white10),
           _buildSectionHeader(context, 'About'),
