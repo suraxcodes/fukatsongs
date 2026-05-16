@@ -8,6 +8,8 @@ import '../../../library/logic/download_notifier.dart';
 import '../../../../core/widgets/glass_container.dart';
 import '../../../player/presentation/immersive_player_screen.dart';
 import '../../../library/presentation/song_options_sheet.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import '../../../../core/constants/hive_boxes.dart';
 
 class SongCard extends ConsumerWidget {
   final Song song;
@@ -26,7 +28,9 @@ class SongCard extends ConsumerWidget {
     
     final isDownloading = downloadState.containsKey(song.id);
     final progress = downloadState[song.id] ?? 0.0;
-    final isDownloaded = song.localPath != null;
+    
+    // Check if song is downloaded by looking at the downloads box
+    final isDownloaded = Hive.box<Song>(HiveBoxes.downloads).containsKey(song.id);
 
     return GestureDetector(
       onTap: () {
@@ -132,6 +136,15 @@ class SongCard extends ConsumerWidget {
                 progress,
                 isDownloaded,
                 () => downloadNotifier.downloadSong(song),
+              ),
+            ),
+            // More Options (Three-dot menu)
+            Positioned(
+              bottom: 4,
+              right: 4,
+              child: IconButton(
+                icon: const Icon(Icons.more_vert_rounded, color: Colors.white70, size: 20),
+                onPressed: () => showSongOptions(context, song),
               ),
             ),
           ],

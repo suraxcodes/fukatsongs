@@ -1,44 +1,51 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import '../../../models/song.dart';
-import '../../../providers/music_repository_provider.dart';
+import 'package:fukat_songs/models/song.dart';
+import 'package:fukat_songs/providers/music_repository_provider.dart';
+import 'package:fukat_songs/core/constants/hive_boxes.dart';
 
-part 'download_notifier.g.dart';
-
-@riverpod
-class DownloadNotifier extends _$DownloadNotifier {
+class DownloadNotifier extends StateNotifier<Map<String, double>> {
+  final Ref ref;
   final _dio = Dio();
-  
-  @override
-  Map<String, double> build() => {};
+  final Map<String, CancelToken> _cancelTokens = {};
+
+  DownloadNotifier(this.ref) : super({});
 
   Future<void> downloadSong(Song song) async {
     if (state.containsKey(song.id)) return;
 
+    final cancelToken = CancelToken();
+    _cancelTokens[song.id] = cancelToken;
+
     try {
-      // 1. Fetch Stream URL
       final repository = ref.read(musicRepositoryProvider);
       final streamUrl = await repository.getStreamUrl(song);
       if (streamUrl == null) throw Exception("Could not fetch stream URL");
 
-      // 2. Prepare Directory
       final appDocDir = await getApplicationDocumentsDirectory();
       final downloadDir = Directory('${appDocDir.path}/downloads');
       if (!await downloadDir.exists()) {
         await downloadDir.create(recursive: true);
       }
 
-      final filePath = '${downloadDir.path}/${song.id}.mp3';
+      final filePath = '${downloadDir.path}/${song.id}.m4a';
       
-      // 3. Start Download
       state = {...state, song.id: 0.0};
       
+      // Saavn requires specific headers for stream access
+      final headers = <String, String>{
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        if (song.source == 'saavn') 'Referer': 'https://www.jiosaavn.com/',
+      };
+
       await _dio.download(
         streamUrl,
         filePath,
+        cancelToken: cancelToken,
+        options: Options(headers: headers),
         onReceiveProgress: (count, total) {
           if (total != -1) {
             state = {...state, song.id: count / total};
@@ -46,20 +53,39 @@ class DownloadNotifier extends _$DownloadNotifier {
         },
       );
 
-      // 4. Persistence
       final updatedSong = song.copyWith(localPath: filePath);
-      final libraryBox = Hive.box('library');
-      await libraryBox.put(updatedSong.id, updatedSong.toJson());
+      final downloadsBox = Hive.box<Song>(HiveBoxes.downloads);
+      await downloadsBox.put(updatedSong.id, updatedSong);
       
-      // Clear progress on success
-      state = {...state}..remove(song.id);
-      
-    } catch (e) {
-      print("Download error: $e");
+    } on DioException catch (e) {
+      if (!CancelToken.isCancel(e)) {
+        rethrow;
+      }
+    } finally {
+      _cancelTokens.remove(song.id);
       state = {...state}..remove(song.id);
     }
   }
-  
-  bool isDownloading(String id) => state.containsKey(id);
-  double getProgress(String id) => state[id] ?? 0.0;
+
+  void cancelDownload(String songId) {
+    _cancelTokens[songId]?.cancel();
+    _cancelTokens.remove(songId);
+    state = {...state}..remove(songId);
+  }
+}
+
+final downloadNotifierProvider = StateNotifierProvider<DownloadNotifier, Map<String, double>>((ref) {
+  return DownloadNotifier(ref);
+});
+
+Future<File?> getLocalAudioFile(String songId) async {
+  final box = Hive.box<Song>(HiveBoxes.downloads);
+  final song = box.get(songId);
+  if (song != null && song.localPath != null) {
+    final file = File(song.localPath!);
+    if (await file.exists()) {
+      return file;
+    }
+  }
+  return null;
 }

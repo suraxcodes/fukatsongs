@@ -10,7 +10,13 @@ import '../../player/presentation/player_notifier.dart';
 import '../../player/presentation/immersive_player_screen.dart';
 import 'playlist_detail_screen.dart';
 import 'song_options_sheet.dart';
+import '../../../core/constants/hive_boxes.dart';
 import '../../../providers/playlist_repository_provider.dart';
+import '../../main/main_screen_notifier.dart';
+import '../../settings/presentation/settings_screen.dart';
+import 'playlist_import_dialog.dart';
+
+final librarySearchProvider = StateProvider<String>((ref) => '');
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -57,12 +63,58 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                       color: Colors.white,
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
-                    onPressed: () => _showCreatePlaylistDialog(context),
-                    tooltip: 'New Playlist',
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.import_export_rounded, color: Colors.white, size: 28),
+                        onPressed: () => showPlaylistImportDialog(context),
+                        tooltip: 'Import Playlist',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+                        onPressed: () => _showCreatePlaylistDialog(context),
+                        tooltip: 'New Playlist',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.settings_outlined, color: Colors.white70),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                        ),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.only(left: 8.w),
+                        child: CircleAvatar(
+                          radius: 14.r,
+                          backgroundColor: Colors.blueAccent,
+                          child: Text('S', style: TextStyle(color: Colors.white, fontSize: 12.sp, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
+              ),
+            ),
+            SizedBox(height: 20.h),
+            // Search Bar for Library
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.w),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
+                child: TextField(
+                  onChanged: (val) => ref.read(librarySearchProvider.notifier).state = val,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Search in library...',
+                    hintStyle: TextStyle(color: Colors.white38, fontSize: 14.sp),
+                    prefixIcon: const Icon(Icons.search_rounded, color: Colors.white38),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 12.h),
+                  ),
+                ),
               ),
             ),
             SizedBox(height: 12.h),
@@ -138,26 +190,26 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
   }
 }
 
-// ─── Downloads Tab ───────────────────────────────────────────────────────────
-
 class _DownloadsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playerNotifier = ref.read(playerNotifierProvider.notifier);
 
     return ValueListenableBuilder(
-      valueListenable: Hive.box('library').listenable(),
-      builder: (context, Box box, _) {
+      valueListenable: Hive.box<Song>(HiveBoxes.downloads).listenable(),
+      builder: (context, Box<Song> box, _) {
         if (box.isEmpty) {
-          return _emptyState(
-            icon: Icons.download_rounded,
-            message: 'Your downloaded songs\nwill appear here',
-          );
+// ...
         }
 
-        final songs = box.values
-            .map((s) => Song.fromJson(Map<String, dynamic>.from(s)))
-            .toList();
+        final searchQuery = ref.watch(librarySearchProvider).toLowerCase();
+        var songs = box.values.toList();
+        if (searchQuery.isNotEmpty) {
+          songs = songs.where((s) => 
+            s.title.toLowerCase().contains(searchQuery) || 
+            s.artist.toLowerCase().contains(searchQuery)
+          ).toList();
+        }
 
         return ListView.builder(
           padding: EdgeInsets.fromLTRB(0, 12.h, 0, 120.h),
@@ -192,8 +244,16 @@ class _PlaylistsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playlists = ref.watch(playlistNotifierProvider);
+    final searchQuery = ref.watch(librarySearchProvider).toLowerCase();
 
-    if (playlists.isEmpty) {
+    var filteredPlaylists = playlists;
+    if (searchQuery.isNotEmpty) {
+      filteredPlaylists = playlists.where((p) => 
+        p.name.toLowerCase().contains(searchQuery)
+      ).toList();
+    }
+
+    if (filteredPlaylists.isEmpty) {
       return _emptyState(
         icon: Icons.queue_music_rounded,
         message: 'No playlists yet\nTap + to create one',
@@ -207,9 +267,9 @@ class _PlaylistsTab extends ConsumerWidget {
 
     return ListView.builder(
       padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 120.h),
-      itemCount: playlists.length,
+      itemCount: filteredPlaylists.length,
       itemBuilder: (context, index) {
-        final pl = playlists[index];
+        final pl = filteredPlaylists[index];
         return _PlaylistTile(playlist: pl);
       },
     );
@@ -300,9 +360,18 @@ class _LikedSongsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final likedSongs = ref.watch(likedSongsNotifierProvider);
+    final searchQuery = ref.watch(librarySearchProvider).toLowerCase();
     final playerNotifier = ref.read(playerNotifierProvider.notifier);
 
-    if (likedSongs.isEmpty) {
+    var filteredSongs = likedSongs;
+    if (searchQuery.isNotEmpty) {
+      filteredSongs = likedSongs.where((s) => 
+        s.title.toLowerCase().contains(searchQuery) || 
+        s.artist.toLowerCase().contains(searchQuery)
+      ).toList();
+    }
+
+    if (filteredSongs.isEmpty) {
       return _emptyState(
         icon: Icons.favorite_rounded,
         message: 'Songs you like\nwill appear here',
@@ -311,9 +380,9 @@ class _LikedSongsTab extends ConsumerWidget {
 
     return ListView.builder(
       padding: EdgeInsets.fromLTRB(0, 12.h, 0, 120.h),
-      itemCount: likedSongs.length,
+      itemCount: filteredSongs.length,
       itemBuilder: (context, index) {
-        final song = likedSongs[index];
+        final song = filteredSongs[index];
         return _SongListTile(
           song: song,
           trailing: IconButton(
@@ -322,7 +391,7 @@ class _LikedSongsTab extends ConsumerWidget {
           ),
           onTap: () {
             playerNotifier.setQueueAndPlay(
-              List<Song>.from(likedSongs),
+              List<Song>.from(filteredSongs),
               startIndex: index,
             );
             Future.delayed(const Duration(milliseconds: 200), () {

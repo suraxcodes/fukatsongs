@@ -7,8 +7,10 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:fukat_songs/core/audio/youtube_audio_source.dart';
 import 'package:fukat_songs/models/song.dart';
+import '../../features/library/logic/download_notifier.dart';
 
-class MusicAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
+class MusicAudioHandler extends BaseAudioHandler
+    with QueueHandler, SeekHandler {
   late final AndroidEqualizer _equalizer;
   late final AndroidLoudnessEnhancer _loudnessEnhancer;
   final yt_exp.YoutubeExplode _yt = yt_exp.YoutubeExplode();
@@ -27,20 +29,53 @@ class MusicAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
   void _initPlayer() {
     _player = AudioPlayer(
       audioPipeline: AudioPipeline(
-        androidAudioEffects: [
-          _equalizer,
-          _loudnessEnhancer,
-        ],
+        androidAudioEffects: [_equalizer, _loudnessEnhancer],
       ),
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     );
     _player.setSkipSilenceEnabled(true);
   }
 
   AndroidEqualizer get equalizer => _equalizer;
 
+  void setLoudnessEnhancement(bool enabled) {
+    _loudnessEnhancer.setEnabled(enabled);
+    if (enabled) {
+      _loudnessEnhancer.setTargetGain(400); // Safer boost (+4dB)
+    }
+  }
+
   Future<void> _initAudioSession() async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
+
+    // Handle interruptions (like phone calls)
+    session.interruptionEventStream.listen((event) {
+      if (event.begin) {
+        switch (event.type) {
+          case AudioInterruptionType.pause:
+          case AudioInterruptionType.unknown:
+            pause();
+            break;
+          case AudioInterruptionType.duck:
+            _player.setVolume(0.5);
+            break;
+        }
+      } else {
+        switch (event.type) {
+          case AudioInterruptionType.pause:
+          case AudioInterruptionType.unknown:
+            play();
+            break;
+          case AudioInterruptionType.duck:
+            _player.setVolume(1.0);
+            break;
+        }
+      }
+    });
+
+    // Handle unplugging headphones
+    session.becomingNoisyEventStream.listen((_) => pause());
   }
 
   void _listenToDurationChanges() {
@@ -55,32 +90,36 @@ class MusicAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
   void _notifyAudioHandlerAboutPlaybackEvents() {
     _player.playbackEventStream.listen((PlaybackEvent event) {
       final playing = _player.playing;
-      playbackState.add(playbackState.value.copyWith(
-        controls: [
-          MediaControl.skipToPrevious,
-          if (playing) MediaControl.pause else MediaControl.play,
-          MediaControl.stop,
-          MediaControl.skipToNext,
-        ],
-        systemActions: const {
-          MediaAction.seek,
-          MediaAction.skipToNext,
-          MediaAction.skipToPrevious,
-        },
-        androidCompactActionIndices: const [0, 1, 3],
-        processingState: {
-          ProcessingState.idle: AudioProcessingState.idle,
-          ProcessingState.loading: AudioProcessingState.loading,
-          ProcessingState.buffering: AudioProcessingState.buffering,
-          ProcessingState.ready: AudioProcessingState.ready,
-          ProcessingState.completed: AudioProcessingState.completed,
-        }[_player.processingState] ?? AudioProcessingState.idle,
-        playing: playing,
-        updatePosition: _player.position,
-        bufferedPosition: _player.bufferedPosition,
-        speed: _player.speed,
-        queueIndex: event.currentIndex,
-      ));
+      playbackState.add(
+        playbackState.value.copyWith(
+          controls: [
+            MediaControl.skipToPrevious,
+            if (playing) MediaControl.pause else MediaControl.play,
+            MediaControl.stop,
+            MediaControl.skipToNext,
+          ],
+          systemActions: const {
+            MediaAction.seek,
+            MediaAction.skipToNext,
+            MediaAction.skipToPrevious,
+          },
+          androidCompactActionIndices: const [0, 1, 3],
+          processingState:
+              {
+                ProcessingState.idle: AudioProcessingState.idle,
+                ProcessingState.loading: AudioProcessingState.loading,
+                ProcessingState.buffering: AudioProcessingState.buffering,
+                ProcessingState.ready: AudioProcessingState.ready,
+                ProcessingState.completed: AudioProcessingState.completed,
+              }[_player.processingState] ??
+              AudioProcessingState.idle,
+          playing: playing,
+          updatePosition: _player.position,
+          bufferedPosition: _player.bufferedPosition,
+          speed: _player.speed,
+          queueIndex: event.currentIndex,
+        ),
+      );
     });
   }
 
@@ -118,66 +157,59 @@ class MusicAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
         break;
     }
   }
+
   int _playSessionId = 0;
 
   Future<void> playUrl(String url, Song song) async {
     final sessionId = ++_playSessionId;
-    print('--- ATTEMPTING HYBRID PLAYBACK ---');
-    
-    final providersToTry = [
-      song.source,
-      ...song.providers.keys.where((p) => p != song.source),
-    ];
+    print('--- PLAYURL CALLED: ${song.title} (${song.source}) ---');
 
-    String? lastError;
+    // Cancel any existing buffering by bumping the session first
+    try {
+      await _player.stop();
+    } catch (_) {}
 
-    for (var provider in providersToTry) {
-      try {
-        print('--- TRYING PROVIDER: $provider ---');
-        
-        String currentUrl = url;
-        final mediaItem = _toMediaItem(song).copyWith(
-          extras: {...?_toMediaItem(song).extras, 'active_provider': provider},
-        );
-        this.mediaItem.add(mediaItem);
-        
-        playbackState.add(playbackState.value.copyWith(
-          processingState: AudioProcessingState.loading,
-        ));
+    if (_playSessionId != sessionId) return;
 
-        if (provider == 'youtube') {
-          await _player.setUrl(currentUrl);
-        } else {
-          await _player.setAudioSource(
-            AudioSource.uri(
-              Uri.parse(currentUrl),
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-                'Referer': 'https://www.jiosaavn.com/',
-              },
-            ),
-          );
-        }
+    final mediaItem = _toMediaItem(song);
+    this.mediaItem.add(mediaItem);
 
-        if (_playSessionId != sessionId) {
-          print('--- PLAYBACK ABORTED (Superseded by new track) ---');
-          return;
-        }
+    playbackState.add(
+      playbackState.value.copyWith(processingState: AudioProcessingState.loading),
+    );
 
-        print('--- PLAYBACK STARTING ($provider) ---');
-        await _player.play();
-        return;
-      } catch (e) {
-        print('--- PROVIDER $provider FAILED: $e ---');
-        lastError = e.toString();
+    // Load the audio source with appropriate headers
+    final headers = <String, String>{
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+      if (song.source == 'saavn') 'Referer': 'https://www.jiosaavn.com/',
+    };
+
+    await _player.setAudioSource(
+      AudioSource.uri(Uri.parse(url), headers: headers),
+      preload: true,
+    );
+
+    if (_playSessionId != sessionId) {
+      print('--- PLAYBACK ABORTED (session expired) ---');
+      return;
+    }
+
+    // Smart Wait: buffer at least 1.5s before playing — but cap at 1.5s total
+    // so switching songs never feels frozen. If player is 'ready', start immediately.
+    int attempts = 0;
+    while (attempts < 8) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      attempts++;
+      if (_playSessionId != sessionId) return;
+      // If player is ready or we have 1.5s buffered, start now
+      if (_player.processingState == ProcessingState.ready &&
+          _player.bufferedPosition >= const Duration(milliseconds: 1500)) {
+        break;
       }
     }
 
-    print('--- ALL PROVIDERS FAILED ---');
-    playbackState.add(playbackState.value.copyWith(
-      processingState: AudioProcessingState.error,
-    ));
-    throw Exception('Playback failed on all sources: $lastError');
+    print('--- PLAYBACK STARTING (${song.source}) ---');
+    await _player.play();
   }
 
   Future<void> playFile(String path, Song song) async {
@@ -185,7 +217,7 @@ class MusicAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
     try {
       final mediaItem = _toMediaItem(song);
       this.mediaItem.add(mediaItem);
-      
+
       await _player.setAudioSource(AudioSource.file(path));
       if (_playSessionId != sessionId) {
         print('--- FILE PLAYBACK ABORTED ---');

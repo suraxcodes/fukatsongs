@@ -2,10 +2,13 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import '../../../models/song.dart';
-import '../../../models/playlist.dart';
-import '../../library/logic/playlist_notifier.dart';
-import '../../player/presentation/player_notifier.dart';
+import 'package:fukat_songs/models/song.dart';
+import 'package:fukat_songs/models/playlist.dart';
+import 'package:fukat_songs/features/library/logic/playlist_notifier.dart';
+import 'package:fukat_songs/features/player/presentation/player_notifier.dart';
+import 'package:fukat_songs/features/library/logic/download_notifier.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:fukat_songs/core/constants/hive_boxes.dart';
 
 /// Shows the three-dot options sheet for a song.
 void showSongOptions(BuildContext context, Song song) {
@@ -17,6 +20,17 @@ void showSongOptions(BuildContext context, Song song) {
   );
 }
 
+/// Shows the 'Add to Playlist' sheet directly.
+void showAddToPlaylistSheet(BuildContext context, WidgetRef ref, Song song) {
+  final playlists = ref.read(playlistNotifierProvider);
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _AddToPlaylistSheet(song: song, playlists: playlists),
+  );
+}
+
 class SongOptionsSheet extends ConsumerWidget {
   final Song song;
   const SongOptionsSheet({super.key, required this.song});
@@ -25,6 +39,12 @@ class SongOptionsSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final playlists = ref.watch(playlistNotifierProvider);
     final isLiked = ref.watch(likedSongsNotifierProvider.notifier).isLiked(song.id);
+    
+    // Check if song is downloaded by looking at the downloads box
+    final isDownloaded = Hive.box<Song>(HiveBoxes.downloads).containsKey(song.id);
+    final downloadState = ref.watch(downloadNotifierProvider);
+    final isDownloading = downloadState.containsKey(song.id);
+    final progress = downloadState[song.id] ?? 0.0;
 
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
@@ -100,6 +120,41 @@ class SongOptionsSheet extends ConsumerWidget {
               ),
               const Divider(color: Colors.white10, height: 1),
               // Options List
+              if (isDownloaded)
+                _option(
+                  context,
+                  icon: Icons.download_done_rounded,
+                  color: Colors.greenAccent,
+                  label: 'Downloaded',
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Song already downloaded')),
+                    );
+                    Navigator.pop(context);
+                  },
+                )
+              else if (isDownloading)
+                _option(
+                  context,
+                  icon: Icons.downloading_rounded,
+                  label: 'Downloading (${(progress * 100).toInt()}%)',
+                  onTap: () {},
+                  trailing: SizedBox(
+                    width: 20.w,
+                    height: 20.w,
+                    child: CircularProgressIndicator(value: progress, strokeWidth: 2),
+                  ),
+                )
+              else
+                _option(
+                  context,
+                  icon: Icons.download_for_offline_rounded,
+                  label: 'Download Song',
+                  onTap: () {
+                    ref.read(downloadNotifierProvider.notifier).downloadSong(song);
+                    Navigator.pop(context);
+                  },
+                ),
               _option(
                 context,
                 icon: isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
@@ -116,7 +171,7 @@ class SongOptionsSheet extends ConsumerWidget {
                 label: 'Save to Playlist',
                 onTap: () {
                   Navigator.pop(context);
-                  _showAddToPlaylistSheet(context, ref, song, playlists);
+                  showAddToPlaylistSheet(context, ref, song);
                 },
               ),
               _option(
@@ -124,6 +179,7 @@ class SongOptionsSheet extends ConsumerWidget {
                 icon: Icons.queue_music_rounded,
                 label: 'Add to Queue',
                 onTap: () {
+                  ref.read(playerNotifierProvider.notifier).addSongToQueue(song);
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Added to queue')),
@@ -135,7 +191,11 @@ class SongOptionsSheet extends ConsumerWidget {
                 icon: Icons.skip_next_rounded,
                 label: 'Play Next',
                 onTap: () {
+                  ref.read(playerNotifierProvider.notifier).playNext(song);
                   Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Playing next')),
+                  );
                 },
               ),
               _option(
@@ -158,11 +218,13 @@ class SongOptionsSheet extends ConsumerWidget {
     required String label,
     required VoidCallback onTap,
     Color color = Colors.white70,
+    Widget? trailing,
   }) {
     return ListTile(
       leading: Icon(icon, color: color, size: 24),
       title: Text(label, style: TextStyle(color: Colors.white, fontSize: 15.sp)),
       onTap: onTap,
+      trailing: trailing,
       contentPadding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 2.h),
     );
   }
@@ -249,9 +311,10 @@ class _AddToPlaylistSheet extends ConsumerWidget {
                     style: const TextStyle(color: Colors.white54),
                   ),
                   onTap: () {
+                    final messenger = ScaffoldMessenger.of(context);
                     ref.read(playlistNotifierProvider.notifier).addSong(pl.id, song);
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    messenger.showSnackBar(
                       SnackBar(content: Text('Added to "${pl.name}"')),
                     );
                   },

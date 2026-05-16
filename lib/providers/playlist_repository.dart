@@ -51,11 +51,12 @@ class PlaylistRepository {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
-  Future<void> createPlaylist(String name) async {
+  Future<void> createPlaylist(String name, {List<Song>? songs}) async {
     final playlist = Playlist(
       id: 'pl_${DateTime.now().millisecondsSinceEpoch}',
       name: name,
       createdAt: DateTime.now().millisecondsSinceEpoch,
+      songs: songs ?? [],
     );
     await savePlaylist(playlist);
   }

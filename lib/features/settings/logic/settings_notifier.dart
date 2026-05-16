@@ -15,7 +15,7 @@ class SettingsNotifier extends _$SettingsNotifier {
   AppSettings build() {
     _box = Hive.box(_boxName);
     final String? jsonString = _box.get(_key);
-    
+
     if (jsonString != null) {
       try {
         return AppSettings.fromJson(json.decode(jsonString));
@@ -23,7 +23,7 @@ class SettingsNotifier extends _$SettingsNotifier {
         return const AppSettings();
       }
     }
-    
+
     return const AppSettings();
   }
 

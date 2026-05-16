@@ -12,6 +12,8 @@ _$AppSettingsImpl _$$AppSettingsImplFromJson(Map<String, dynamic> json) =>
       downloadQuality: json['downloadQuality'] as String? ?? '320',
       useSystemTheme: json['useSystemTheme'] as bool? ?? true,
       isDarkMode: json['isDarkMode'] as bool? ?? false,
+      highFidelityMode: json['highFidelityMode'] as bool? ?? true,
+      loudnessEnhancement: json['loudnessEnhancement'] as bool? ?? false,
     );
 
 Map<String, dynamic> _$$AppSettingsImplToJson(_$AppSettingsImpl instance) =>
@@ -20,4 +22,6 @@ Map<String, dynamic> _$$AppSettingsImplToJson(_$AppSettingsImpl instance) =>
       'downloadQuality': instance.downloadQuality,
       'useSystemTheme': instance.useSystemTheme,
       'isDarkMode': instance.isDarkMode,
+      'highFidelityMode': instance.highFidelityMode,
+      'loudnessEnhancement': instance.loudnessEnhancement,
     };

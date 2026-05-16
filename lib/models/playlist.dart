@@ -1,17 +1,47 @@
-import 'package:freezed_annotation/freezed_annotation.dart';
 import 'song.dart';
 
-part 'playlist.freezed.dart';
-part 'playlist.g.dart';
+class Playlist {
+  final String id;
+  final String name;
+  final List<Song> songs;
+  final int createdAt;
 
-@freezed
-class Playlist with _$Playlist {
-  const factory Playlist({
-    required String id,
-    required String name,
-    @Default([]) List<Song> songs,
-    @Default(0) int createdAt,
-  }) = _Playlist;
+  const Playlist({
+    required this.id,
+    required this.name,
+    this.songs = const [],
+    this.createdAt = 0,
+  });
 
-  factory Playlist.fromJson(Map<String, dynamic> json) => _$PlaylistFromJson(json);
+  Playlist copyWith({
+    String? id,
+    String? name,
+    List<Song>? songs,
+    int? createdAt,
+  }) {
+    return Playlist(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      songs: songs ?? this.songs,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'songs': songs.map((s) => s.toJson()).toList(),
+      'createdAt': createdAt,
+    };
+  }
+
+  factory Playlist.fromJson(Map<String, dynamic> json) {
+    return Playlist(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      songs: (json['songs'] as List?)?.map((s) => Song.fromJson(s as Map<String, dynamic>)).toList() ?? [],
+      createdAt: json['createdAt'] as int? ?? 0,
+    );
+  }
 }

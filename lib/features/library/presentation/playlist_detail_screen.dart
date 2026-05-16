@@ -2,40 +2,41 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../../../models/playlist.dart';
-import '../../../models/song.dart';
-import '../../player/presentation/player_notifier.dart';
-import '../../player/presentation/immersive_player_screen.dart';
-import '../logic/playlist_notifier.dart';
-import 'song_options_sheet.dart';
+import 'package:fukat_songs/models/playlist.dart';
+import 'package:fukat_songs/models/song.dart';
+import 'package:fukat_songs/features/player/presentation/player_notifier.dart';
+import 'package:fukat_songs/features/player/presentation/immersive_player_screen.dart';
+import 'package:fukat_songs/features/library/logic/playlist_notifier.dart';
+import 'package:fukat_songs/features/library/presentation/song_options_sheet.dart';
 
 class PlaylistDetailScreen extends ConsumerWidget {
-  final String playlistId;
-  const PlaylistDetailScreen({super.key, required this.playlistId});
+  final String? playlistId;
+  final Playlist? playlist;
+  const PlaylistDetailScreen({super.key, this.playlistId, this.playlist});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final playlists = ref.watch(playlistNotifierProvider);
-    final playlist = playlists.firstWhere(
-      (p) => p.id == playlistId,
-      orElse: () => Playlist(id: '', name: 'Not Found'),
-    );
+    final targetPlaylist = playlist ?? 
+      ref.watch(playlistNotifierProvider).firstWhere(
+        (p) => p.id == playlistId,
+        orElse: () => const Playlist(id: '', name: 'Not Found'),
+      );
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D0B1F),
       body: CustomScrollView(
         slivers: [
-          _buildHeader(context, playlist, ref),
+          _buildHeader(context, targetPlaylist, ref),
           SliverList(
             delegate: SliverChildBuilderDelegate(
               (context, index) {
-                final song = playlist.songs[index];
-                return _buildSongTile(context, ref, playlist, song, index);
+                final song = targetPlaylist.songs[index];
+                return _buildSongTile(context, ref, targetPlaylist, song, index);
               },
-              childCount: playlist.songs.length,
+              childCount: targetPlaylist.songs.length,
             ),
           ),
-          if (playlist.songs.isEmpty)
+          if (targetPlaylist.songs.isEmpty)
             SliverFillRemaining(
               child: Center(
                 child: Column(

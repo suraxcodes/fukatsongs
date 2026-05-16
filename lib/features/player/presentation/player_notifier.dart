@@ -1,8 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:fukat_songs/models/song.dart';
 import 'package:fukat_songs/core/audio/audio_handler.dart';
 import 'package:fukat_songs/core/audio/audio_handler_provider.dart';
@@ -10,85 +11,71 @@ import 'package:fukat_songs/providers/music_repository_provider.dart';
 import 'package:fukat_songs/providers/playlist_repository_provider.dart';
 import 'package:fukat_songs/features/settings/logic/settings_notifier.dart';
 import 'package:fukat_songs/core/repositories/history_repository.dart';
-import 'player_state.dart';
+import 'package:fukat_songs/core/constants/hive_boxes.dart';
+import 'package:fukat_songs/features/player/presentation/player_state.dart';
 
-part 'player_notifier.g.dart';
-
-@Riverpod(keepAlive: true)
-class PlayerNotifier extends _$PlayerNotifier {
-  // Both queues are kept in sync — never destructively shuffle
+class PlayerNotifier extends StateNotifier<PlayerState> {
+  final Ref ref;
   List<Song> _originalQueue = [];
   List<Song> _shuffledQueue = [];
+  int _playbackSessionId = 0;
 
-  @override
-  PlayerState build() {
-    final handler = ref.watch(audioHandlerProvider);
+  PlayerNotifier(this.ref) : super(const PlayerState()) {
+    _init();
+  }
 
-    final playbackSubscription = handler.playbackState.listen((s) {
-      this.state = this.state.copyWith(
+  void _init() {
+    final handler = ref.read(audioHandlerProvider);
+
+    handler.playbackState.listen((s) {
+      state = state.copyWith(
         isPlaying: s.playing,
         processingState: s.processingState,
         bufferedPosition: s.bufferedPosition,
       );
 
-      // Auto-advance when a song completes
       if (s.processingState == AudioProcessingState.completed) {
         _onSongCompleted();
       }
     });
 
-    final mediaItemSubscription = handler.mediaItem.listen((item) {
+    handler.mediaItem.listen((item) {
       if (item != null) {
-        this.state = this.state.copyWith(
-          totalDuration: item.duration ?? Duration.zero,
-        );
+        state = state.copyWith(totalDuration: item.duration ?? Duration.zero);
       }
     });
 
-    final positionSubscription =
-        (handler as MusicAudioHandler).positionStream.listen((pos) {
-      this.state = this.state.copyWith(position: pos);
+    (handler as MusicAudioHandler).positionStream.listen((pos) {
+      state = state.copyWith(position: pos);
     });
-
-    ref.onDispose(() {
-      playbackSubscription.cancel();
-      mediaItemSubscription.cancel();
-      positionSubscription.cancel();
-    });
-
-    return const PlayerState();
   }
 
-  // ─── Queue Management ───────────────────────────────────────────
-
-  int _playbackSessionId = 0;
-
-  /// Play a single song without changing the queue.
   Future<void> playSong(Song song, {bool isRetry = false}) async {
     final sessionId = ++_playbackSessionId;
     final audioHandler = ref.read(audioHandlerProvider);
-    
-    // Immediately pause previous audio to prevent ghost-playing while fetching URL
-    audioHandler.pause();
+
+    // ✅ Stop current playback IMMEDIATELY — no lingering old audio
+    await audioHandler.stop();
 
     state = state.copyWith(
-      currentSong: song, 
-      isPlaying: true,
+      currentSong: song,
+      isPlaying: false,
       position: Duration.zero,
       processingState: AudioProcessingState.loading,
     );
-    
+
     ref.read(historyRepositoryProvider).addToPlaybackHistory(song);
     await _doPlay(song, sessionId, isRetry: isRetry);
   }
 
-  /// Set a full queue and start playing from [startIndex].
   Future<void> setQueueAndPlay(List<Song> songs, {int startIndex = 0}) async {
     if (songs.isEmpty) return;
     _originalQueue = List.from(songs);
     _buildShuffledQueue(startIndex);
 
-    final activeQueue = state.isShuffleModeEnabled ? _shuffledQueue : _originalQueue;
+    final activeQueue = state.isShuffleModeEnabled
+        ? _shuffledQueue
+        : _originalQueue;
     final song = activeQueue[startIndex];
     state = state.copyWith(
       queue: activeQueue,
@@ -96,6 +83,45 @@ class PlayerNotifier extends _$PlayerNotifier {
       currentSong: song,
     );
     await playSong(song);
+  }
+
+  void addSongToQueue(Song song) {
+    if (_originalQueue.isEmpty && state.currentSong != null) {
+      _originalQueue = [state.currentSong!, song];
+    } else {
+      _originalQueue.add(song);
+    }
+
+    if (state.isShuffleModeEnabled) {
+      _shuffledQueue.add(song);
+    }
+    state = state.copyWith(
+      queue: state.isShuffleModeEnabled ? _shuffledQueue : _originalQueue,
+    );
+  }
+
+  void playNext(Song song) {
+    if (_originalQueue.isEmpty && state.currentSong != null) {
+      _originalQueue = [state.currentSong!, song];
+      state = state.copyWith(queue: _originalQueue, currentIndex: 0);
+      return;
+    }
+
+    if (_originalQueue.isEmpty) {
+      setQueueAndPlay([song]);
+      return;
+    }
+
+    final currentIndex = state.currentIndex;
+    _originalQueue.insert(currentIndex + 1, song);
+
+    if (state.isShuffleModeEnabled) {
+      _shuffledQueue.insert(currentIndex + 1, song);
+    }
+
+    state = state.copyWith(
+      queue: state.isShuffleModeEnabled ? _shuffledQueue : _originalQueue,
+    );
   }
 
   void _buildShuffledQueue(int anchorIndex) {
@@ -107,9 +133,6 @@ class PlayerNotifier extends _$PlayerNotifier {
   void _onSongCompleted() {
     switch (state.repeatMode) {
       case AudioServiceRepeatMode.one:
-        // Native just_audio LoopMode.one usually prevents 'completed' state,
-        // but if it ever triggers, simply seek to 0 to loop it instantly
-        // without hitting the network again.
         seek(Duration.zero);
         resume();
         break;
@@ -128,24 +151,28 @@ class PlayerNotifier extends _$PlayerNotifier {
     if (queue.isEmpty) return;
     final nextIndex = state.currentIndex + 1;
     if (nextIndex >= queue.length) {
-      if (!wrap) return; // End of queue, stop
+      if (!wrap) return;
       state = state.copyWith(currentIndex: 0, currentSong: queue[0]);
       playSong(queue[0]);
     } else {
-      state = state.copyWith(currentIndex: nextIndex, currentSong: queue[nextIndex]);
+      state = state.copyWith(
+        currentIndex: nextIndex,
+        currentSong: queue[nextIndex],
+      );
       playSong(queue[nextIndex]);
     }
   }
-
-  // ─── Shuffle ─────────────────────────────────────────────────
 
   void toggleShuffle() {
     final enabled = !state.isShuffleModeEnabled;
     if (enabled && _originalQueue.isNotEmpty) {
       _buildShuffledQueue(state.currentIndex);
-      state = state.copyWith(isShuffleModeEnabled: true, queue: _shuffledQueue, currentIndex: 0);
+      state = state.copyWith(
+        isShuffleModeEnabled: true,
+        queue: _shuffledQueue,
+        currentIndex: 0,
+      );
     } else {
-      // Restore original queue, keep current song position
       final currentSong = state.currentSong;
       final idx = currentSong != null
           ? _originalQueue.indexWhere((s) => s.id == currentSong.id)
@@ -158,19 +185,15 @@ class PlayerNotifier extends _$PlayerNotifier {
     }
   }
 
-  // ─── Repeat ──────────────────────────────────────────────────
-
   void cycleRepeatMode() {
     final next = switch (state.repeatMode) {
       AudioServiceRepeatMode.none => AudioServiceRepeatMode.all,
-      AudioServiceRepeatMode.all  => AudioServiceRepeatMode.one,
-      _                           => AudioServiceRepeatMode.none,
+      AudioServiceRepeatMode.all => AudioServiceRepeatMode.one,
+      _ => AudioServiceRepeatMode.none,
     };
     state = state.copyWith(repeatMode: next);
     ref.read(audioHandlerProvider).setRepeatMode(next);
   }
-
-  // ─── Skip controls ───────────────────────────────────────────
 
   void skipToNext() {
     if (state.queue.isEmpty) {
@@ -186,13 +209,15 @@ class PlayerNotifier extends _$PlayerNotifier {
       ref.read(audioHandlerProvider).skipToPrevious();
       return;
     }
-    // If more than 3s in, restart current song instead
     if (state.position.inSeconds > 3) {
       seek(Duration.zero);
       return;
     }
     final prevIndex = (state.currentIndex - 1).clamp(0, queue.length - 1);
-    state = state.copyWith(currentIndex: prevIndex, currentSong: queue[prevIndex]);
+    state = state.copyWith(
+      currentIndex: prevIndex,
+      currentSong: queue[prevIndex],
+    );
     playSong(queue[prevIndex]);
   }
 
@@ -203,23 +228,45 @@ class PlayerNotifier extends _$PlayerNotifier {
     playSong(queue[index]);
   }
 
-  // ─── Playback helpers ─────────────────────────────────────────
-
   Future<void> _doPlay(Song song, int sessionId, {bool isRetry = false}) async {
     final settings = ref.read(settingsNotifierProvider);
     final audioHandler = ref.read(audioHandlerProvider);
     final repository = ref.read(musicRepositoryProvider);
 
     try {
-      if (song.localPath != null) {
-        final file = File(song.localPath!);
+      audioHandler.setLoudnessEnhancement(settings.loudnessEnhancement);
+      
+      final downloadsBox = Hive.box<Song>(HiveBoxes.downloads);
+      final downloadedSong = downloadsBox.get(song.id);
+
+      if (downloadedSong != null && downloadedSong.localPath != null) {
+        final file = File(downloadedSong.localPath!);
         if (await file.exists()) {
           if (_playbackSessionId != sessionId) return;
-          await audioHandler.playFile(song.localPath!, song);
+          await audioHandler.playFile(
+            downloadedSong.localPath!,
+            downloadedSong,
+          );
           return;
         }
       }
-      final url = await repository.getStreamUrl(song, quality: settings.streamingQuality);
+
+      // --- HYBRID QUALITY LOGIC ---
+      String quality = settings.streamingQuality;
+      if (settings.highFidelityMode) {
+        final connectivity = await Connectivity().checkConnectivity();
+        if (connectivity == ConnectivityResult.mobile) {
+          quality = '160'; // Start at 160 on mobile to prevent stuttering
+          print('--- HYBRID MODE: Mobile detected, starting at 160kbps ---');
+        } else {
+          quality = '320';
+        }
+      }
+
+      final url = await repository.getStreamUrl(
+        song,
+        quality: quality,
+      );
       if (url != null) {
         if (_playbackSessionId != sessionId) return;
         await audioHandler.playUrl(url, song);
@@ -231,7 +278,6 @@ class PlayerNotifier extends _$PlayerNotifier {
       if (!isRetry) {
         await _repairAndPlay(song, sessionId);
       } else {
-        debugPrint('Permanent playback failure for: ${song.title}');
         state = state.copyWith(processingState: AudioProcessingState.error);
       }
     }
@@ -240,8 +286,14 @@ class PlayerNotifier extends _$PlayerNotifier {
   Future<void> _repairAndPlay(Song song, int sessionId) async {
     final repository = ref.read(musicRepositoryProvider);
     final playlistRepo = ref.read(playlistRepositoryProvider);
-    debugPrint('Attempting self-healing for: ${song.title}');
-    final results = await repository.search('${song.title} ${song.artist}');
+
+    final cleanTitle = song.title
+        .replaceAll(RegExp(r'\(.*?\)|\[.*?\]'), '')
+        .replaceAll(RegExp(r'official (video|audio|lyric|hd|4k|mv)'), '')
+        .replaceAll(RegExp(r'[^\w\s]'), '')
+        .trim();
+
+    final results = await repository.search('$cleanTitle ${song.artist}');
     if (results.isNotEmpty) {
       final youtubeId = results.first.providers['youtube'];
       if (youtubeId != null) {
@@ -253,7 +305,7 @@ class PlayerNotifier extends _$PlayerNotifier {
           await libraryBox.put(song.id, repairedSong.toJson());
         }
         await playlistRepo.updateSongInAllPlaylists(repairedSong);
-        
+
         if (_playbackSessionId != sessionId) return;
         await playSong(repairedSong, isRetry: true);
       }
@@ -267,3 +319,8 @@ class PlayerNotifier extends _$PlayerNotifier {
   void resume() => ref.read(audioHandlerProvider).play();
   void seek(Duration position) => ref.read(audioHandlerProvider).seek(position);
 }
+
+final playerNotifierProvider =
+    StateNotifierProvider<PlayerNotifier, PlayerState>((ref) {
+      return PlayerNotifier(ref);
+    });

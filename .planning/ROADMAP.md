@@ -31,6 +31,16 @@ Status: **Active**
 - [ ] Build the "Liked Music" special collection (PL-04)
 - [ ] Final UI Polish: Scroll-up animations for all bottom sheets.
 
+### Phase 12: Caching & Offline Capabilities
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 11
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 12 to break down)
+
 ---
 
 ## Success Criteria (Milestone v2.0)

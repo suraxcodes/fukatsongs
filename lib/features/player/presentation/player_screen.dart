@@ -4,6 +4,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:audio_service/audio_service.dart';
 import 'player_notifier.dart';
+import '../../library/presentation/song_options_sheet.dart';
+import '../../../models/song.dart';
 
 class PlayerScreen extends ConsumerWidget {
   const PlayerScreen({super.key});
@@ -25,6 +27,12 @@ class PlayerScreen extends ConsumerWidget {
           icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 32),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+            onPressed: () => showSongOptions(context, currentSong),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Padding(

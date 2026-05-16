@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../logic/settings_notifier.dart';
 import '../../player/presentation/widgets/equalizer_sheet.dart';
 
@@ -66,8 +67,21 @@ class SettingsScreen extends ConsumerWidget {
             trailing: Text('1.0.0 (v2.0 Beta)', style: TextStyle(color: Colors.white54)),
           ),
           ListTile(
+            leading: const Icon(Icons.person_outline_rounded),
             title: const Text('Developer'),
-            trailing: const Text('Suraj Gawas', style: TextStyle(color: Colors.white54)),
+            subtitle: const Text('Suraj Gawas'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.email_outlined),
+            title: const Text('Contact'),
+            subtitle: const Text('gawassuraj090@gmail.com'),
+            onTap: () => launchUrl(Uri.parse('mailto:gawassuraj090@gmail.com')),
+          ),
+          ListTile(
+            leading: const Icon(Icons.code_rounded),
+            title: const Text('GitHub'),
+            subtitle: const Text('https://github.com/suraxcodes'),
+            onTap: () => launchUrl(Uri.parse('https://github.com/suraxcodes'), mode: LaunchMode.externalApplication),
           ),
         ],
       ),

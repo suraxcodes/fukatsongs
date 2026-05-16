@@ -1,9 +1,6 @@
-import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'playlist_repository.dart';
 
-part 'playlist_repository_provider.g.dart';
-
-@riverpod
-PlaylistRepository playlistRepository(PlaylistRepositoryRef ref) {
+final playlistRepositoryProvider = Provider<PlaylistRepository>((ref) {
   return PlaylistRepository();
-}
+});

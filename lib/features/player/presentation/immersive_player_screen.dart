@@ -4,18 +4,32 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:audio_service/audio_service.dart';
-import 'player_notifier.dart';
-import '../../../models/song.dart';
+import 'package:fukat_songs/features/player/presentation/player_notifier.dart';
+import 'package:fukat_songs/models/song.dart';
+import 'package:fukat_songs/features/library/presentation/song_options_sheet.dart';
+import 'package:fukat_songs/features/library/logic/playlist_notifier.dart';
+import 'package:fukat_songs/features/library/logic/download_notifier.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:fukat_songs/core/constants/hive_boxes.dart';
+
+/// Guard flag — prevents duplicate player sheets from stacking
+bool _isPlayerOpen = false;
 
 /// Opens the immersive player with a slide-up transition.
+/// Safe to call multiple times — only one sheet will ever be open.
 void openImmersivePlayer(BuildContext context) {
+  if (_isPlayerOpen) return; // Already open — ignore duplicate calls
+  _isPlayerOpen = true;
+
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     enableDrag: true,
     builder: (_) => const ImmersivePlayerScreen(),
-  );
+  ).whenComplete(() {
+    _isPlayerOpen = false; // Reset when dismissed
+  });
 }
 
 class ImmersivePlayerScreen extends ConsumerStatefulWidget {
@@ -67,17 +81,15 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
       snap: true,
       snapSizes: const [0.5, 1.0],
       builder: (context, scrollController) {
-        return Container(
-          decoration: const BoxDecoration(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Stack(
+        return Scaffold(
+          backgroundColor: const Color(0xFF0D0B1F),
+          body: Stack(
             children: [
               // Blurred background artwork
               _buildBackground(song),
               // Frosted overlay
               BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 0, sigmaY: 0),
+                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -134,40 +146,43 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
                             ),
                             IconButton(
                               icon: const Icon(Icons.more_vert_rounded, color: Colors.white70),
-                              onPressed: () {},
+                              onPressed: () => showSongOptions(context, song),
                             ),
                           ],
                         ),
                         SizedBox(height: 24.h),
                         // Artwork with animation
-                        ScaleTransition(
-                          scale: _artworkScale,
-                          child: Container(
-                            width: 300.w,
-                            height: 300.w,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(24.r),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF6200EE).withOpacity(0.5),
-                                  blurRadius: 40,
-                                  spreadRadius: 8,
-                                  offset: const Offset(0, 12),
-                                ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(24.r),
-                              child: CachedNetworkImage(
-                                imageUrl: song.imageUrl.replaceAll('150x150', '500x500'),
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => Container(
-                                  color: Colors.white10,
-                                  child: const Icon(Icons.music_note, size: 80, color: Colors.white24),
-                                ),
-                                errorWidget: (context, url, error) => Container(
-                                  color: Colors.white10,
-                                  child: const Icon(Icons.music_note, size: 80, color: Colors.white24),
+                        RepaintBoundary(
+                          child: ScaleTransition(
+                            scale: _artworkScale,
+                            child: Container(
+                              width: 300.w,
+                              height: 300.w,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(24.r),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF6200EE).withOpacity(0.5),
+                                    blurRadius: 40,
+                                    spreadRadius: 8,
+                                    offset: const Offset(0, 12),
+                                  ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(24.r),
+                                child: CachedNetworkImage(
+                                  imageUrl: song.imageUrl.replaceAll('150x150', '500x500'),
+                                  fit: BoxFit.cover,
+                                  memCacheWidth: 600, // Optimize memory
+                                  placeholder: (context, url) => Container(
+                                    color: Colors.white10,
+                                    child: const Icon(Icons.music_note, size: 80, color: Colors.white24),
+                                  ),
+                                  errorWidget: (context, url, error) => Container(
+                                    color: Colors.white10,
+                                    child: const Icon(Icons.music_note, size: 80, color: Colors.white24),
+                                  ),
                                 ),
                               ),
                             ),
@@ -244,6 +259,7 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
               fit: BoxFit.cover,
               width: double.infinity,
               height: double.infinity,
+              memCacheWidth: 100, // Small cache for blurred background saves tons of RAM
             ),
             BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
@@ -497,34 +513,138 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
   }
 
   Widget _buildBottomActions(Song song) {
+    final isDownloaded = Hive.box<Song>(HiveBoxes.downloads).containsKey(song.id);
+    final downloadState = ref.watch(downloadNotifierProvider);
+    final isDownloading = downloadState.containsKey(song.id);
+    final progress = downloadState[song.id] ?? 0.0;
+    
+    final playlists = ref.watch(playlistNotifierProvider);
+    final isInPlaylist = playlists.any((pl) => pl.songs.any((s) => s.id == song.id));
+    
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        _actionButton(Icons.devices_rounded, 'Devices'),
-        _actionButton(Icons.playlist_add_rounded, 'Playlist'),
-        _actionButton(Icons.download_rounded, 'Download'),
-        _actionButton(Icons.share_rounded, 'Share'),
+        _actionButton(Icons.devices_rounded, 'Devices', () {
+          final messenger = ScaffoldMessenger.of(context);
+          messenger.showSnackBar(const SnackBar(content: Text('Device switching coming soon')));
+        }),
+        _actionButton(
+          isInPlaylist ? Icons.playlist_add_check_rounded : Icons.playlist_add_rounded, 
+          isInPlaylist ? 'Added' : 'Playlist', 
+          () {
+            if (isInPlaylist) {
+              _showPlaylistOptions(context, ref, song);
+            } else {
+              showAddToPlaylistSheet(context, ref, song);
+            }
+          },
+          color: isInPlaylist ? const Color(0xFFBB86FC) : Colors.white70,
+        ),
+        _actionButton(
+          isDownloading ? Icons.downloading_rounded : (isDownloaded ? Icons.download_done_rounded : Icons.download_rounded), 
+          isDownloading ? '${(progress * 100).toInt()}%' : (isDownloaded ? 'Saved' : 'Download'),
+          () {
+            final messenger = ScaffoldMessenger.of(context);
+            if (isDownloaded) {
+              messenger.showSnackBar(const SnackBar(content: Text('Already downloaded')));
+            } else if (isDownloading) {
+              ref.read(downloadNotifierProvider.notifier).cancelDownload(song.id);
+              messenger.showSnackBar(const SnackBar(content: Text('Download cancelled')));
+            } else {
+              ref.read(downloadNotifierProvider.notifier).downloadSong(song);
+              messenger.showSnackBar(const SnackBar(content: Text('Starting download...')));
+            }
+          },
+          color: isDownloaded ? Colors.greenAccent : (isDownloading ? const Color(0xFF6200EE) : Colors.white70),
+          trailing: isDownloading ? SizedBox(
+            width: 14.w,
+            height: 14.w,
+            child: CircularProgressIndicator(value: progress, strokeWidth: 2, color: const Color(0xFF6200EE)),
+          ) : null,
+        ),
+        _actionButton(Icons.share_rounded, 'Share', () {
+          final messenger = ScaffoldMessenger.of(context);
+          messenger.showSnackBar(const SnackBar(content: Text('Sharing coming soon')));
+        }),
       ],
     );
   }
 
-  Widget _actionButton(IconData icon, String label) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 48.w,
-          height: 48.w,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.06),
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withOpacity(0.08)),
+  Widget _actionButton(IconData icon, String label, VoidCallback onTap, {Color color = Colors.white70, Widget? trailing}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(32.r),
+        child: Padding(
+          padding: EdgeInsets.all(8.w),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 48.w,
+                    height: 48.w,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.06),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white.withOpacity(0.08)),
+                    ),
+                    child: Icon(icon, color: color, size: 22),
+                  ),
+                  if (trailing != null)
+                    Positioned.fill(child: Center(child: trailing)),
+                ],
+              ),
+              SizedBox(height: 6.h),
+              Text(label, style: TextStyle(color: Colors.white38, fontSize: 10.sp)),
+            ],
           ),
-          child: Icon(icon, color: Colors.white70, size: 22),
         ),
-        SizedBox(height: 6.h),
-        Text(label, style: TextStyle(color: Colors.white38, fontSize: 10.sp)),
-      ],
+      ),
+    );
+  }
+
+  void _showPlaylistOptions(BuildContext context, WidgetRef ref, Song song) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF16142E),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28.r)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: EdgeInsets.all(16.w),
+              child: Container(width: 40.w, height: 4.h, decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(2.r))),
+            ),
+            ListTile(
+              leading: const Icon(Icons.playlist_add_rounded, color: Colors.white70),
+              title: const Text('Add to another playlist', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(ctx);
+                showAddToPlaylistSheet(context, ref, song);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.playlist_remove_rounded, color: Colors.redAccent),
+              title: const Text('Remove from all playlists', style: TextStyle(color: Colors.redAccent)),
+              onTap: () {
+                final messenger = ScaffoldMessenger.of(context);
+                ref.read(playlistNotifierProvider.notifier).removeSongFromAllPlaylists(song.id);
+                Navigator.pop(ctx);
+                messenger.showSnackBar(const SnackBar(content: Text('Removed from all playlists')));
+              },
+            ),
+            SizedBox(height: MediaQuery.of(context).padding.bottom + 16.h),
+          ],
+        ),
+      ),
     );
   }
 

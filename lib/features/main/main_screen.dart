@@ -4,15 +4,11 @@ import '../search/presentation/search_screen.dart';
 import '../library/presentation/library_screen.dart';
 import '../player/presentation/widgets/mini_player.dart';
 
-class MainScreen extends StatefulWidget {
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'main_screen_notifier.dart';
+
+class MainScreen extends ConsumerWidget {
   const MainScreen({super.key});
-
-  @override
-  State<MainScreen> createState() => _MainScreenState();
-}
-
-class _MainScreenState extends State<MainScreen> {
-  int _currentIndex = 0;
 
   final List<Widget> _screens = const [
     HomeScreen(),
@@ -21,12 +17,14 @@ class _MainScreenState extends State<MainScreen> {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentIndex = ref.watch(mainScreenNotifierProvider);
+
     return Scaffold(
       body: Stack(
         children: [
           IndexedStack(
-            index: _currentIndex,
+            index: currentIndex,
             children: _screens,
           ),
           const Positioned(
@@ -42,10 +40,10 @@ class _MainScreenState extends State<MainScreen> {
           canvasColor: const Color(0xFF0D0B1F),
         ),
         child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) => setState(() => _currentIndex = index),
+          currentIndex: currentIndex,
+          onTap: (index) => ref.read(mainScreenNotifierProvider.notifier).state = index,
           backgroundColor: const Color(0xFF0D0B1F),
-          selectedItemColor: const Color(0xFF6200EE),
+          selectedItemColor: const Color(0xFFBB86FC),
           unselectedItemColor: Colors.white54,
           showUnselectedLabels: true,
           type: BottomNavigationBarType.fixed,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:dio/dio.dart';
+import 'dart:convert';
 
 void main() {
   runApp(const MaterialApp(
@@ -18,7 +19,11 @@ class YTTestScreen extends StatefulWidget {
 
 class _YTTestScreenState extends State<YTTestScreen> {
   final player = AudioPlayer();
-  final dio = Dio();
+  final dio = Dio(BaseOptions(
+    connectTimeout: const Duration(seconds: 30),
+    receiveTimeout: const Duration(seconds: 30),
+  ));
+
   String status = 'Ready to test';
   bool isLoading = false;
 
@@ -33,47 +38,98 @@ class _YTTestScreenState extends State<YTTestScreen> {
   Future<void> startTest() async {
     setState(() {
       isLoading = true;
-      status = 'Opening the Diamond Key Tunnel (Invidious)...';
+      status = 'Searching for a "Crack" in the Block...';
     });
 
     const videoId = '7wtfhZwyrcc'; // Believer
 
     for (var instance in diamondKeys) {
       try {
-        setState(() => status = 'Trying Diamond Key: $instance');
-        print('--- Testing Diamond Key: $instance');
+        setState(() => status = 'Probing Tunnel: $instance');
+        print('--- PROBING: $instance');
         
         final response = await dio.get('$instance/api/v1/videos/$videoId');
         
+        // Deep Logging
+        print('--- STATUS: ${response.statusCode}');
+        
         if (response.statusCode == 200) {
-          final formats = response.data['adaptiveFormats'] as List;
-          // Look for audio-only streams
+          var data = response.data;
+          if (data is String) {
+            data = jsonDecode(data);
+          }
+          
+          if (data['adaptiveFormats'] == null) {
+            print('--- FAIL: No adaptive formats found on $instance');
+            continue;
+          }
+
+          final formats = data['adaptiveFormats'] as List;
           final audioStream = formats.firstWhere(
             (f) => f['type'].toString().contains('audio'),
-            orElse: () => formats.first,
+            orElse: () => null,
           );
           
-          final streamUrl = audioStream['url'];
+          if (audioStream == null) {
+            print('--- FAIL: No audio-only stream found on $instance');
+            continue;
+          }
           
-          setState(() => status = 'SUCCESS! Diamond Key Active.\nPlaying from: $instance');
+          final streamUrl = audioStream['url'];
+          print('--- WINNER! Stream URL: $streamUrl');
+          
+          setState(() => status = 'SUCCESS! Tunnel Cracked.\nLoading Sound...');
           
           await player.setUrl(streamUrl);
           player.play();
           
           setState(() {
-            status = 'PLAYING! 🔊\nListening via Invidious ($instance)';
+            status = 'PLAYING! 🔊\nListening via $instance';
             isLoading = false;
           });
           return;
         }
       } catch (e) {
-        print('--- Diamond Key $instance failed: $e');
+        print('--- PROBE FAILED: $instance | Error: $e');
         continue;
       }
     }
 
+    // 3. THE MAGIC SWITCH (Saavn Matching)
+    setState(() => status = 'YouTube blocked. Activating Magic Switch...');
+    try {
+      print('--- MAGIC SWITCH: Searching Saavn for match...');
+      // Use the verified working Saavn API from your main app
+      final saavnResponse = await dio.get('https://jiosaavn-api-sigma-sandy.vercel.app/search/songs', queryParameters: {'query': 'Believer'});
+      
+      var data = saavnResponse.data;
+      if (data is String) {
+        data = jsonDecode(data);
+      }
+      
+      if (data['status'] == 'SUCCESS') {
+        final List songList = data['data'] is List ? data['data'] : (data['data']['results'] ?? []);
+        final song = songList[0];
+        final List downloadUrls = song['downloadUrl'];
+        final streamUrl = downloadUrls.last['link'];
+        
+        setState(() => status = 'MAGIC SWITCH ACTIVE! 🪄\nFound match on Saavn. Loading...');
+        
+        await player.setUrl(streamUrl);
+        player.play();
+        
+        setState(() {
+          status = 'PLAYING! 🔊\nListening via Magic Switch (Saavn Engine)';
+          isLoading = false;
+        });
+        return;
+      }
+    } catch (e) {
+      print('--- MAGIC SWITCH FAILED: $e');
+    }
+
     setState(() {
-      status = 'ALL TUNNELS FAILED. ❌\nThis usually means your internet is blocking these proxy servers.';
+      status = 'TOTAL BLOCK. ❌\nAll YouTube tunnels and the Saavn Switch failed.';
       isLoading = false;
     });
   }

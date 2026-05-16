@@ -24,6 +24,8 @@ mixin _$AppSettings {
   String get downloadQuality => throw _privateConstructorUsedError;
   bool get useSystemTheme => throw _privateConstructorUsedError;
   bool get isDarkMode => throw _privateConstructorUsedError;
+  bool get highFidelityMode => throw _privateConstructorUsedError;
+  bool get loudnessEnhancement => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -41,7 +43,9 @@ abstract class $AppSettingsCopyWith<$Res> {
       {String streamingQuality,
       String downloadQuality,
       bool useSystemTheme,
-      bool isDarkMode});
+      bool isDarkMode,
+      bool highFidelityMode,
+      bool loudnessEnhancement});
 }
 
 /// @nodoc
@@ -61,6 +65,8 @@ class _$AppSettingsCopyWithImpl<$Res, $Val extends AppSettings>
     Object? downloadQuality = null,
     Object? useSystemTheme = null,
     Object? isDarkMode = null,
+    Object? highFidelityMode = null,
+    Object? loudnessEnhancement = null,
   }) {
     return _then(_value.copyWith(
       streamingQuality: null == streamingQuality
@@ -79,6 +85,14 @@ class _$AppSettingsCopyWithImpl<$Res, $Val extends AppSettings>
           ? _value.isDarkMode
           : isDarkMode // ignore: cast_nullable_to_non_nullable
               as bool,
+      highFidelityMode: null == highFidelityMode
+          ? _value.highFidelityMode
+          : highFidelityMode // ignore: cast_nullable_to_non_nullable
+              as bool,
+      loudnessEnhancement: null == loudnessEnhancement
+          ? _value.loudnessEnhancement
+          : loudnessEnhancement // ignore: cast_nullable_to_non_nullable
+              as bool,
     ) as $Val);
   }
 }
@@ -95,7 +109,9 @@ abstract class _$$AppSettingsImplCopyWith<$Res>
       {String streamingQuality,
       String downloadQuality,
       bool useSystemTheme,
-      bool isDarkMode});
+      bool isDarkMode,
+      bool highFidelityMode,
+      bool loudnessEnhancement});
 }
 
 /// @nodoc
@@ -113,6 +129,8 @@ class __$$AppSettingsImplCopyWithImpl<$Res>
     Object? downloadQuality = null,
     Object? useSystemTheme = null,
     Object? isDarkMode = null,
+    Object? highFidelityMode = null,
+    Object? loudnessEnhancement = null,
   }) {
     return _then(_$AppSettingsImpl(
       streamingQuality: null == streamingQuality
@@ -131,6 +149,14 @@ class __$$AppSettingsImplCopyWithImpl<$Res>
           ? _value.isDarkMode
           : isDarkMode // ignore: cast_nullable_to_non_nullable
               as bool,
+      highFidelityMode: null == highFidelityMode
+          ? _value.highFidelityMode
+          : highFidelityMode // ignore: cast_nullable_to_non_nullable
+              as bool,
+      loudnessEnhancement: null == loudnessEnhancement
+          ? _value.loudnessEnhancement
+          : loudnessEnhancement // ignore: cast_nullable_to_non_nullable
+              as bool,
     ));
   }
 }
@@ -142,7 +168,9 @@ class _$AppSettingsImpl implements _AppSettings {
       {this.streamingQuality = '320',
       this.downloadQuality = '320',
       this.useSystemTheme = true,
-      this.isDarkMode = false});
+      this.isDarkMode = false,
+      this.highFidelityMode = true,
+      this.loudnessEnhancement = false});
 
   factory _$AppSettingsImpl.fromJson(Map<String, dynamic> json) =>
       _$$AppSettingsImplFromJson(json);
@@ -159,10 +187,16 @@ class _$AppSettingsImpl implements _AppSettings {
   @override
   @JsonKey()
   final bool isDarkMode;
+  @override
+  @JsonKey()
+  final bool highFidelityMode;
+  @override
+  @JsonKey()
+  final bool loudnessEnhancement;
 
   @override
   String toString() {
-    return 'AppSettings(streamingQuality: $streamingQuality, downloadQuality: $downloadQuality, useSystemTheme: $useSystemTheme, isDarkMode: $isDarkMode)';
+    return 'AppSettings(streamingQuality: $streamingQuality, downloadQuality: $downloadQuality, useSystemTheme: $useSystemTheme, isDarkMode: $isDarkMode, highFidelityMode: $highFidelityMode, loudnessEnhancement: $loudnessEnhancement)';
   }
 
   @override
@@ -177,13 +211,23 @@ class _$AppSettingsImpl implements _AppSettings {
             (identical(other.useSystemTheme, useSystemTheme) ||
                 other.useSystemTheme == useSystemTheme) &&
             (identical(other.isDarkMode, isDarkMode) ||
-                other.isDarkMode == isDarkMode));
+                other.isDarkMode == isDarkMode) &&
+            (identical(other.highFidelityMode, highFidelityMode) ||
+                other.highFidelityMode == highFidelityMode) &&
+            (identical(other.loudnessEnhancement, loudnessEnhancement) ||
+                other.loudnessEnhancement == loudnessEnhancement));
   }
 
   @JsonKey(ignore: true)
   @override
-  int get hashCode => Object.hash(runtimeType, streamingQuality,
-      downloadQuality, useSystemTheme, isDarkMode);
+  int get hashCode => Object.hash(
+      runtimeType,
+      streamingQuality,
+      downloadQuality,
+      useSystemTheme,
+      isDarkMode,
+      highFidelityMode,
+      loudnessEnhancement);
 
   @JsonKey(ignore: true)
   @override
@@ -204,7 +248,9 @@ abstract class _AppSettings implements AppSettings {
       {final String streamingQuality,
       final String downloadQuality,
       final bool useSystemTheme,
-      final bool isDarkMode}) = _$AppSettingsImpl;
+      final bool isDarkMode,
+      final bool highFidelityMode,
+      final bool loudnessEnhancement}) = _$AppSettingsImpl;
 
   factory _AppSettings.fromJson(Map<String, dynamic> json) =
       _$AppSettingsImpl.fromJson;
@@ -217,6 +263,10 @@ abstract class _AppSettings implements AppSettings {
   bool get useSystemTheme;
   @override
   bool get isDarkMode;
+  @override
+  bool get highFidelityMode;
+  @override
+  bool get loudnessEnhancement;
   @override
   @JsonKey(ignore: true)
   _$$AppSettingsImplCopyWith<_$AppSettingsImpl> get copyWith =>

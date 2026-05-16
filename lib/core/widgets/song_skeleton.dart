@@ -8,21 +8,23 @@ class SongSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Shimmer.fromColors(
-      baseColor: Colors.white.withOpacity(0.05),
-      highlightColor: Colors.white.withOpacity(0.1),
-      child: GlassContainer(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 1,
-              child: Container(
-                color: Colors.white,
+    return RepaintBoundary(
+      child: Shimmer.fromColors(
+        baseColor: Colors.white.withOpacity(0.05),
+        highlightColor: Colors.white.withOpacity(0.1),
+        child: GlassContainer(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AspectRatio(
+                aspectRatio: 1,
+                child: Container(
+                  color: Colors.white,
+                ),
               ),
-            ),
-            Padding(
-              padding: EdgeInsets.all(8.w),
+              Padding(
+                padding: EdgeInsets.all(8.w),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -43,6 +45,7 @@ class SongSkeleton extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

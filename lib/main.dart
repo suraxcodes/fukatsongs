@@ -5,8 +5,10 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:audio_service/audio_service.dart';
 import 'models/song.dart';
 import 'features/main/main_screen.dart';
+import 'features/main/presentation/splash_screen.dart';
 import 'core/audio/audio_handler.dart';
 import 'core/audio/audio_handler_provider.dart';
+import 'core/constants/hive_boxes.dart';
 
 void main() async {
   try {
@@ -17,20 +19,22 @@ void main() async {
     
     // Register Adapters
     if (!Hive.isAdapterRegistered(0)) {
-      Hive.registerAdapter(SongImplAdapter());
+      Hive.registerAdapter(SongAdapter());
     }
 
     // Open Core Boxes
     await Future.wait([
-      Hive.openBox('settings'),
-      Hive.openBox<Song>('songs'),
-      Hive.openBox('liked_songs'),
-      Hive.openBox<Song>('recent_songs'),
-      Hive.openBox<String>('search_cache'),
-      Hive.openBox('queue_state'),
-      Hive.openBox('library'),
-      Hive.openBox('playlists'),
-      Hive.openBox<String>('search_history'),
+      Hive.openBox(HiveBoxes.settings),
+      Hive.openBox<Song>(HiveBoxes.songs),
+      Hive.openBox(HiveBoxes.likedSongs),
+      Hive.openBox<Song>(HiveBoxes.recentSongs),
+      Hive.openBox<String>(HiveBoxes.searchCache),
+      Hive.openBox(HiveBoxes.queueState),
+      Hive.openBox(HiveBoxes.library),
+      Hive.openBox(HiveBoxes.playlists),
+      Hive.openBox<String>(HiveBoxes.searchHistory),
+      Hive.openBox<Song>(HiveBoxes.downloads),
+      Hive.openBox(HiveBoxes.auth),
     ]);
 
     // Initialize Audio Service
@@ -79,7 +83,7 @@ class FukatSongsApp extends StatelessWidget {
           title: 'fukatSongs',
           debugShowCheckedModeBanner: false,
           theme: _buildTheme(),
-          home: const MainScreen(),
+          home: const SplashScreen(),
         );
       },
     );
