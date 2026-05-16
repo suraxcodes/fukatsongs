@@ -11,6 +11,8 @@ import 'package:fukat_songs/features/library/logic/playlist_notifier.dart';
 import 'package:fukat_songs/features/library/logic/download_notifier.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:fukat_songs/core/constants/hive_boxes.dart';
+import 'package:fukat_songs/features/player/logic/lyrics_notifier.dart';
+import 'package:fukat_songs/features/player/presentation/widgets/lyrics_view.dart';
 
 /// Guard flag — prevents duplicate player sheets from stacking
 bool _isPlayerOpen = false;
@@ -43,6 +45,7 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _artworkController;
   late Animation<double> _artworkScale;
+  bool _showLyrics = false;
 
   @override
   void initState() {
@@ -151,40 +154,54 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
                           ],
                         ),
                         SizedBox(height: 24.h),
-                        // Artwork with animation
+                        // Artwork or Lyrics
                         RepaintBoundary(
-                          child: ScaleTransition(
-                            scale: _artworkScale,
-                            child: Container(
-                              width: 300.w,
-                              height: 300.w,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(24.r),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF6200EE).withOpacity(0.5),
-                                    blurRadius: 40,
-                                    spreadRadius: 8,
-                                    offset: const Offset(0, 12),
-                                  ),
-                                ],
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(24.r),
-                                child: CachedNetworkImage(
-                                  imageUrl: song.imageUrl.replaceAll('150x150', '500x500'),
-                                  fit: BoxFit.cover,
-                                  memCacheWidth: 600, // Optimize memory
-                                  placeholder: (context, url) => Container(
-                                    color: Colors.white10,
-                                    child: const Icon(Icons.music_note, size: 80, color: Colors.white24),
-                                  ),
-                                  errorWidget: (context, url, error) => Container(
-                                    color: Colors.white10,
-                                    child: const Icon(Icons.music_note, size: 80, color: Colors.white24),
+                          child: AnimatedCrossFade(
+                            duration: const Duration(milliseconds: 300),
+                            crossFadeState: _showLyrics ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                            firstChild: ScaleTransition(
+                              scale: _artworkScale,
+                              child: Container(
+                                width: 300.w,
+                                height: 300.w,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(24.r),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF6200EE).withOpacity(0.5),
+                                      blurRadius: 40,
+                                      spreadRadius: 8,
+                                      offset: const Offset(0, 12),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(24.r),
+                                  child: CachedNetworkImage(
+                                    imageUrl: song.imageUrl.replaceAll('150x150', '500x500'),
+                                    fit: BoxFit.cover,
+                                    memCacheWidth: 600,
+                                    placeholder: (context, url) => Container(
+                                      color: Colors.white10,
+                                      child: const Icon(Icons.music_note, size: 80, color: Colors.white24),
+                                    ),
+                                    errorWidget: (context, url, error) => Container(
+                                      color: Colors.white10,
+                                      child: const Icon(Icons.music_note, size: 80, color: Colors.white24),
+                                    ),
                                   ),
                                 ),
                               ),
+                            ),
+                            secondChild: Container(
+                              width: 300.w,
+                              height: 300.w,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(24.r),
+                                border: Border.all(color: Colors.white10),
+                              ),
+                              child: LyricsView(song: song),
                             ),
                           ),
                         ),
@@ -566,6 +583,19 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
           final messenger = ScaffoldMessenger.of(context);
           messenger.showSnackBar(const SnackBar(content: Text('Sharing coming soon')));
         }),
+        _actionButton(
+          _showLyrics ? Icons.lyrics_rounded : Icons.lyrics_outlined,
+          'Lyrics',
+          () {
+            setState(() {
+              _showLyrics = !_showLyrics;
+            });
+            if (_showLyrics) {
+              ref.read(lyricsProvider.notifier).fetchLyrics(song);
+            }
+          },
+          color: _showLyrics ? const Color(0xFFBB86FC) : Colors.white70,
+        ),
       ],
     );
   }

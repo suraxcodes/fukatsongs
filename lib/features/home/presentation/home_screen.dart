@@ -10,6 +10,7 @@ import 'package:fukat_songs/features/player/presentation/immersive_player_screen
 import 'package:fukat_songs/features/library/presentation/playlist_detail_screen.dart';
 import 'package:fukat_songs/core/widgets/premium_widgets.dart';
 import 'package:fukat_songs/core/widgets/song_skeleton.dart';
+import 'package:fukat_songs/features/library/presentation/song_options_sheet.dart';
 import 'package:fukat_songs/features/main/main_screen_notifier.dart';
 import 'package:fukat_songs/features/settings/presentation/settings_screen.dart';
 
@@ -300,7 +301,10 @@ class HomeScreen extends ConsumerWidget {
             ),
             title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white, fontSize: 14.sp)),
             subtitle: Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white54, fontSize: 12.sp)),
-            trailing: const Icon(Icons.more_vert_rounded, color: Colors.white54),
+            trailing: IconButton(
+              icon: const Icon(Icons.more_vert_rounded, color: Colors.white54),
+              onPressed: () => showSongOptions(context, song),
+            ),
           ),
         );
       },

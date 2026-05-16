@@ -9,6 +9,7 @@ import 'package:fukat_songs/features/player/presentation/player_notifier.dart';
 import 'package:fukat_songs/features/library/logic/download_notifier.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:fukat_songs/core/constants/hive_boxes.dart';
+import 'package:fukat_songs/features/player/presentation/widgets/sleep_timer_sheet.dart';
 
 /// Shows the three-dot options sheet for a song.
 void showSongOptions(BuildContext context, Song song) {
@@ -203,6 +204,19 @@ class SongOptionsSheet extends ConsumerWidget {
                 icon: Icons.share_rounded,
                 label: 'Share',
                 onTap: () => Navigator.pop(context),
+              ),
+              _option(
+                context,
+                icon: Icons.timer_outlined,
+                label: 'Sleep Timer',
+                onTap: () {
+                  Navigator.pop(context);
+                  showModalBottomSheet(
+                    context: context,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => const SleepTimerSheet(),
+                  );
+                },
               ),
               SizedBox(height: MediaQuery.of(context).padding.bottom + 12.h),
             ],
