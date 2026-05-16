@@ -77,7 +77,7 @@ class HomeNotifier extends _$HomeNotifier {
 
     // If speed dial is too short, pad with trending
     if (speedDial.length < 6) {
-      speedDial.addAll(trendingSongs.take(6 - speedDial.length)..toList()..shuffle());
+      speedDial.addAll(trendingSongs.take(6 - speedDial.length).toList()..shuffle());
     }
 
     return HomeState(
