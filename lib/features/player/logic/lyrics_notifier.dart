@@ -46,8 +46,8 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
         queryParameters: {
           'artist_name': song.artist,
           'track_name': song.title,
-          'album_name': song.album,
-          'duration': song.duration.inSeconds,
+          'album_name': song.albumName,
+          'duration': song.duration,
         },
         options: Options(
           headers: {'User-Agent': 'fukatSongs/1.0'},
