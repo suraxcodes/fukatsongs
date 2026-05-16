@@ -64,6 +64,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         child: Column(
           children: [
             _buildCustomSearchBar(context, isOffline),
+            _buildSourceFilter(),
             Expanded(
               child: searchState.when(
                 data: (songs) {
@@ -83,6 +84,86 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildSourceFilter() {
+    final currentSource = ref.watch(searchSourceProvider);
+    
+    return Container(
+      height: 40.h,
+      margin: EdgeInsets.only(bottom: 12.h),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.symmetric(horizontal: 16.w),
+        children: [
+          _filterChip(
+            label: 'All',
+            icon: Icons.all_inclusive_rounded,
+            isSelected: currentSource == SearchSource.both,
+            onTap: () => _updateSource(SearchSource.both),
+          ),
+          _filterChip(
+            label: 'JioSaavn',
+            icon: Icons.music_note_rounded,
+            isSelected: currentSource == SearchSource.saavn,
+            onTap: () => _updateSource(SearchSource.saavn),
+          ),
+          _filterChip(
+            label: 'YouTube',
+            icon: Icons.play_circle_fill_rounded,
+            isSelected: currentSource == SearchSource.youtube,
+            onTap: () => _updateSource(SearchSource.youtube),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: EdgeInsets.only(right: 8.w),
+        padding: EdgeInsets.symmetric(horizontal: 16.w),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF6200EE) : Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(20.r),
+          border: Border.all(
+            color: isSelected ? Colors.transparent : Colors.white10,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 16.sp,
+              color: isSelected ? Colors.white : Colors.white54,
+            ),
+            SizedBox(width: 8.w),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : Colors.white70,
+                fontSize: 13.sp,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _updateSource(SearchSource source) {
+    ref.read(searchSourceProvider.notifier).state = source;
+    if (_searchController.text.isNotEmpty) {
+      _onSearch(_searchController.text);
+    }
   }
 
   Widget _buildCustomSearchBar(BuildContext context, bool isOffline) {

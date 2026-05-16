@@ -2,90 +2,133 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../logic/lyrics_notifier.dart';
-import '../../../../models/song.dart';
+import '../player_notifier.dart';
 
-class LyricsView extends ConsumerWidget {
-  final Song song;
-  const LyricsView({super.key, required this.song});
+class LyricsView extends ConsumerStatefulWidget {
+  const LyricsView({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LyricsView> createState() => _LyricsViewState();
+}
+
+class _LyricsViewState extends ConsumerState<LyricsView> {
+  final ScrollController _scrollController = ScrollController();
+  int _currentIndex = -1;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToCurrentLine(int index) {
+    if (index == -1 || !_scrollController.hasClients) return;
+    
+    // Estimate line height is roughly 60.h (text + padding)
+    final targetOffset = index * 50.h; 
+    _scrollController.animateTo(
+      targetOffset,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final lyricsState = ref.watch(lyricsProvider);
+    final playerState = ref.watch(playerNotifierProvider);
+    final currentPosition = playerState.position;
 
     if (lyricsState.isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: Color(0xFFBB86FC)),
-      );
+      return const Center(child: CircularProgressIndicator(color: Colors.white24));
     }
 
     if (lyricsState.error != null) {
       return Center(
-        child: Padding(
-          padding: EdgeInsets.all(20.w),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.sentiment_dissatisfied_rounded, color: Colors.white24, size: 48.sp),
-              SizedBox(height: 12.h),
-              Text(
-                lyricsState.error!,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white54, fontSize: 14.sp),
-              ),
-              TextButton(
-                onPressed: () => ref.read(lyricsProvider.notifier).fetchLyrics(song),
-                child: const Text('Retry', style: TextStyle(color: Color(0xFFBB86FC))),
-              ),
-            ],
-          ),
+        child: Text(
+          lyricsState.error!,
+          style: TextStyle(color: Colors.white38, fontSize: 16.sp),
         ),
       );
     }
 
-    final lyrics = lyricsState.plainLyrics ?? lyricsState.syncedLyrics;
+    // Synced Lyrics UI
+    if (lyricsState.lyrics.isNotEmpty) {
+      // Find current line index
+      int newIndex = -1;
+      for (int i = 0; i < lyricsState.lyrics.length; i++) {
+        if (currentPosition >= lyricsState.lyrics[i].time) {
+          newIndex = i;
+        } else {
+          break;
+        }
+      }
 
-    if (lyrics == null || lyrics.isEmpty) {
-      return Center(
-        child: Text(
-          'No lyrics found for this song',
-          style: TextStyle(color: Colors.white38, fontSize: 14.sp),
+      if (newIndex != _currentIndex) {
+        _currentIndex = newIndex;
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrentLine(newIndex));
+      }
+
+      return ShaderMask(
+        shaderCallback: (rect) {
+          return const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.transparent, Colors.white, Colors.white, Colors.transparent],
+            stops: [0.0, 0.1, 0.9, 1.0],
+          ).createShader(rect);
+        },
+        blendMode: BlendMode.dstIn,
+        child: ListView.builder(
+          controller: _scrollController,
+          padding: EdgeInsets.symmetric(vertical: 150.h, horizontal: 24.w),
+          itemCount: lyricsState.lyrics.length,
+          itemBuilder: (context, index) {
+            final line = lyricsState.lyrics[index];
+            final isActive = index == _currentIndex;
+
+            return AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 300),
+              style: TextStyle(
+                fontSize: isActive ? 24.sp : 18.sp,
+                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                color: isActive ? Colors.white : Colors.white38,
+                height: 1.5,
+              ),
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 12.h),
+                child: Text(
+                  line.text,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          },
         ),
       );
     }
 
-    // Process synced lyrics to remove timestamps for now (V1)
-    final cleanLyrics = _cleanLyrics(lyrics);
-
-    return ShaderMask(
-      shaderCallback: (rect) {
-        return const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Colors.black, Colors.transparent, Colors.transparent, Colors.black],
-          stops: [0.0, 0.1, 0.9, 1.0],
-        ).createShader(rect);
-      },
-      blendMode: BlendMode.dstOut,
-      child: SingleChildScrollView(
-        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 30.h),
+    // Fallback to Plain Lyrics
+    if (lyricsState.plainLyrics != null) {
+      return SingleChildScrollView(
+        padding: EdgeInsets.all(24.w),
         child: Text(
-          cleanLyrics,
+          lyricsState.plainLyrics!,
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.9),
+            color: Colors.white70,
             fontSize: 18.sp,
             height: 1.8,
-            fontWeight: FontWeight.w500,
-            letterSpacing: 0.5,
           ),
         ),
+      );
+    }
+
+    return Center(
+      child: Text(
+        'No lyrics available',
+        style: TextStyle(color: Colors.white38, fontSize: 16.sp),
       ),
     );
-  }
-
-  String _cleanLyrics(String lyrics) {
-    // Remove timestamps [00:00.00]
-    final regex = RegExp(r'\[\d{2}:\d{2}\.\d{2,3}\]');
-    return lyrics.replaceAll(regex, '').trim();
   }
 }

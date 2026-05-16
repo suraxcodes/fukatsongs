@@ -2,8 +2,14 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fukat_songs/models/song.dart';
 import 'package:fukat_songs/providers/music_repository_provider.dart';
-import 'package:fukat_songs/core/services/connectivity_service.dart';
+import 'package:fukat_songs/core/constants/hive_boxes.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:fukat_songs/features/library/logic/playlist_notifier.dart';
 import 'package:fukat_songs/core/repositories/history_repository.dart';
+
+enum SearchSource { saavn, youtube, both }
+
+final searchSourceProvider = StateProvider<SearchSource>((ref) => SearchSource.both);
 
 class SearchNotifier extends StateNotifier<AsyncValue<List<Song>>> {
   final Ref ref;
@@ -45,6 +51,7 @@ class SearchNotifier extends StateNotifier<AsyncValue<List<Song>>> {
       state = const AsyncValue.loading();
       
       final isConnected = await ref.read(connectivityServiceProvider.notifier).isConnected();
+      final source = ref.read(searchSourceProvider);
       
       state = await AsyncValue.guard(() async {
         try {
@@ -52,7 +59,10 @@ class SearchNotifier extends StateNotifier<AsyncValue<List<Song>>> {
             return _searchLibrary(query);
           }
 
-          final results = await ref.read(musicRepositoryProvider).search(query);
+          final results = await ref.read(musicRepositoryProvider).search(
+            query,
+            source: source.name,
+          );
           return results;
         } catch (e, stack) {
           print('--- SearchNotifier Error during search: $e');
@@ -64,8 +74,22 @@ class SearchNotifier extends StateNotifier<AsyncValue<List<Song>>> {
   }
 
   List<Song> _searchLibrary(String query) {
-    // Basic library search logic
-    return []; // Implementation simplified for now
+    if (query.isEmpty) return [];
+    
+    final downloadsBox = Hive.box<Song>(HiveBoxes.downloads);
+    final likedSongs = ref.read(likedSongsNotifierProvider);
+    
+    // Combine both sources and remove duplicates by ID
+    final Set<Song> localSongs = {
+      ...downloadsBox.values,
+      ...likedSongs,
+    };
+    
+    final searchLower = query.toLowerCase();
+    return localSongs.where((song) {
+      return song.title.toLowerCase().contains(searchLower) ||
+             song.artist.toLowerCase().contains(searchLower);
+    }).toList();
   }
 }
 

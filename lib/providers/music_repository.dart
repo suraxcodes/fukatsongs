@@ -8,9 +8,9 @@ class MusicRepository {
   final SaavnProvider _saavn = SaavnProvider();
   final YouTubeProvider _youtube = YouTubeProvider();
 
-  Future<List<Song>> search(String query) async {
+  Future<List<Song>> search(String query, {String source = 'both'}) async {
     final cacheBox = Hive.box<String>('search_cache');
-    final cacheKey = query.toLowerCase().trim();
+    final cacheKey = '${source}_${query.toLowerCase().trim()}';
 
     // 1. Check Cache
     if (cacheBox.containsKey(cacheKey)) {
@@ -24,21 +24,23 @@ class MusicRepository {
       }
     }
 
-    // 2. Parallel execution with individual error handling
-    final results = await Future.wait([
-      _saavn.search(query).catchError((e) {
+    // 2. Execute based on source
+    List<Song> saavnResults = [];
+    List<Song> youtubeResults = [];
+
+    if (source == 'saavn' || source == 'both') {
+      saavnResults = await _saavn.search(query).catchError((e) {
         print('Saavn search error: $e');
         return <Song>[];
-      }),
-      _youtube.search(query).catchError((e) {
+      });
+    }
+
+    if (source == 'youtube' || source == 'both') {
+      youtubeResults = await _youtube.search(query).catchError((e) {
         print('YouTube search error: $e');
         return <Song>[];
-      }),
-    ]);
-    
-    // ... (rest of the merging logic remains same)
-    final saavnResults = results[0];
-    final youtubeResults = results[1];
+      });
+    }
     final Map<String, Song> unifiedMap = {};
 
     for (var song in saavnResults) {
