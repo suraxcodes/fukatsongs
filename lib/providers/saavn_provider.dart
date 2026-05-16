@@ -88,10 +88,23 @@ class SaavnProvider implements MusicProvider {
       }
     } catch (_) {}
 
+    String artistName = 'Unknown';
+    try {
+      final primary = json['primaryArtists'];
+      final artists = json['artists'];
+      final artistsObj = primary ?? artists;
+      
+      if (artistsObj is List && artistsObj.isNotEmpty) {
+        artistName = (artistsObj[0]['name'] ?? artistsObj[0]['title'] ?? 'Unknown').toString();
+      } else if (artistsObj != null) {
+        artistName = artistsObj.toString();
+      }
+    } catch (_) {}
+
     return Song(
       id: json['id']?.toString() ?? '',
       title: (json['name'] ?? json['title'] ?? 'Unknown').toString(),
-      artist: (json['primaryArtists'] ?? json['artists'] ?? 'Unknown').toString(),
+      artist: artistName,
       albumName: (json['album'] is Map ? (json['album']['name'] ?? '') : (json['album'] ?? '')).toString(),
       year: json['year']?.toString() ?? '',
       imageUrl: imageUrl,

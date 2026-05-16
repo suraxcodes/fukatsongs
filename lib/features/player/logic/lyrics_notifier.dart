@@ -130,7 +130,7 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
     return title
         .replaceAll(RegExp(r'\(.*\)'), '') // Remove (text)
         .replaceAll(RegExp(r'\[.*\]'), '') // Remove [text]
-        .replaceAll(RegExp(r'(?i)full video|official video|lyrical|audio|karaoke|piano|cover'), '') // Remove common tags
+        .replaceAll(RegExp(r'full video|official video|lyrical|audio|karaoke|piano|cover', caseSensitive: false), '') // Remove common tags
         .replaceAll(RegExp(r'\s+'), ' ') // Normalize spaces
         .trim();
   }
