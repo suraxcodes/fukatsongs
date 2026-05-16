@@ -318,6 +318,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   void pause() => ref.read(audioHandlerProvider).pause();
   void resume() => ref.read(audioHandlerProvider).play();
   void seek(Duration position) => ref.read(audioHandlerProvider).seek(position);
+
+  Stream<Duration> get positionStream => (ref.read(audioHandlerProvider) as MusicAudioHandler).positionStream;
 }
 
 final playerNotifierProvider =

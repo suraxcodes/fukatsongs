@@ -201,7 +201,7 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
                                 borderRadius: BorderRadius.circular(24.r),
                                 border: Border.all(color: Colors.white10),
                               ),
-                              child: LyricsView(song: song),
+                              child: const LyricsView(),
                             ),
                           ),
                         ),
@@ -538,13 +538,17 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
     final playlists = ref.watch(playlistNotifierProvider);
     final isInPlaylist = playlists.any((pl) => pl.songs.any((s) => s.id == song.id));
     
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: EdgeInsets.symmetric(horizontal: 16.w),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
         _actionButton(Icons.devices_rounded, 'Devices', () {
           final messenger = ScaffoldMessenger.of(context);
           messenger.showSnackBar(const SnackBar(content: Text('Device switching coming soon')));
         }),
+        SizedBox(width: 15.w),
         _actionButton(
           isInPlaylist ? Icons.playlist_add_check_rounded : Icons.playlist_add_rounded, 
           isInPlaylist ? 'Added' : 'Playlist', 
@@ -557,6 +561,7 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
           },
           color: isInPlaylist ? const Color(0xFFBB86FC) : Colors.white70,
         ),
+        SizedBox(width: 15.w),
         _actionButton(
           isDownloading ? Icons.downloading_rounded : (isDownloaded ? Icons.download_done_rounded : Icons.download_rounded), 
           isDownloading ? '${(progress * 100).toInt()}%' : (isDownloaded ? 'Saved' : 'Download'),
@@ -579,10 +584,12 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
             child: CircularProgressIndicator(value: progress, strokeWidth: 2, color: const Color(0xFF6200EE)),
           ) : null,
         ),
+        SizedBox(width: 15.w),
         _actionButton(Icons.share_rounded, 'Share', () {
           final messenger = ScaffoldMessenger.of(context);
           messenger.showSnackBar(const SnackBar(content: Text('Sharing coming soon')));
         }),
+        SizedBox(width: 15.w),
         _actionButton(
           _showLyrics ? Icons.lyrics_rounded : Icons.lyrics_outlined,
           'Lyrics',
@@ -597,8 +604,9 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
           color: _showLyrics ? const Color(0xFFBB86FC) : Colors.white70,
         ),
       ],
-    );
-  }
+    ),
+  );
+}
 
   Widget _actionButton(IconData icon, String label, VoidCallback onTap, {Color color = Colors.white70, Widget? trailing}) {
     return Material(

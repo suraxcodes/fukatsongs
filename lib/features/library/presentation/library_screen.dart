@@ -82,14 +82,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                           MaterialPageRoute(builder: (_) => const SettingsScreen()),
                         ),
                       ),
-                      Padding(
-                        padding: EdgeInsets.only(left: 8.w),
-                        child: CircleAvatar(
-                          radius: 14.r,
-                          backgroundColor: Colors.blueAccent,
-                          child: Text('S', style: TextStyle(color: Colors.white, fontSize: 12.sp, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
                     ],
                   ),
                 ],

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:fukat_songs/models/song.dart';
 import 'package:fukat_songs/providers/music_repository_provider.dart';
+import 'package:fukat_songs/features/library/logic/download_notifier.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'playlist_import_notifier.g.dart';
@@ -16,6 +17,7 @@ class PlaylistImportState {
   final List<String> failedSongs;
   final String? errorMessage;
   final String? playlistName;
+  final bool isAutoDownloadEnabled;
 
   PlaylistImportState({
     this.status = ImportStatus.idle,
@@ -25,6 +27,7 @@ class PlaylistImportState {
     this.failedSongs = const [],
     this.errorMessage,
     this.playlistName,
+    this.isAutoDownloadEnabled = false,
   });
 
   PlaylistImportState copyWith({
@@ -35,6 +38,7 @@ class PlaylistImportState {
     List<String>? failedSongs,
     String? errorMessage,
     String? playlistName,
+    bool? isAutoDownloadEnabled,
   }) {
     return PlaylistImportState(
       status: status ?? this.status,
@@ -44,6 +48,7 @@ class PlaylistImportState {
       failedSongs: failedSongs ?? this.failedSongs,
       errorMessage: errorMessage ?? this.errorMessage,
       playlistName: playlistName ?? this.playlistName,
+      isAutoDownloadEnabled: isAutoDownloadEnabled ?? this.isAutoDownloadEnabled,
     );
   }
 }
@@ -54,6 +59,10 @@ class PlaylistImportNotifier extends _$PlaylistImportNotifier {
 
   @override
   PlaylistImportState build() => PlaylistImportState();
+
+  void toggleAutoDownload(bool enabled) {
+    state = state.copyWith(isAutoDownloadEnabled: enabled);
+  }
 
   Future<void> importFromUrl(String url) async {
     state = state.copyWith(status: ImportStatus.parsing, errorMessage: null, importedSongs: [], failedSongs: []);
@@ -91,23 +100,20 @@ class PlaylistImportNotifier extends _$PlaylistImportNotifier {
 
       for (int i = 0; i < videos.length; i++) {
         final video = videos[i];
-        state = state.copyWith(currentCount: i + 1);
-
+        
         try {
-          // Search for a better Saavn match first for high quality
           final cleanTitle = video.title
               .replaceAll(RegExp(r'\(.*?\)|\[.*?\]'), '')
               .replaceAll(RegExp(r'official (video|audio|lyric|hd|4k|mv)'), '')
               .trim();
           
           final searchResults = await musicRepo.search(cleanTitle);
+          Song matchedSong;
+          
           if (searchResults.isNotEmpty) {
-            // Try to find a very close match
-            final match = searchResults.first;
-            found.add(match);
+            matchedSong = searchResults.first;
           } else {
-            // Fallback to the YouTube video itself
-            found.add(Song(
+            matchedSong = Song(
               id: video.id.value,
               title: video.title,
               artist: video.author,
@@ -117,17 +123,32 @@ class PlaylistImportNotifier extends _$PlaylistImportNotifier {
               duration: video.duration?.inSeconds ?? 0,
               source: 'youtube',
               providers: {'youtube': video.id.value},
-            ));
+            );
           }
+          
+          found.add(matchedSong);
+          
+          // Trigger download ONLY IF enabled in the CURRENT state
+          if (state.isAutoDownloadEnabled) {
+            // ignore: unused_result
+            ref.read(downloadNotifierProvider.notifier).downloadSong(matchedSong);
+          }
+
+          state = state.copyWith(
+            currentCount: i + 1,
+            importedSongs: List.from(found),
+          );
         } catch (e) {
           missed.add(video.title);
+          state = state.copyWith(
+            currentCount: i + 1,
+            failedSongs: List.from(missed),
+          );
         }
       }
 
       state = state.copyWith(
         status: ImportStatus.completed,
-        importedSongs: found,
-        failedSongs: missed,
       );
     } catch (e) {
       state = state.copyWith(status: ImportStatus.error, errorMessage: 'YouTube Import Error: $e');

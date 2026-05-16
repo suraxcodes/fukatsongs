@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/song.dart';
+import '../presentation/player_notifier.dart';
+import '../presentation/player_state.dart';
 
 class LyricLine {
   final Duration time;
@@ -43,16 +45,28 @@ class LyricsState {
 
 class LyricsNotifier extends StateNotifier<LyricsState> {
   final Dio _dio = Dio();
+  final Ref ref;
+  String? _lastSongId;
   
-  LyricsNotifier() : super(LyricsState());
+  LyricsNotifier(this.ref) : super(LyricsState()) {
+    // Listen to current song changes
+    ref.listen<PlayerState>(playerNotifierProvider, (previous, next) {
+      final newSong = next.currentSong;
+      if (newSong != null && newSong.id != _lastSongId) {
+        _lastSongId = newSong.id;
+        fetchLyrics(newSong);
+      }
+    });
+  }
 
   Future<void> fetchLyrics(Song song) async {
     if (song.title.isEmpty) return;
 
-    state = state.copyWith(isLoading: true, error: null, plainLyrics: null, syncedLyrics: null, lyrics: []);
+    // Reset state for new song
+    state = LyricsState(isLoading: true);
 
     try {
-      print('Lyrics: Fetching exact match for "${song.title}" by "${song.artist}"');
+      print('Lyrics: Fetching for "${song.title}"');
       final response = await _dio.get(
         'https://lrclib.net/api/get',
         queryParameters: {
@@ -63,14 +77,12 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
         },
         options: Options(
           headers: {'User-Agent': 'fukatSongs/1.0'},
-          sendTimeout: const Duration(seconds: 8),
-          receiveTimeout: const Duration(seconds: 8),
+          sendTimeout: const Duration(seconds: 5),
         ),
       );
 
       if (response.statusCode == 200) {
         final data = response.data;
-        print('Lyrics: Found exact match!');
         final syncedText = data['syncedLyrics'] as String?;
         state = state.copyWith(
           plainLyrics: data['plainLyrics'],
@@ -79,43 +91,38 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
           isLoading: false,
         );
       } else {
-        _tryFuzzySearch(song);
+        await _tryFuzzySearch(song);
       }
     } catch (e) {
-      _tryFuzzySearch(song);
+      await _tryFuzzySearch(song);
     }
   }
 
   Future<void> _tryFuzzySearch(Song song) async {
     try {
       final cleanTitle = _getCleanTitle(song.title);
-      final queries = ['$cleanTitle ${song.artist}', cleanTitle];
-
-      bool found = false;
-      for (final query in queries) {
-        final queryClean = query.replaceAll(RegExp(r'\s+'), ' ').trim();
-        if (queryClean.length < 3) continue;
-
-        final searchResponse = await _dio.get(
-          'https://lrclib.net/api/search',
-          queryParameters: {'q': queryClean},
-        );
-
-        if (searchResponse.statusCode == 200 && (searchResponse.data as List).isNotEmpty) {
-          final bestMatch = searchResponse.data[0];
-          final syncedText = bestMatch['syncedLyrics'] as String?;
-          state = state.copyWith(
-            plainLyrics: bestMatch['plainLyrics'],
-            syncedLyrics: syncedText,
-            lyrics: syncedText != null ? _parseLrc(syncedText) : [],
-            isLoading: false,
-          );
-          found = true;
-          break;
-        }
+      final queryClean = '$cleanTitle ${song.artist}'.trim();
+      
+      if (queryClean.length < 3) {
+        state = state.copyWith(isLoading: false, error: 'Lyrics not found');
+        return;
       }
 
-      if (!found) {
+      final searchResponse = await _dio.get(
+        'https://lrclib.net/api/search',
+        queryParameters: {'q': queryClean},
+      );
+
+      if (searchResponse.statusCode == 200 && (searchResponse.data as List).isNotEmpty) {
+        final bestMatch = searchResponse.data[0];
+        final syncedText = bestMatch['syncedLyrics'] as String?;
+        state = state.copyWith(
+          plainLyrics: bestMatch['plainLyrics'],
+          syncedLyrics: syncedText,
+          lyrics: syncedText != null ? _parseLrc(syncedText) : [],
+          isLoading: false,
+        );
+      } else {
         state = state.copyWith(isLoading: false, error: 'Lyrics not available');
       }
     } catch (err) {
@@ -134,6 +141,9 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
         final seconds = double.parse(match.group(2)!);
         final text = match.group(3)!.trim();
         
+        // Skip empty text lines if any
+        if (text.isEmpty && lines.isNotEmpty && lines.last.text.isEmpty) continue;
+
         final duration = Duration(
           minutes: minutes,
           seconds: seconds.toInt(),
@@ -143,6 +153,8 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
         lines.add(LyricLine(time: duration, text: text));
       }
     }
+    // Sort by time just in case the API returns them unordered
+    lines.sort((a, b) => a.time.compareTo(b.time));
     return lines;
   }
 
@@ -151,15 +163,15 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
         .replaceAll(RegExp(r'\(.*\)'), '')
         .replaceAll(RegExp(r'\[.*\]'), '')
         .replaceAll(RegExp(r'full video|official video|lyrical|audio|karaoke|piano|cover', caseSensitive: false), '')
-        .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
   }
 
   void clear() {
     state = LyricsState();
+    _lastSongId = null;
   }
 }
 
 final lyricsProvider = StateNotifierProvider<LyricsNotifier, LyricsState>((ref) {
-  return LyricsNotifier();
+  return LyricsNotifier(ref);
 });

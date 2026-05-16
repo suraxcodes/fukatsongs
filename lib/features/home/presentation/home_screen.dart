@@ -59,7 +59,14 @@ class HomeScreen extends ConsumerWidget {
         padding: EdgeInsets.only(left: 16.w),
         child: Row(
           children: [
-            Icon(Icons.music_note_rounded, color: const Color(0xFFBB86FC), size: 28.sp),
+            ClipOval(
+              child: Image.asset(
+                'assets/images/logo.png',
+                width: 32.w,
+                height: 32.w,
+                fit: BoxFit.cover,
+              ),
+            ),
             SizedBox(width: 8.w),
             Text(
               'fukatSongs',

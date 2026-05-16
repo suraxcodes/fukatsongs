@@ -5,6 +5,7 @@ import 'package:fukat_songs/providers/music_repository_provider.dart';
 import 'package:fukat_songs/core/constants/hive_boxes.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:fukat_songs/features/library/logic/playlist_notifier.dart';
+import 'package:fukat_songs/core/services/connectivity_service.dart';
 import 'package:fukat_songs/core/repositories/history_repository.dart';
 
 enum SearchSource { saavn, youtube, both }
