@@ -67,48 +67,72 @@ class LyricsNotifier extends StateNotifier<LyricsState> {
         );
       } else {
         print('Lyrics: Exact match not found (Status: ${response.statusCode})');
-        state = state.copyWith(isLoading: false, error: 'No lyrics found');
+        _tryFuzzySearch(song);
       }
     } catch (e) {
       print('Lyrics: Exact match failed, trying fuzzy search...');
-      // If exact search fails, try general search
-      try {
-        final songTitleClean = song.title
-          .replaceAll(RegExp(r'\(.*\)'), '')
-          .replaceAll(RegExp(r'\[.*\]'), '')
-          .replaceAll('Full Video', '')
-          .replaceAll('Official Video', '')
-          .replaceAll('Lyrical', '')
-          .replaceAll('Audio', '')
-          .trim();
-          
-        final searchQuery = '$songTitleClean ${song.artist}'.trim();
-        print('Lyrics: Searching for "$searchQuery"');
-        
+      _tryFuzzySearch(song);
+    }
+  }
+
+  Future<void> _tryFuzzySearch(Song song) async {
+    try {
+      final title = song.title;
+      final artist = song.artist;
+
+      // Strategy 1: Cleaned Title + Artist
+      final cleanTitle = _getCleanTitle(title);
+      final queries = [
+        '$cleanTitle $artist', // Standard
+        cleanTitle,            // Just title (often contains artist in YT titles)
+      ];
+
+      // If title has a dash, add the first part as a query
+      if (cleanTitle.contains('-')) {
+        queries.add(cleanTitle.split('-')[0].trim());
+      }
+
+      bool found = false;
+      for (final query in queries) {
+        final queryClean = query.replaceAll(RegExp(r'\s+'), ' ').trim();
+        if (queryClean.length < 3) continue;
+
+        print('Lyrics: Searching for "$queryClean"...');
         final searchResponse = await _dio.get(
           'https://lrclib.net/api/search',
-          queryParameters: {
-            'q': searchQuery,
-          },
+          queryParameters: {'q': queryClean},
         );
-        
+
         if (searchResponse.statusCode == 200 && (searchResponse.data as List).isNotEmpty) {
           final bestMatch = searchResponse.data[0];
-          print('Lyrics: Found fuzzy match: ${bestMatch['trackName']}');
+          print('Lyrics: Found match for "$queryClean": ${bestMatch['trackName']}');
           state = state.copyWith(
             plainLyrics: bestMatch['plainLyrics'],
             syncedLyrics: bestMatch['syncedLyrics'],
             isLoading: false,
           );
-        } else {
-          print('Lyrics: No matches found in fuzzy search');
-          state = state.copyWith(isLoading: false, error: 'Lyrics not available');
+          found = true;
+          break;
         }
-      } catch (err) {
-        print('Lyrics: Error during fuzzy search: $err');
-        state = state.copyWith(isLoading: false, error: 'Lyrics not found');
       }
+
+      if (!found) {
+        print('Lyrics: All search strategies failed');
+        state = state.copyWith(isLoading: false, error: 'Lyrics not available');
+      }
+    } catch (err) {
+      print('Lyrics: Error during fuzzy search: $err');
+      state = state.copyWith(isLoading: false, error: 'Lyrics not found');
     }
+  }
+
+  String _getCleanTitle(String title) {
+    return title
+        .replaceAll(RegExp(r'\(.*\)'), '') // Remove (text)
+        .replaceAll(RegExp(r'\[.*\]'), '') // Remove [text]
+        .replaceAll(RegExp(r'(?i)full video|official video|lyrical|audio|karaoke|piano|cover'), '') // Remove common tags
+        .replaceAll(RegExp(r'\s+'), ' ') // Normalize spaces
+        .trim();
   }
 
   void clear() {
