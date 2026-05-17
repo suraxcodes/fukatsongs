@@ -73,6 +73,10 @@ class PlaylistDetailScreen extends ConsumerWidget {
       ),
       actions: [
         IconButton(
+          icon: const Icon(Icons.edit_rounded, color: Colors.white70),
+          onPressed: () => _renamePlaylist(context, ref, playlist),
+        ),
+        IconButton(
           icon: const Icon(Icons.delete_outline_rounded, color: Colors.white70),
           onPressed: () => _confirmDelete(context, ref, playlist),
         ),
@@ -270,6 +274,43 @@ class PlaylistDetailScreen extends ConsumerWidget {
               Navigator.pop(context); // go back to library
             },
             child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _renamePlaylist(BuildContext context, WidgetRef ref, Playlist playlist) {
+    final ctrl = TextEditingController(text: playlist.name);
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF16142E),
+        title: const Text('Rename Playlist', style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: 'Playlist name',
+            hintStyle: TextStyle(color: Colors.white38),
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF6200EE))),
+            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFF6200EE), width: 2)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () {
+              if (ctrl.text.trim().isNotEmpty) {
+                ref.read(playlistNotifierProvider.notifier).renamePlaylist(playlist.id, ctrl.text.trim());
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Rename', style: TextStyle(color: Color(0xFF6200EE))),
           ),
         ],
       ),

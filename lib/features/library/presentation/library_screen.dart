@@ -383,25 +383,39 @@ class _DownloadsTab extends ConsumerWidget {
           ).toList();
         }
 
-        return ListView.builder(
-          padding: EdgeInsets.fromLTRB(0, 12.h, 0, 120.h),
-          itemCount: songs.length,
-          itemBuilder: (context, index) {
-            final song = songs[index];
-            return _SongListTile(
-              song: song,
-              viewMode: viewMode,
-              onTap: () {
-                playerNotifier.setQueueAndPlay(
-                  List<Song>.from(songs),
-                  startIndex: index,
-                );
-                Future.delayed(const Duration(milliseconds: 200), () {
-                  if (context.mounted) openImmersivePlayer(context);
-                });
-              },
-            );
-          },
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 0),
+              child: Text(
+                '${songs.length} Downloaded Songs',
+                style: TextStyle(color: Colors.white70, fontSize: 14.sp, fontWeight: FontWeight.w500),
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                padding: EdgeInsets.fromLTRB(0, 12.h, 0, 120.h),
+                itemCount: songs.length,
+                itemBuilder: (context, index) {
+                  final song = songs[index];
+                  return _SongListTile(
+                    song: song,
+                    viewMode: viewMode,
+                    onTap: () {
+                      playerNotifier.setQueueAndPlay(
+                        List<Song>.from(songs),
+                        startIndex: index,
+                      );
+                      Future.delayed(const Duration(milliseconds: 200), () {
+                        if (context.mounted) openImmersivePlayer(context);
+                      });
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
         );
       },
     );

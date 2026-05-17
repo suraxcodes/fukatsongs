@@ -16,6 +16,11 @@ class PlaylistNotifier extends StateNotifier<List<Playlist>> {
     state = _repo.getAllPlaylists();
   }
 
+  Future<void> renamePlaylist(String id, String newName) async {
+    await _repo.renamePlaylist(id, newName);
+    state = _repo.getAllPlaylists();
+  }
+
   Future<void> deletePlaylist(String id) async {
     await _repo.deletePlaylist(id);
     state = _repo.getAllPlaylists();

@@ -61,6 +61,15 @@ class PlaylistRepository {
     await savePlaylist(playlist);
   }
 
+  Future<void> renamePlaylist(String id, String newName) async {
+    final box = Hive.box(boxName);
+    final raw = box.get(id);
+    if (raw == null) return;
+    final playlist = _playlistFromRaw(raw);
+    final updated = playlist.copyWith(name: newName);
+    await box.put(id, _playlistToMap(updated));
+  }
+
   Future<void> deletePlaylist(String id) async {
     final box = Hive.box(boxName);
     await box.delete(id);
