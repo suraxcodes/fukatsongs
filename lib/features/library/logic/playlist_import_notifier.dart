@@ -21,6 +21,7 @@ class PlaylistImportState {
   final String? errorMessage;
   final String? playlistName;
   final bool isAutoDownloadEnabled;
+  final bool isSaveToPlaylistEnabled;
 
   PlaylistImportState({
     this.status = ImportStatus.idle,
@@ -31,6 +32,7 @@ class PlaylistImportState {
     this.errorMessage,
     this.playlistName,
     this.isAutoDownloadEnabled = false,
+    this.isSaveToPlaylistEnabled = true,
   });
 
   PlaylistImportState copyWith({
@@ -42,6 +44,7 @@ class PlaylistImportState {
     String? errorMessage,
     String? playlistName,
     bool? isAutoDownloadEnabled,
+    bool? isSaveToPlaylistEnabled,
   }) {
     return PlaylistImportState(
       status: status ?? this.status,
@@ -52,6 +55,7 @@ class PlaylistImportState {
       errorMessage: errorMessage ?? this.errorMessage,
       playlistName: playlistName ?? this.playlistName,
       isAutoDownloadEnabled: isAutoDownloadEnabled ?? this.isAutoDownloadEnabled,
+      isSaveToPlaylistEnabled: isSaveToPlaylistEnabled ?? this.isSaveToPlaylistEnabled,
     );
   }
 }
@@ -66,6 +70,10 @@ class PlaylistImportNotifier extends _$PlaylistImportNotifier {
 
   void toggleAutoDownload(bool enabled) {
     state = state.copyWith(isAutoDownloadEnabled: enabled);
+  }
+
+  void toggleSaveToPlaylist(bool enabled) {
+    state = state.copyWith(isSaveToPlaylistEnabled: enabled);
   }
 
   void stopImport() {
@@ -126,12 +134,26 @@ class PlaylistImportNotifier extends _$PlaylistImportNotifier {
               .replaceAll(RegExp(r'official (video|audio|lyric|hd|4k|mv)'), '')
               .trim();
           
-          final searchResults = await musicRepo.search(cleanTitle);
-          Song matchedSong;
+          final searchResults = await musicRepo.search('${cleanTitle} ${video.author}');
+          Song? matchedSong;
           
           if (searchResults.isNotEmpty) {
-            matchedSong = searchResults.first;
-          } else {
+            // Strict match for title
+            for (var result in searchResults) {
+              final resTitle = result.title.toLowerCase();
+              final resArtist = result.artist.toLowerCase();
+              final targetTitle = cleanTitle.toLowerCase();
+              final targetArtist = video.author.toLowerCase().replaceAll('vevo', '').trim();
+              
+              if (resTitle.contains(targetTitle) || targetTitle.contains(resTitle)) {
+                // If it's a YouTube video, the author is the channel. Just match title mostly, or if channel matches artist
+                matchedSong = result;
+                break;
+              }
+            }
+          }
+          
+          if (matchedSong == null) {
             matchedSong = Song(
               id: video.id.value,
               title: video.title,
@@ -240,9 +262,26 @@ class PlaylistImportNotifier extends _$PlaylistImportNotifier {
           final cleanArtist = artist.split(',').first.trim();
           
           final searchResults = await musicRepo.search('$cleanTitle $cleanArtist');
+          Song? matchedSong;
           
           if (searchResults.isNotEmpty) {
-            final matchedSong = searchResults.first;
+            for (var result in searchResults) {
+              final resTitle = result.title.toLowerCase();
+              final resArtist = result.artist.toLowerCase();
+              final targetTitle = cleanTitle.toLowerCase();
+              final targetArtist = cleanArtist.toLowerCase();
+              
+              bool titleMatch = resTitle.contains(targetTitle) || targetTitle.contains(resTitle);
+              bool artistMatch = resArtist.contains(targetArtist) || targetArtist.contains(resArtist);
+              
+              if (titleMatch && artistMatch) {
+                matchedSong = result;
+                break;
+              }
+            }
+          }
+          
+          if (matchedSong != null) {
             found.add(matchedSong);
             if (state.isAutoDownloadEnabled) {
               downloadNotifier.downloadSong(matchedSong);

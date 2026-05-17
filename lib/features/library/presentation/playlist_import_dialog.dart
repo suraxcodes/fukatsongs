@@ -51,8 +51,16 @@ class _PlaylistImportDialogState extends ConsumerState<PlaylistImportDialog> {
               contentPadding: EdgeInsets.zero,
               value: importState.isAutoDownloadEnabled,
               onChanged: (v) => notifier.toggleAutoDownload(v),
-              title: Text('Auto-Download matched songs', style: TextStyle(color: Colors.white, fontSize: 13.sp)),
-              subtitle: Text('Offline ready as they are found', style: TextStyle(color: Colors.white38, fontSize: 11.sp)),
+              title: Text('Download matched songs', style: TextStyle(color: Colors.white, fontSize: 13.sp)),
+              subtitle: Text('Download as they are found', style: TextStyle(color: Colors.white38, fontSize: 11.sp)),
+              activeColor: const Color(0xFFBB86FC),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: importState.isSaveToPlaylistEnabled,
+              onChanged: (v) => notifier.toggleSaveToPlaylist(v),
+              title: Text('Add to Playlist', style: TextStyle(color: Colors.white, fontSize: 13.sp)),
+              subtitle: Text('Create a playlist with imported songs', style: TextStyle(color: Colors.white38, fontSize: 11.sp)),
               activeColor: const Color(0xFFBB86FC),
             ),
             SizedBox(height: 8.h),
@@ -261,11 +269,13 @@ class _PlaylistImportDialogState extends ConsumerState<PlaylistImportDialog> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    // Create the playlist in Hive
-                    ref.read(playlistNotifierProvider.notifier).createPlaylist(
-                      importState.playlistName ?? 'Imported Playlist',
-                      songs: importState.importedSongs,
-                    );
+                    if (importState.isSaveToPlaylistEnabled) {
+                      // Create the playlist in Hive
+                      ref.read(playlistNotifierProvider.notifier).createPlaylist(
+                        importState.playlistName ?? 'Imported Playlist',
+                        songs: importState.importedSongs,
+                      );
+                    }
                     notifier.reset();
                     Navigator.pop(context);
                   },
@@ -274,7 +284,7 @@ class _PlaylistImportDialogState extends ConsumerState<PlaylistImportDialog> {
                     foregroundColor: Colors.greenAccent,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
                   ),
-                  child: const Text('Save to Library'),
+                  child: Text(importState.isSaveToPlaylistEnabled ? 'Save to Library' : 'Done'),
                 ),
               ),
             ],
