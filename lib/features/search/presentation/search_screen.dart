@@ -13,6 +13,8 @@ import 'package:fukat_songs/core/services/connectivity_service.dart';
 import 'package:fukat_songs/core/repositories/history_repository.dart';
 import 'package:fukat_songs/features/main/main_screen_notifier.dart';
 import 'package:fukat_songs/features/settings/presentation/settings_screen.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:fukat_songs/core/constants/hive_boxes.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
@@ -64,7 +66,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         child: Column(
           children: [
             _buildCustomSearchBar(context, isOffline),
-            _buildSourceFilter(),
             Expanded(
               child: searchState.when(
                 data: (songs) {
@@ -84,86 +85,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ),
       ),
     );
-  }
-
-  Widget _buildSourceFilter() {
-    final currentSource = ref.watch(searchSourceProvider);
-    
-    return Container(
-      height: 40.h,
-      margin: EdgeInsets.only(bottom: 12.h),
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: 16.w),
-        children: [
-          _filterChip(
-            label: 'All',
-            icon: Icons.all_inclusive_rounded,
-            isSelected: currentSource == SearchSource.both,
-            onTap: () => _updateSource(SearchSource.both),
-          ),
-          _filterChip(
-            label: 'JioSaavn',
-            icon: Icons.music_note_rounded,
-            isSelected: currentSource == SearchSource.saavn,
-            onTap: () => _updateSource(SearchSource.saavn),
-          ),
-          _filterChip(
-            label: 'YouTube',
-            icon: Icons.play_circle_fill_rounded,
-            isSelected: currentSource == SearchSource.youtube,
-            onTap: () => _updateSource(SearchSource.youtube),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _filterChip({
-    required String label,
-    required IconData icon,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: EdgeInsets.only(right: 8.w),
-        padding: EdgeInsets.symmetric(horizontal: 16.w),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF6200EE) : Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(20.r),
-          border: Border.all(
-            color: isSelected ? Colors.transparent : Colors.white10,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 16.sp,
-              color: isSelected ? Colors.white : Colors.white54,
-            ),
-            SizedBox(width: 8.w),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? Colors.white : Colors.white70,
-                fontSize: 13.sp,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _updateSource(SearchSource source) {
-    ref.read(searchSourceProvider.notifier).state = source;
-    if (_searchController.text.isNotEmpty) {
-      _onSearch(_searchController.text);
-    }
   }
 
   Widget _buildCustomSearchBar(BuildContext context, bool isOffline) {
@@ -294,6 +215,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             ),
           ),
         ],
+        _TopSongsSection(),
         if (textHistory.isNotEmpty) ...[
           ...textHistory.map((query) => ListTile(
                 leading: const Icon(Icons.history_rounded, color: Colors.white38),
@@ -314,19 +236,38 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   Widget _buildResults(List<Song> songs, WidgetRef ref) {
-    return GridView.builder(
-      padding: EdgeInsets.fromLTRB(8.w, 0, 8.w, 100.h),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.8,
-        mainAxisSpacing: 8.h,
-        crossAxisSpacing: 8.w,
-      ),
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(0, 0, 0, 100.h),
       itemCount: songs.length,
       itemBuilder: (context, index) {
         final song = songs[index];
-        return SongCard(
-          song: song,
+        return ListTile(
+          contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
+          leading: ClipRRect(
+            borderRadius: BorderRadius.circular(8.r),
+            child: CachedNetworkImage(
+              imageUrl: song.imageUrl,
+              width: 52.w,
+              height: 52.w,
+              fit: BoxFit.cover,
+              errorWidget: (_, __, ___) => Container(
+                color: Colors.white10,
+                child: const Icon(Icons.music_note, color: Colors.white24),
+              ),
+            ),
+          ),
+          title: Text(
+            song.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14.sp),
+          ),
+          subtitle: Text(
+            song.artist,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: Colors.white54, fontSize: 12.sp),
+          ),
           onTap: () {
             ref.read(playerNotifierProvider.notifier).setQueueAndPlay(songs, startIndex: index);
             openImmersivePlayer(context);
@@ -337,16 +278,26 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   Widget _buildLoadingGrid() {
-    return GridView.builder(
-      padding: EdgeInsets.fromLTRB(8.w, 0, 8.w, 100.h),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.8,
-        mainAxisSpacing: 8.h,
-        crossAxisSpacing: 8.w,
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(0, 0, 0, 100.h),
+      itemCount: 8,
+      itemBuilder: (context, index) => Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+        child: Row(
+          children: [
+            Container(width: 52.w, height: 52.w, color: Colors.white10),
+            SizedBox(width: 16.w),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(width: 150.w, height: 14.h, color: Colors.white10),
+                SizedBox(height: 8.h),
+                Container(width: 100.w, height: 12.h, color: Colors.white10),
+              ],
+            )
+          ],
+        ),
       ),
-      itemCount: 6,
-      itemBuilder: (context, index) => const SongSkeleton(),
     );
   }
 
@@ -373,6 +324,67 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             onPressed: () => _onSearch(_searchController.text),
             child: const Text('Retry', style: TextStyle(color: Color(0xFFBB86FC))),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TopSongsSection extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final historyRepo = ref.watch(historyRepositoryProvider);
+    final topSongIds = historyRepo.getTopSongIds(limit: 5);
+    
+    if (topSongIds.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Your Top Songs',
+            style: TextStyle(color: Colors.white70, fontSize: 14.sp, fontWeight: FontWeight.w500),
+          ),
+          SizedBox(height: 12.h),
+          ...topSongIds.map((entry) {
+            // Try to find the song in the recent box or songs box
+            late final Song song;
+            try {
+               song = Hive.box<Song>(HiveBoxes.recentSongs).values.firstWhere(
+                (s) => s.id == entry.key,
+                orElse: () => Hive.box<Song>(HiveBoxes.songs).values.firstWhere(
+                  (s) => s.id == entry.key,
+                  orElse: () => Hive.box<Song>(HiveBoxes.downloads).values.firstWhere(
+                    (s) => s.id == entry.key,
+                    orElse: () => throw Exception('Not found'),
+                  ),
+                ),
+              );
+            } catch (_) {
+              return const SizedBox.shrink();
+            }
+
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: ClipRRect(
+                borderRadius: BorderRadius.circular(8.r),
+                child: CachedNetworkImage(
+                  imageUrl: song.imageUrl,
+                  width: 44.w,
+                  height: 44.w,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              title: Text(song.title, style: TextStyle(color: Colors.white, fontSize: 13.sp, fontWeight: FontWeight.w600)),
+              subtitle: Text('${entry.value} plays', style: TextStyle(color: Colors.white38, fontSize: 11.sp)),
+              onTap: () {
+                ref.read(playerNotifierProvider.notifier).playSong(song);
+                openImmersivePlayer(context);
+              },
+            );
+          }),
         ],
       ),
     );
