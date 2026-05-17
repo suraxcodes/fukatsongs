@@ -55,6 +55,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
 
     (handler as MusicAudioHandler).positionStream.listen((pos) {
       state = state.copyWith(position: pos);
+      _checkPreloadTrigger(pos);
     });
 
     (handler as MusicAudioHandler).onSkipToNext = skipToNext;
@@ -62,6 +63,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }
 
   Future<void> playSong(Song song, {bool isRetry = false, Duration? initialPosition}) async {
+    _preloadedSongId = null;
+    _isPreloading = false;
     final sessionId = ++_playbackSessionId;
     final audioHandler = ref.read(audioHandlerProvider);
 
@@ -395,6 +398,52 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       }
     } catch (e) {
       print('--- Autoplay Failed: $e ---');
+    }
+  }
+
+  bool _isPreloading = false;
+  String? _preloadedSongId;
+
+  Future<void> _checkPreloadTrigger(Duration position) async {
+    final currentSong = state.currentSong;
+    if (currentSong == null || state.queue.isEmpty) return;
+    
+    final total = state.totalDuration;
+    if (total == Duration.zero) return;
+
+    final progress = position.inMilliseconds / total.inMilliseconds;
+    if (progress > 0.8) {
+      final nextIndex = state.currentIndex + 1;
+      if (nextIndex < state.queue.length) {
+        final nextSong = state.queue[nextIndex];
+        if (_preloadedSongId == nextSong.id || _isPreloading) return;
+
+        final connectivity = await Connectivity().checkConnectivity();
+        await preloadNextTrack(nextSong, isWifi: connectivity != ConnectivityResult.mobile);
+      }
+    }
+  }
+
+  Future<void> preloadNextTrack(Song song, {required bool isWifi}) async {
+    _isPreloading = true;
+    _preloadedSongId = song.id;
+    print('--- PRELOAD: Resolving stream URL for next track: ${song.title} ---');
+    try {
+      final settings = ref.read(settingsNotifierProvider);
+      String quality = settings.streamingQuality;
+      if (settings.highFidelityMode) {
+        quality = isWifi ? '320' : '160';
+      }
+      
+      final url = await ref.read(musicRepositoryProvider).getStreamUrl(song, quality: quality);
+      if (url != null) {
+        print('--- PRELOAD: Successfully resolved stream URL for: ${song.title} ---');
+      }
+    } catch (e) {
+      print('--- PRELOAD: Failed to preload: $e ---');
+      _preloadedSongId = null;
+    } finally {
+      _isPreloading = false;
     }
   }
 }

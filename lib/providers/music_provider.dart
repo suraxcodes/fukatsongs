@@ -8,7 +8,7 @@ abstract class MusicProvider {
   String get name;
 
   /// Search for songs matching the query
-  Future<List<Song>> search(String query);
+  Future<List<Song>> search(String query, {int page = 1, int limit = 20});
 
   /// Fetch a fresh stream URL for the given song ID
   Future<String?> getStreamUrl(String songId, {String quality = '320'});

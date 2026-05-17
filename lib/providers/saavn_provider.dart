@@ -23,11 +23,15 @@ class SaavnProvider implements MusicProvider {
   String get name => 'JioSaavn';
 
   @override
-  Future<List<Song>> search(String query) async {
+  Future<List<Song>> search(String query, {int page = 1, int limit = 20}) async {
     return _withRetry(() async {
       final dio = _getDio();
-      print('--- Saavn Search: ${dio.options.baseUrl}/search/songs?query=$query');
-      final response = await dio.get('/search/songs', queryParameters: {'query': query});
+      print('--- Saavn Search: ${dio.options.baseUrl}/search/songs?query=$query&page=$page&limit=$limit');
+      final response = await dio.get('/search/songs', queryParameters: {
+        'query': query,
+        'page': page,
+        'limit': limit,
+      });
       if (response.data['status'] == 'SUCCESS' || response.data['data'] != null) {
         final dynamic rawData = response.data['data'];
         final List data = rawData is List ? rawData : (rawData['results'] ?? []);

@@ -42,6 +42,16 @@ class SettingsNotifier extends _$SettingsNotifier {
     await _save();
   }
 
+  Future<void> toggleAutoplay(bool enabled) async {
+    state = state.copyWith(isAutoplayEnabled: enabled);
+    await _save();
+  }
+
+  Future<void> toggleGapless(bool enabled) async {
+    state = state.copyWith(isGaplessPlayback: enabled);
+    await _save();
+  }
+
   Future<void> _save() async {
     await _box.put(_key, json.encode(state.toJson()));
   }

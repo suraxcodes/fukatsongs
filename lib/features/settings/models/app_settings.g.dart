@@ -14,6 +14,8 @@ _$AppSettingsImpl _$$AppSettingsImplFromJson(Map<String, dynamic> json) =>
       isDarkMode: json['isDarkMode'] as bool? ?? false,
       highFidelityMode: json['highFidelityMode'] as bool? ?? true,
       loudnessEnhancement: json['loudnessEnhancement'] as bool? ?? false,
+      isAutoplayEnabled: json['isAutoplayEnabled'] as bool? ?? true,
+      isGaplessPlayback: json['isGaplessPlayback'] as bool? ?? false,
     );
 
 Map<String, dynamic> _$$AppSettingsImplToJson(_$AppSettingsImpl instance) =>
@@ -24,4 +26,6 @@ Map<String, dynamic> _$$AppSettingsImplToJson(_$AppSettingsImpl instance) =>
       'isDarkMode': instance.isDarkMode,
       'highFidelityMode': instance.highFidelityMode,
       'loudnessEnhancement': instance.loudnessEnhancement,
+      'isAutoplayEnabled': instance.isAutoplayEnabled,
+      'isGaplessPlayback': instance.isGaplessPlayback,
     };

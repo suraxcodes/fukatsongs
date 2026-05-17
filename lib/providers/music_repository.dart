@@ -8,9 +8,9 @@ class MusicRepository {
   final SaavnProvider _saavn = SaavnProvider();
   final YouTubeProvider _youtube = YouTubeProvider();
 
-  Future<List<Song>> search(String query, {String source = 'both'}) async {
+  Future<List<Song>> search(String query, {String source = 'both', int page = 1, int limit = 20}) async {
     final cacheBox = Hive.box<String>('search_cache');
-    final cacheKey = '${source}_${query.toLowerCase().trim()}';
+    final cacheKey = '${source}_${query.toLowerCase().trim()}_${page}_${limit}';
 
     // 1. Check Cache
     if (cacheBox.containsKey(cacheKey)) {
@@ -29,14 +29,14 @@ class MusicRepository {
     List<Song> youtubeResults = [];
 
     if (source == 'saavn' || source == 'both') {
-      saavnResults = await _saavn.search(query).catchError((e) {
+      saavnResults = await _saavn.search(query, page: page, limit: limit).catchError((e) {
         print('Saavn search error: $e');
         return <Song>[];
       });
     }
 
     if (source == 'youtube' || source == 'both') {
-      youtubeResults = await _youtube.search(query).catchError((e) {
+      youtubeResults = await _youtube.search(query, page: page, limit: limit).catchError((e) {
         print('YouTube search error: $e');
         return <Song>[];
       });
@@ -70,6 +70,8 @@ class MusicRepository {
     return finalResults;
   }
 
+  final Map<String, _CachedStreamUrl> _streamUrlCache = {};
+
   Future<List<Song>> getTrending() async {
     return _saavn.getTrending();
   }
@@ -77,15 +79,32 @@ class MusicRepository {
   Future<String?> getStreamUrl(Song song, {String? preferredProvider, String quality = '320'}) async {
     final provider = preferredProvider ?? song.source;
     final providerId = song.providers[provider];
-    print('--- MusicRepository: Fetching $quality quality for $provider ---');
 
     if (providerId == null) return null;
 
-    if (provider == 'saavn') {
-      return _saavn.getStreamUrl(providerId, quality: quality);
-    } else {
-      return _youtube.getStreamUrl(providerId, quality: quality);
+    final cacheKey = '${song.id}_${provider}_$quality';
+    if (_streamUrlCache.containsKey(cacheKey)) {
+      final cached = _streamUrlCache[cacheKey]!;
+      if (cached.expiry.isAfter(DateTime.now())) {
+        print('--- MusicRepository: Cache HIT for preloaded stream of ${song.title} ---');
+        return cached.url;
+      }
+      _streamUrlCache.remove(cacheKey);
     }
+
+    print('--- MusicRepository: Fetching $quality quality for $provider ---');
+
+    String? url;
+    if (provider == 'saavn') {
+      url = await _saavn.getStreamUrl(providerId, quality: quality);
+    } else {
+      url = await _youtube.getStreamUrl(providerId, quality: quality);
+    }
+
+    if (url != null) {
+      _streamUrlCache[cacheKey] = _CachedStreamUrl(url, DateTime.now().add(const Duration(hours: 1)));
+    }
+    return url;
   }
 
   String _normalizeTitle(String title, String artist) {
@@ -102,4 +121,10 @@ class MusicRepository {
 
     return '$cleanTitle|$cleanArtist';
   }
+}
+
+class _CachedStreamUrl {
+  final String url;
+  final DateTime expiry;
+  _CachedStreamUrl(this.url, this.expiry);
 }

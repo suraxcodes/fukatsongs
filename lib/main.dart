@@ -35,6 +35,7 @@ void main() async {
       Hive.openBox<String>(HiveBoxes.searchHistory),
       Hive.openBox<Song>(HiveBoxes.downloads),
       Hive.openBox(HiveBoxes.auth),
+      Hive.openBox<int>(HiveBoxes.playStats),
     ]);
 
     // Initialize Audio Service

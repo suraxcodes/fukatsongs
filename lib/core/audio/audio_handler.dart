@@ -11,8 +11,8 @@ import '../../features/library/logic/song_download_notifier.dart';
 
 class MusicAudioHandler extends BaseAudioHandler
     with QueueHandler, SeekHandler {
-  VoidCallback? onSkipToNext;
-  VoidCallback? onSkipToPrevious;
+  void Function()? onSkipToNext;
+  void Function()? onSkipToPrevious;
   
   late final AndroidEqualizer _equalizer;
   late final AndroidLoudnessEnhancer _loudnessEnhancer;
@@ -31,12 +31,8 @@ class MusicAudioHandler extends BaseAudioHandler
 
   void _initPlayer() {
     _player = AudioPlayer(
-      audioPipeline: AudioPipeline(
-        androidAudioEffects: [_equalizer, _loudnessEnhancer],
-      ),
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     );
-    _player.setSkipSilenceEnabled(true);
   }
 
   AndroidEqualizer get equalizer => _equalizer;

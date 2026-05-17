@@ -5,6 +5,7 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../logic/settings_notifier.dart';
 import '../../player/logic/sleep_timer_notifier.dart';
+
 import '../../player/presentation/widgets/equalizer_sheet.dart';
 import '../../player/presentation/widgets/sleep_timer_sheet.dart';
 
@@ -90,6 +91,20 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: const Text('Force dark theme'),
             value: settings.isDarkMode,
             onChanged: (val) => ref.read(settingsNotifierProvider.notifier).toggleDarkMode(val),
+          ),
+          const Divider(color: Colors.white10),
+          _buildSectionHeader(context, 'Playback'),
+          SwitchListTile(
+            title: const Text('Autoplay'),
+            subtitle: const Text('Keep the music going with similar songs'),
+            value: settings.isAutoplayEnabled,
+            onChanged: (val) => ref.read(settingsNotifierProvider.notifier).toggleAutoplay(val),
+          ),
+          SwitchListTile(
+            title: const Text('Gapless Playback'),
+            subtitle: const Text('Remove silences between songs'),
+            value: settings.isGaplessPlayback,
+            onChanged: (val) => ref.read(settingsNotifierProvider.notifier).toggleGapless(val),
           ),
           const Divider(color: Colors.white10),
           _buildSectionHeader(context, 'Storage'),

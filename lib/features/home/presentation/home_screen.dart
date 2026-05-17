@@ -8,17 +8,41 @@ import 'package:fukat_songs/features/home/presentation/home_notifier.dart';
 import 'package:fukat_songs/features/player/presentation/player_notifier.dart';
 import 'package:fukat_songs/features/player/presentation/immersive_player_screen.dart';
 import 'package:fukat_songs/features/library/presentation/playlist_detail_screen.dart';
-import 'package:fukat_songs/core/widgets/premium_widgets.dart';
 import 'package:fukat_songs/core/widgets/song_skeleton.dart';
 import 'package:fukat_songs/features/library/presentation/song_options_sheet.dart';
 import 'package:fukat_songs/features/main/main_screen_notifier.dart';
 import 'package:fukat_songs/features/settings/presentation/settings_screen.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 400) {
+      ref.read(homeNotifierProvider.notifier).fetchMoreFeed();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final homeState = ref.watch(homeNotifierProvider);
 
     return Scaffold(
@@ -28,19 +52,20 @@ class HomeScreen extends ConsumerWidget {
         backgroundColor: const Color(0xFF1E1E2C),
         onRefresh: () => ref.read(homeNotifierProvider.notifier).refresh(),
         child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(), // Important for RefreshIndicator
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            _buildAppBar(context, ref),
+            _buildAppBar(context),
             homeState.when(
-              data: (state) => _buildCategoryChips(ref, state),
+              data: (state) => _buildCategoryChips(state),
               loading: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
               error: (err, stack) => const SliverToBoxAdapter(child: SizedBox.shrink()),
             ),
             SliverToBoxAdapter(
               child: homeState.when(
-                data: (state) => _buildHomeContent(context, state, ref),
+                data: (state) => _buildHomeContent(context, state),
                 loading: () => _buildLoadingState(),
-                error: (err, stack) => _buildErrorState(ref),
+                error: (err, stack) => _buildErrorState(),
               ),
             ),
           ],
@@ -49,7 +74,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildAppBar(BuildContext context, WidgetRef ref) {
+  Widget _buildAppBar(BuildContext context) {
     return SliverAppBar(
       floating: true,
       backgroundColor: const Color(0xFF0D0B1F),
@@ -65,6 +90,12 @@ class HomeScreen extends ConsumerWidget {
                 width: 32.w,
                 height: 32.w,
                 fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  width: 32.w,
+                  height: 32.w,
+                  color: const Color(0xFFBB86FC),
+                  child: const Icon(Icons.music_note, color: Colors.black, size: 20),
+                ),
               ),
             ),
             SizedBox(width: 8.w),
@@ -97,7 +128,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildCategoryChips(WidgetRef ref, HomeState state) {
+  Widget _buildCategoryChips(HomeState state) {
     final categories = ['Podcasts', 'Romance', 'Relax', 'Feel good', 'Energy', 'Workout'];
     return SliverToBoxAdapter(
       child: SizedBox(
@@ -136,7 +167,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHomeContent(BuildContext context, HomeState state, WidgetRef ref) {
+  Widget _buildHomeContent(BuildContext context, HomeState state) {
     if (state.selectedCategory.isNotEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -162,7 +193,7 @@ class HomeScreen extends ConsumerWidget {
               child: const Center(child: CircularProgressIndicator(color: Color(0xFFBB86FC))),
             )
           else
-            _buildQuickPicksList(state.categorySongs, ref),
+            _buildSongVerticalList(state.categorySongs),
         ],
       );
     }
@@ -181,8 +212,35 @@ class HomeScreen extends ConsumerWidget {
               ],
             ),
           ),
-          _buildSpeedDialGrid(state.speedDialItems, ref),
+          _buildSpeedDialGrid(state.speedDialItems),
         ],
+
+        if (state.samples.isNotEmpty) ...[
+          SizedBox(height: 24.h),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.w),
+            child: Text(
+              'Samples for you',
+              style: TextStyle(color: Colors.white, fontSize: 22.sp, fontWeight: FontWeight.bold),
+            ),
+          ),
+          SizedBox(height: 12.h),
+          _buildHorizontalSongList(state.samples, cardWidth: 130.w, cardHeight: 130.w),
+        ],
+
+        if (state.trending.isNotEmpty) ...[
+          SizedBox(height: 24.h),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.w),
+            child: Text(
+              'Trending songs',
+              style: TextStyle(color: Colors.white, fontSize: 22.sp, fontWeight: FontWeight.bold),
+            ),
+          ),
+          SizedBox(height: 12.h),
+          _buildHorizontalSongList(state.trending, cardWidth: 130.w, cardHeight: 130.w),
+        ],
+
         SizedBox(height: 24.h),
         Padding(
           padding: EdgeInsets.symmetric(horizontal: 16.w),
@@ -190,24 +248,136 @@ class HomeScreen extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Quick picks', style: TextStyle(color: Colors.white, fontSize: 22.sp, fontWeight: FontWeight.bold)),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20.r),
-                  border: Border.all(color: Colors.white10),
+              GestureDetector(
+                onTap: () {
+                  if (state.quickPicks.isNotEmpty) {
+                    ref.read(playerNotifierProvider.notifier).setQueueAndPlay(state.quickPicks);
+                    openImmersivePlayer(context);
+                  }
+                },
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20.r),
+                    border: Border.all(color: Colors.white10),
+                  ),
+                  child: Text('Play all', style: TextStyle(color: Colors.white, fontSize: 12.sp)),
                 ),
-                child: Text('Play all', style: TextStyle(color: Colors.white, fontSize: 12.sp)),
               ),
             ],
           ),
         ),
-        _buildQuickPicksList(state.quickPicks, ref),
+        _buildSongVerticalList(state.quickPicks),
+
+        if (state.paginatedFeed.isNotEmpty) ...[
+          SizedBox(height: 24.h),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.w),
+            child: Text(
+              'For You Feed',
+              style: TextStyle(color: Colors.white, fontSize: 22.sp, fontWeight: FontWeight.bold),
+            ),
+          ),
+          _buildSongVerticalList(state.paginatedFeed, isFeed: true),
+        ],
+
+        if (state.isFetchingMore)
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: 24.h),
+            child: const Center(child: CircularProgressIndicator(color: Color(0xFFBB86FC))),
+          ),
+
         SizedBox(height: 100.h),
       ],
     );
   }
 
-  Widget _buildSpeedDialGrid(List<dynamic> items, WidgetRef ref) {
+  Widget _buildHorizontalSongList(List<Song> songs, {required double cardWidth, required double cardHeight}) {
+    return SizedBox(
+      height: (cardHeight + 64.h),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.symmetric(horizontal: 16.w),
+        itemCount: songs.length,
+        itemBuilder: (context, index) {
+          final song = songs[index];
+          return GestureDetector(
+            onTap: () {
+              ref.read(playerNotifierProvider.notifier).setQueueAndPlay(songs, startIndex: index);
+              openImmersivePlayer(context);
+            },
+            child: Container(
+              width: cardWidth,
+              margin: EdgeInsets.only(right: 16.w),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12.r),
+                        child: CachedNetworkImage(
+                          imageUrl: song.imageUrl,
+                          width: cardWidth,
+                          height: cardHeight,
+                          fit: BoxFit.cover,
+                          memCacheWidth: 200,
+                          placeholder: (_, __) => Container(
+                            width: cardWidth,
+                            height: cardHeight,
+                            color: Colors.white.withOpacity(0.05),
+                            child: const Center(
+                              child: Icon(Icons.music_note_rounded, color: Colors.white24),
+                            ),
+                          ),
+                          errorWidget: (_, __, ___) => Container(
+                            width: cardWidth,
+                            height: cardHeight,
+                            color: Colors.white.withOpacity(0.05),
+                            child: const Center(
+                              child: Icon(Icons.music_note_rounded, color: Colors.white24),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 8.w,
+                        bottom: 8.h,
+                        child: Container(
+                          padding: EdgeInsets.all(6.r),
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 20),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8.h),
+                  Text(
+                    song.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.white, fontSize: 13.sp, fontWeight: FontWeight.w600),
+                  ),
+                  SizedBox(height: 2.h),
+                  Text(
+                    song.artist,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.white54, fontSize: 11.sp),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSpeedDialGrid(List<dynamic> items) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -251,7 +421,7 @@ class HomeScreen extends ConsumerWidget {
                         width: 56.w,
                         height: 56.w,
                         fit: BoxFit.cover,
-                        memCacheWidth: 150, // Optimize memory for thumbnails
+                        memCacheWidth: 150,
                         errorWidget: (_, __, ___) => _playlistPlaceholder(),
                       )
                     : _playlistPlaceholder(),
@@ -282,7 +452,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildQuickPicksList(List<Song> songs, WidgetRef ref) {
+  Widget _buildSongVerticalList(List<Song> songs, {bool isFeed = false}) {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -297,16 +467,28 @@ class HomeScreen extends ConsumerWidget {
               openImmersivePlayer(context);
             },
             leading: ClipRRect(
-              borderRadius: BorderRadius.circular(4.r),
+              borderRadius: BorderRadius.circular(6.r),
               child: CachedNetworkImage(
                 imageUrl: song.imageUrl,
                 width: 48.w,
                 height: 48.w,
                 fit: BoxFit.cover,
                 memCacheWidth: 120,
+                placeholder: (_, __) => Container(
+                  width: 48.w,
+                  height: 48.w,
+                  color: Colors.white.withOpacity(0.05),
+                  child: const Center(child: Icon(Icons.music_note, color: Colors.white24, size: 20)),
+                ),
+                errorWidget: (_, __, ___) => Container(
+                  width: 48.w,
+                  height: 48.w,
+                  color: Colors.white.withOpacity(0.05),
+                  child: const Center(child: Icon(Icons.music_note, color: Colors.white24, size: 20)),
+                ),
               ),
             ),
-            title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white, fontSize: 14.sp)),
+            title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white, fontSize: 14.sp, fontWeight: FontWeight.w500)),
             subtitle: Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.white54, fontSize: 12.sp)),
             trailing: IconButton(
               icon: const Icon(Icons.more_vert_rounded, color: Colors.white54),
@@ -324,7 +506,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildErrorState(WidgetRef ref) {
+  Widget _buildErrorState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,

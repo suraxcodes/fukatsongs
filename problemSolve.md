@@ -119,4 +119,12 @@ Integrated `flutter_launcher_icons`, configured it in `pubspec.yaml`, and ran th
 
 ---
 
+## Problem #16 — Audio Playing Too Fast (Chipmunk Effect)
+### ❌ Problem
+Songs would occasionally play at 2x speed (chipmunk effect) without any code changes, especially on the Android Emulator.
+### ✅ Fix
+Diagnosed as a known bug in the Windows Android Emulator (`sdk_gphone64_x86_64`) audio drivers misinterpreting the sample rate of AAC/M4A streams. Fixed by performing a "Cold Boot" / "Wipe Data" on the emulator in Android Studio. No code changes were required; the `just_audio` configuration was correct.
+
+---
+
 *Last updated: May 2026 — fukatSongs Final Release*

@@ -12,7 +12,9 @@ import 'package:fukat_songs/features/library/logic/song_download_notifier.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:fukat_songs/core/constants/hive_boxes.dart';
 import 'package:fukat_songs/features/player/logic/lyrics_notifier.dart';
+import 'package:fukat_songs/features/player/presentation/player_state.dart';
 import 'package:fukat_songs/features/player/presentation/widgets/lyrics_view.dart';
+import 'package:fukat_songs/features/search/presentation/browse_screen.dart';
 
 /// Guard flag — prevents duplicate player sheets from stacking
 bool _isPlayerOpen = false;
@@ -225,13 +227,26 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
                                     ),
                                   ),
                                   SizedBox(height: 4.h),
-                                  Text(
-                                    song.artist,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 16.sp,
-                                      color: Colors.white60,
+                                  GestureDetector(
+                                    onTap: () {
+                                      Navigator.push(context, MaterialPageRoute(
+                                        builder: (_) => BrowseScreen(
+                                          title: song.artist,
+                                          query: song.artist,
+                                          imageUrl: song.imageUrl,
+                                        ),
+                                      ));
+                                    },
+                                    child: Text(
+                                      song.artist,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 16.sp,
+                                        color: Colors.white60,
+                                        decoration: TextDecoration.underline,
+                                        decorationColor: Colors.white30,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -251,7 +266,7 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
                         _buildUpNext(playerState, notifier),
                         SizedBox(height: 24.h),
                         // Volume & More row
-                        _buildBottomActions(song),
+                        _buildBottomActions(song, playerState, notifier),
                         SizedBox(height: 24.h),
                       ],
                     ),
@@ -453,11 +468,13 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
     );
   }
 
-  Widget _buildUpNext(playerState, notifier) {
+  Widget _buildUpNext(PlayerState playerState, PlayerNotifier notifier) {
     final queue = (playerState.queue as List<Song>);
     final currentIndex = playerState.currentIndex as int;
+    
+    // We want to reorder the "upcoming" part of the queue
     final upcoming = queue.length > currentIndex + 1
-        ? queue.sublist(currentIndex + 1, (currentIndex + 4).clamp(0, queue.length))
+        ? queue.sublist(currentIndex + 1)
         : <Song>[];
 
     if (upcoming.isEmpty) return const SizedBox.shrink();
@@ -476,60 +493,73 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
                 fontWeight: FontWeight.bold,
                 letterSpacing: 0.5,
               )),
-              Text('${queue.length - currentIndex - 1} songs', style: TextStyle(
+              Text('${upcoming.length} songs', style: TextStyle(
                 color: Colors.white38,
                 fontSize: 12.sp,
               )),
             ],
           ),
         ),
-        ...upcoming.asMap().entries.map((entry) {
-          final idx = currentIndex + 1 + entry.key;
-          final s = entry.value;
-          return GestureDetector(
-            onTap: () => notifier.skipToIndex(idx),
-            child: Padding(
-              padding: EdgeInsets.only(bottom: 10.h),
-              child: Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8.r),
-                    child: CachedNetworkImage(
-                      imageUrl: s.imageUrl,
-                      width: 44.w,
-                      height: 44.w,
-                      fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => Container(
-                        width: 44.w,
-                        height: 44.w,
-                        color: Colors.white10,
-                        child: const Icon(Icons.music_note, color: Colors.white24),
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: upcoming.length,
+          onReorder: (oldIndex, newIndex) {
+            // Adjust indices for the full queue
+            notifier.reorderQueue(currentIndex + 1 + oldIndex, currentIndex + 1 + newIndex);
+          },
+          itemBuilder: (context, index) {
+            final s = upcoming[index];
+            final idx = currentIndex + 1 + index;
+            return GestureDetector(
+              key: ValueKey(s.id + idx.toString()), // Unique key per position
+              onTap: () => notifier.skipToIndex(idx),
+              child: Padding(
+                padding: EdgeInsets.only(bottom: 12.h),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8.r),
+                      child: CachedNetworkImage(
+                        imageUrl: s.imageUrl,
+                        width: 48.w,
+                        height: 48.w,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, __, ___) => Container(
+                          width: 48.w,
+                          height: 48.w,
+                          color: Colors.white10,
+                          child: const Icon(Icons.music_note, color: Colors.white24),
+                        ),
                       ),
                     ),
-                  ),
-                  SizedBox(width: 12.w),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(s.title, maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: Colors.white, fontSize: 13.sp, fontWeight: FontWeight.w600)),
-                        Text(s.artist, maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: Colors.white54, fontSize: 11.sp)),
-                      ],
+                    SizedBox(width: 12.w),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(s.title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: Colors.white, fontSize: 13.sp, fontWeight: FontWeight.w600)),
+                          Text(s.artist, maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: Colors.white54, fontSize: 11.sp)),
+                        ],
+                      ),
                     ),
-                  ),
-                  Icon(Icons.drag_handle_rounded, color: Colors.white24, size: 20),
-                ],
+                    ReorderableDragStartListener(
+                      index: index,
+                      child: Icon(Icons.drag_handle_rounded, color: Colors.white24, size: 22.sp),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          );
-        }),
+            );
+          },
+        ),
       ],
     );
   }
 
-  Widget _buildBottomActions(Song song) {
+  Widget _buildBottomActions(Song song, PlayerState playerState, PlayerNotifier notifier) {
     final isDownloaded = Hive.box<Song>(HiveBoxes.downloads).containsKey(song.id);
     final downloadState = ref.watch(downloadNotifierProvider);
     final isDownloading = downloadState.containsKey(song.id);

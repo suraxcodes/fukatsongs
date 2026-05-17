@@ -1,200 +1,127 @@
-# 🎵 fukatSongs
+# fukatSongs 🎵
 
-> **A personal Android music streaming app built in Flutter** — for learning and personal use.  
-> Search, stream, and download songs from JioSaavn and YouTube Music. No backend. No cloud. Just music.
+fukatSongs is a feature-rich, entirely local, ad-free personal Android music streaming app built with Flutter. It seamlessly integrates searches across YouTube Music and JioSaavn, providing high-fidelity streaming, offline downloads, and stable queue management without the need for a backend server.
 
----
-
-## 📱 What It Does
-
-fukatSongs lets you:
-- 🔍 **Search** songs from **JioSaavn** and **YouTube Music** simultaneously
-- ▶️ **Stream** music with a stable background playback engine
-- ⬇️ **Download** songs for offline listening
-- 📋 **Create and manage playlists** locally on your device
-- 📥 **Import playlists** from other apps (YouTube, Spotify links)
-- ❤️ **Like songs** and see recent history
-- 🔒 **Protected by a one-time install password** — personal use only
+**Core Value:** Stable, uninterrupted music playback with a reliable queue system, local offline storage, and zero cloud dependency.
 
 ---
 
-## 🛡️ Security (Gatekeeper)
+## 🚀 Features
 
-This app is password-protected. On fresh install, the user must enter the password once.  
-After that, the app opens directly without asking again.  
-If the app is deleted and reinstalled, the password is required again.
+### 🎧 Core Playback & Audio Engine
+*   **Dual-Source Streaming Architecture:** Parallel querying and streaming from JioSaavn and YouTube Music APIs, maximizing song availability.
+*   **Multi-Tunnel Fallback System:** A resilient proxy rotation and fallback mechanism designed to seamlessly bypass aggressive rate-limiting or geographic blocks from YouTube.
+*   **"Infinite Music" (Smart Autoplay):** Radio-like infinite playback. When the queue ends, the application intelligently searches for and appends top tracks from the most recently played artist.
+*   **Reorderable Queue Management:** Full drag-and-drop support within the immersive player's "Up Next" section, allowing users to effortlessly curate their active listening session.
+*   **High-Fidelity Audio:** Configurable streaming and download quality modes, intelligently adapting to network conditions (e.g., automatically starting at 160kbps on mobile data to prevent stuttering).
+*   **Built-in Equalizer & Loudness Enhancer:** Native Android audio effects pipeline (`AndroidLoudnessEnhancer`, `AndroidEqualizer`) for deep bass and up to +4dB volume boosting.
+*   **Gapless Playback:** Custom audio buffering logic to eliminate "pops" and reduce buffering delays during track transitions.
 
-**To change the password:**  
-Open `lib/core/constants/app_secrets.dart` and change the value:
-```dart
-static const String appPassword = "your_password_here";
-```
+### 📚 Library & Discovery
+*   **Smart Library Organization:** Advanced dynamic sorting engine across Downloads, Playlists, and Liked Songs tabs. Users can sort by Title, Artist, Album, Recently Added, Duration, and Custom Order.
+*   **Customizable UI Views:** Toggleable View Modes (List vs. Compact Grid), empowering users to prioritize high-resolution artwork or dense text lists for larger music collections.
+*   **Background Playlist Importer:** A robust, asynchronous importer that seamlessly migrates massive playlists from Spotify and YouTube directly into the app. Features include real-time progress indicators, background execution, and the ability to cancel or hide the import dialog without interrupting the process.
+*   **Intelligent Search History:** The search home interface displays a curated horizontal list of actual recently played songs alongside a persistent query history, mimicking the fluidity of premium streaming services.
+*   **Personalized Listening Stats:** A dynamic "Your Top Songs" section that tracks local playback counts, automatically elevating your most listened-to tracks to the top of the search dashboard.
+*   **Artist & Album Browsing:** Dedicated, immersive browse screens dynamically generated for exploring complete artist discographies and album tracklists.
+*   **Synced Lyrics Engine:** High-precision, real-time synchronized lyrics integration powered by the LRCLIB API.
 
----
-
-## 🏗️ Architecture
-
-```
-lib/
-├── main.dart                   # App entry point, Hive + AudioService init
-├── core/
-│   ├── audio/
-│   │   ├── audio_handler.dart  # Global AudioPlayer + effects engine
-│   │   └── youtube_audio_source.dart
-│   ├── constants/
-│   │   ├── hive_boxes.dart     # All Hive box name constants
-│   │   └── app_secrets.dart    # Password config (change here)
-│   └── widgets/
-│       └── song_skeleton.dart  # Loading shimmer UI
-├── features/
-│   ├── auth/
-│   │   └── gatekeeper_screen.dart   # Password lock screen (first-run only)
-│   ├── home/                        # Home tab — trending + recent
-│   ├── search/                      # Search tab — Saavn + YouTube
-│   ├── player/                      # Mini + Immersive player, queue
-│   ├── library/                     # Playlists, liked songs, downloads
-│   ├── settings/                    # Audio quality, theme, EQ
-│   └── main/
-│       ├── main_screen.dart         # Bottom nav shell
-│       └── splash_screen.dart       # Animated splash + auth routing
-├── models/
-│   └── song.dart                    # Song data model (Freezed + Hive)
-└── providers/
-    ├── music_repository.dart        # Central stream URL gateway
-    ├── saavn_provider.dart          # JioSaavn API handler
-    └── youtube_provider.dart        # YouTube + Piped proxy handler
-```
+### 💾 Offline & Utilities
+*   **Zero-Cloud Local Storage:** Instantaneous loading of metadata, playlists, liked songs, and application settings via a blazing-fast local NoSQL key-value store (`Hive`).
+*   **Offline Downloads:** Download any track for offline listening. Audio files are saved directly to application-specific storage.
+*   **Storage Management:** Built-in utility dashboard to monitor disk usage and manually clear specific caches or downloaded files.
+*   **Sleep Timer:** Set a customized countdown timer to automatically fade out and stop playback when falling asleep.
+*   **Intelligent Queue Shuffling:** Maintains absolute state synchronization between `originalQueue` and `shuffledQueue`, allowing users to toggle shuffle without destructively modifying their original playlist order.
+*   **Background Playback & Integrations:** Full Android background execution support via `audio_service`, featuring lock-screen controls, media session management, and responsive push notifications.
 
 ---
 
-## 🎯 Design Principles
+## 🛠 Technology Stack
 
-| Principle | Implementation |
-|---|---|
-| **Single Audio Player** | One global `AudioPlayer` instance — never duplicated |
-| **Stream URLs are never persisted** | Always fetched fresh at playback time |
-| **Provider Abstraction** | Saavn and YouTube behind a unified `MusicRepository` |
-| **Offline First** | Downloads checked before any network request |
-| **No Backend** | All data stored locally via Hive |
+### Architecture & State Management
+*   **Framework:** Flutter (Android only for V1)
+*   **State Management:** `flutter_riverpod` (v2.5.1) with code-generation (`riverpod_annotation`).
 
----
+### Audio & Networking
+*   **Audio Engine:** `just_audio` (v0.9.36) and `audio_service` (v0.18.13). Handles HLS, MP3, M4A, and OPUS formats.
+*   **Network Client:** `dio` (v5.4.0) with custom interceptors for retries, auth, and download streaming.
+*   **API Interactions:** `youtube_explode_dart` (for YT metadata) and direct JioSaavn API interactions.
 
-## 🔊 Audio Engine
+### Local Storage & Data
+*   **Database:** `hive` (v2.2.3) & `hive_flutter`.
+*   **File System:** `path_provider` and `permission_handler` for Android 13+ storage & audio permissions.
+*   **Models:** `freezed` and `json_serializable` for immutable, boilerplate-free data classes.
 
-The audio pipeline is powered by `just_audio` + `audio_service`:
-
-- **Android Hardware EQ** (`AndroidEqualizer`) — frequency band control
-- **Loudness Enhancer** (`AndroidLoudnessEnhancer`) — optional +4dB boost
-- **Skip Silence** — auto-skips quiet gaps in tracks
-- **Smart Pre-Buffer** — waits for 2 seconds of buffer before starting playback to prevent stuttering
-
-### Audio Quality Levels
-| Setting | Bitrate | Best For |
-|---|---|---|
-| Low | 96 kbps | Saving data |
-| Medium | 160 kbps | Balanced |
-| High | 320 kbps | Best quality |
-| Hi-Fi Mode | 320 kbps (forced) | WiFi, premium listening |
+### UI & UX
+*   **Image Caching:** `cached_network_image`.
+*   **Responsiveness:** `flutter_screenutil` for perfect scaling across all Android device sizes.
 
 ---
 
-## 🌐 Multi-Source Streaming Strategy
-
-### YouTube
-1. **Stage 1 — Stealth Tunnels**: Tries multiple Piped proxy mirrors (YouTube's rate limiting shield)
-2. **Stage 2 — Direct Extraction**: Falls back to `youtube_explode_dart` for highest-bitrate Opus stream
-3. **Stage 3 — Magic Switch**: If YouTube fails entirely, searches JioSaavn for the same song and plays its 320kbps stream
-
-### JioSaavn
-- Uses unofficial Saavn API with mirror rotation
-- Always picks 320kbps stream if available
-- Falls back to lower quality if not found
-
----
-
-## 📦 Tech Stack
-
-| Package | Purpose |
-|---|---|
-| `flutter_riverpod` | State management |
-| `just_audio` | Audio playback engine |
-| `audio_service` | Background playback + lock screen controls |
-| `audio_session` | Interruption handling (calls, headphones) |
-| `hive_flutter` | Local database (songs, playlists, settings) |
-| `dio` | HTTP client with retry + interceptors |
-| `freezed` | Immutable data models |
-| `cached_network_image` | Album art with disk caching |
-| `youtube_explode_dart` | YouTube stream extraction fallback |
-| `connectivity_plus` | WiFi vs mobile data detection |
-| `path_provider` | File system paths for downloads |
-| `permission_handler` | Storage permissions |
-| `flutter_launcher_icons` | Native app icons |
-
----
-
-## 🚀 Getting Started (Development)
+## 🏗 Development Setup
 
 ### Prerequisites
-- Flutter SDK 3.x
-- Android SDK / Emulator
-- Java 17+
+*   Flutter SDK (3.19.0 or higher recommended)
+*   Android Studio / Android SDK (API level 34+)
 
-### Run in Debug Mode
-```bash
-flutter run
-```
+### Installation
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/yourusername/fukat_songs.git
+   cd freesongs
+   ```
 
-### Build Release APK
+2. **Install dependencies:**
+   ```bash
+   flutter pub get
+   ```
+
+3. **Run Code Generation:**
+   Since the app relies heavily on Freezed and Riverpod annotations, you must run the build runner to generate the `.g.dart` and `.freezed.dart` files.
+   ```bash
+   dart run build_runner build --delete-conflicting-outputs
+   ```
+
+4. **Run the App:**
+   Connect an Android emulator or physical device.
+   ```bash
+   flutter run
+   ```
+
+### Building the APK
+To build a production-ready APK split by architecture (reduces app size):
 ```bash
 flutter build apk --split-per-abi
 ```
+The output APKs will be located in `build/app/outputs/flutter-apk/`.
 
-**Output files:**
-| File | Size | Use For |
-|---|---|---|
-| `app-armeabi-v7a-release.apk` | ~19 MB | Old phones |
-| `app-arm64-v8a-release.apk` | ~21 MB | ✅ Most modern phones |
-| `app-x86_64-release.apk` | ~23 MB | Emulators |
+---
 
-### Regenerate Code (after model changes)
-```bash
-flutter pub run build_runner build --delete-conflicting-outputs
+## 🧩 Project Structure
+
+```text
+lib/
+├── core/
+│   ├── audio/         # AudioHandler, Audio sources, Equalizer config
+│   ├── constants/     # API keys, Hive box names, UI constants
+│   └── repositories/  # Abstracted data fetching (History, Music, etc.)
+├── features/
+│   ├── home/          # Feed, recently played, top charts
+│   ├── library/       # Offline downloads, playlists, liked songs
+│   ├── player/        # Immersive player, queue management, lyrics, sleep timer
+│   ├── search/        # Multi-source search, Browse pages
+│   └── settings/      # Audio quality, theme, gapless playback toggles
+└── models/            # Freezed data models (Song, AppSettings, etc.)
 ```
 
 ---
 
-## 📂 Local Storage (Hive Boxes)
-
-| Box | Type | Stores |
-|---|---|---|
-| `settings` | `dynamic` | Audio quality, theme, EQ prefs |
-| `songs` | `Song` | Cached song metadata |
-| `downloads` | `Song` | Offline downloaded songs |
-| `liked_songs` | `dynamic` | Liked song IDs |
-| `recent_songs` | `Song` | Recently played |
-| `playlists` | `dynamic` | User-created playlists |
-| `search_cache` | `String` | Search result cache |
-| `search_history` | `String` | Recent search queries |
-| `queue_state` | `dynamic` | Persisted playback queue |
-| `auth` | `dynamic` | One-time unlock flag |
+## ⚠️ Constraints & Disclaimers
+*   **Android Exclusive:** Version 1 is strictly optimized for Android. iOS support is not currently planned due to background audio limitations and file system constraints.
+*   **API Volatility:** This application relies on unofficial APIs (YouTube Music, JioSaavn). Stream URLs are intentionally never persisted in the database; they are dynamically resolved at playback time to prevent broken streams.
+*   **Single Instance Player:** The app strictly enforces a single global `AudioPlayer` instance to prevent memory leaks and overlapping audio states.
 
 ---
 
-## ⚠️ Important Constraints
-
-- **Android Only** — No iOS support in V1
-- **Unofficial APIs** — Saavn and YouTube APIs may change; fallback logic is built-in
-- **Personal Use** — This app is not intended for public distribution
-- **No Login Required** — Anonymous streaming, no accounts
-
----
-
-## 📁 APK Location After Build
-
-```
-build/app/outputs/flutter-apk/
-```
-
----
-
-*Built with ❤️ using Flutter — fukatSongs v1.0*
+## 🤝 Contributing
+As this is a personal learning project, contributions, forks, and pull requests are welcome but not actively managed. If you find a bug regarding API resolution, feel free to submit a patch!

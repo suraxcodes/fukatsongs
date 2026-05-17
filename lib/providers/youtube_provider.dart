@@ -75,7 +75,7 @@ class YouTubeProvider implements MusicProvider {
   String get name => 'YouTube Music';
 
   @override
-  Future<List<Song>> search(String query) async {
+  Future<List<Song>> search(String query, {int page = 1, int limit = 20}) async {
     try {
       final response = await _dio.post(
         'https://music.youtube.com/youtubei/v1/search',

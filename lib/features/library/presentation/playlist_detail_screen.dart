@@ -9,40 +9,85 @@ import 'package:fukat_songs/features/player/presentation/immersive_player_screen
 import 'package:fukat_songs/features/library/logic/playlist_notifier.dart';
 import 'package:fukat_songs/features/library/presentation/song_options_sheet.dart';
 
-class PlaylistDetailScreen extends ConsumerWidget {
+class PlaylistDetailScreen extends ConsumerStatefulWidget {
   final String? playlistId;
   final Playlist? playlist;
   const PlaylistDetailScreen({super.key, this.playlistId, this.playlist});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final targetPlaylist = playlist ?? 
+  ConsumerState<PlaylistDetailScreen> createState() => _PlaylistDetailScreenState();
+}
+
+class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
+  final ScrollController _scrollController = ScrollController();
+  int _visibleCount = 30;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 300) {
+      final targetPlaylist = widget.playlist ?? 
+        ref.read(playlistNotifierProvider).firstWhere(
+          (p) => p.id == widget.playlistId,
+          orElse: () => const Playlist(id: '', name: 'Not Found'),
+        );
+      if (_visibleCount < targetPlaylist.songs.length) {
+        setState(() {
+          _visibleCount = (_visibleCount + 30).clamp(0, targetPlaylist.songs.length);
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final targetPlaylist = widget.playlist ?? 
       ref.watch(playlistNotifierProvider).firstWhere(
-        (p) => p.id == playlistId,
+        (p) => p.id == widget.playlistId,
         orElse: () => const Playlist(id: '', name: 'Not Found'),
       );
+
+    final songsToRender = targetPlaylist.songs.take(_visibleCount).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D0B1F),
       body: CustomScrollView(
+        controller: _scrollController,
         slivers: [
-          _buildHeader(context, targetPlaylist, ref),
+          _buildHeader(context, targetPlaylist),
           SliverList(
             delegate: SliverChildBuilderDelegate(
               (context, index) {
-                final song = targetPlaylist.songs[index];
-                return _buildSongTile(context, ref, targetPlaylist, song, index);
+                final song = songsToRender[index];
+                return _buildSongTile(context, targetPlaylist, song, index);
               },
-              childCount: targetPlaylist.songs.length,
+              childCount: songsToRender.length,
             ),
           ),
+          if (_visibleCount < targetPlaylist.songs.length)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: CircularProgressIndicator(color: Color(0xFFBB86FC))),
+              ),
+            ),
           if (targetPlaylist.songs.isEmpty)
             SliverFillRemaining(
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.queue_music_rounded, size: 64, color: Colors.white24),
+                    const Icon(Icons.queue_music_rounded, size: 64, color: Colors.white24),
                     SizedBox(height: 16.h),
                     Text(
                       'No songs yet\nSearch and save songs here',
@@ -59,7 +104,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context, Playlist playlist, WidgetRef ref) {
+  Widget _buildHeader(BuildContext context, Playlist playlist) {
     final hasSongs = playlist.songs.isNotEmpty;
     final coverUrl = hasSongs ? playlist.songs.first.imageUrl : null;
 
@@ -74,11 +119,11 @@ class PlaylistDetailScreen extends ConsumerWidget {
       actions: [
         IconButton(
           icon: const Icon(Icons.edit_rounded, color: Colors.white70),
-          onPressed: () => _renamePlaylist(context, ref, playlist),
+          onPressed: () => _renamePlaylist(context, playlist),
         ),
         IconButton(
           icon: const Icon(Icons.delete_outline_rounded, color: Colors.white70),
-          onPressed: () => _confirmDelete(context, ref, playlist),
+          onPressed: () => _confirmDelete(context, playlist),
         ),
       ],
       flexibleSpace: FlexibleSpaceBar(
@@ -89,6 +134,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
               CachedNetworkImage(
                 imageUrl: coverUrl.replaceAll('150x150', '500x500'),
                 fit: BoxFit.cover,
+                memCacheWidth: 400,
               )
             else
               Container(
@@ -96,11 +142,11 @@ class PlaylistDetailScreen extends ConsumerWidget {
                 child: const Icon(Icons.queue_music_rounded, size: 80, color: Colors.white12),
               ),
             Container(
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, const Color(0xFF0D0B1F)],
+                  colors: [Colors.transparent, Color(0xFF0D0B1F)],
                 ),
               ),
             ),
@@ -192,7 +238,6 @@ class PlaylistDetailScreen extends ConsumerWidget {
 
   Widget _buildSongTile(
     BuildContext context,
-    WidgetRef ref,
     Playlist playlist,
     Song song,
     int index,
@@ -221,6 +266,19 @@ class PlaylistDetailScreen extends ConsumerWidget {
             width: 52.w,
             height: 52.w,
             fit: BoxFit.cover,
+            memCacheWidth: 150,
+            placeholder: (_, __) => Container(
+              width: 52.w,
+              height: 52.w,
+              color: Colors.white.withOpacity(0.05),
+              child: const Center(child: Icon(Icons.music_note, color: Colors.white24, size: 20)),
+            ),
+            errorWidget: (_, __, ___) => Container(
+              width: 52.w,
+              height: 52.w,
+              color: Colors.white.withOpacity(0.05),
+              child: const Center(child: Icon(Icons.music_note, color: Colors.white24, size: 20)),
+            ),
           ),
         ),
         title: Text(
@@ -252,7 +310,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
     );
   }
 
-  void _confirmDelete(BuildContext context, WidgetRef ref, Playlist playlist) {
+  void _confirmDelete(BuildContext context, Playlist playlist) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -280,7 +338,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
     );
   }
 
-  void _renamePlaylist(BuildContext context, WidgetRef ref, Playlist playlist) {
+  void _renamePlaylist(BuildContext context, Playlist playlist) {
     final ctrl = TextEditingController(text: playlist.name);
     showDialog(
       context: context,

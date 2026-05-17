@@ -8,6 +8,7 @@ import 'package:fukat_songs/features/library/logic/song_download_notifier.dart';
 import '../../../../core/widgets/glass_container.dart';
 import '../../../player/presentation/immersive_player_screen.dart';
 import '../../../library/presentation/song_options_sheet.dart';
+import '../browse_screen.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../../../core/constants/hive_boxes.dart';
 
@@ -77,13 +78,29 @@ class SongCard extends ConsumerWidget {
                         ),
                       ),
                       SizedBox(height: 4.h),
-                      Text(
-                        song.artist,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white54,
-                          fontSize: 12.sp,
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => BrowseScreen(
+                                title: song.artist,
+                                query: song.artist,
+                                imageUrl: song.imageUrl,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Text(
+                          song.artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12.sp,
+                            decoration: TextDecoration.underline,
+                            decorationColor: Colors.white24,
+                          ),
                         ),
                       ),
                     ],

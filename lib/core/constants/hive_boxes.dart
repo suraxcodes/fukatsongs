@@ -10,4 +10,5 @@ class HiveBoxes {
   static const String searchHistory = 'search_history';
   static const String downloads = 'downloads';
   static const String auth = 'auth';
+  static const String playStats = 'play_stats';
 }
