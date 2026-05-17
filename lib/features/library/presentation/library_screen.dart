@@ -19,6 +19,12 @@ import 'background_import_indicator.dart';
 
 final librarySearchProvider = StateProvider<String>((ref) => '');
 
+enum LibrarySort { title, artist, album, recentlyAdded, duration, custom }
+enum LibraryView { compact, list }
+
+final librarySortProvider = StateProvider<LibrarySort>((ref) => LibrarySort.recentlyAdded);
+final libraryViewProvider = StateProvider<LibraryView>((ref) => LibraryView.list);
+
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
 
@@ -49,95 +55,148 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
       body: SafeArea(
         child: Stack(
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Padding(
-                  padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Your Library',
-                        style: TextStyle(
-                          fontSize: 28.sp,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+            NestedScrollView(
+              headerSliverBuilder: (context, innerBoxIsScrolled) {
+                return [
+                  SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Your Library',
+                                style: TextStyle(
+                                  fontSize: 28.sp,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.import_export_rounded, color: Colors.white, size: 28),
+                                    onPressed: () => showPlaylistImportDialog(context),
+                                    tooltip: 'Import Playlist',
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+                                    onPressed: () => _showCreatePlaylistDialog(context),
+                                    tooltip: 'New Playlist',
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.settings_outlined, color: Colors.white70),
+                                    onPressed: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.import_export_rounded, color: Colors.white, size: 28),
-                            onPressed: () => showPlaylistImportDialog(context),
-                            tooltip: 'Import Playlist',
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
-                            onPressed: () => _showCreatePlaylistDialog(context),
-                            tooltip: 'New Playlist',
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.settings_outlined, color: Colors.white70),
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                        SizedBox(height: 20.h),
+                        // Search Bar for Library
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16.w),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(12.r),
+                            ),
+                            child: TextField(
+                              onChanged: (val) => ref.read(librarySearchProvider.notifier).state = val,
+                              style: const TextStyle(color: Colors.white),
+                              decoration: InputDecoration(
+                                hintText: 'Search in library...',
+                                hintStyle: TextStyle(color: Colors.white38, fontSize: 14.sp),
+                                prefixIcon: const Icon(Icons.search_rounded, color: Colors.white38),
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.symmetric(vertical: 12.h),
+                              ),
                             ),
                           ),
+                        ),
+                        SizedBox(height: 12.h),
+                        // Sort and View Options Bar
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16.w),
+                          child: Row(
+                            children: [
+                              GestureDetector(
+                                onTap: () => _showSortBottomSheet(context, ref),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.sort_rounded, color: const Color(0xFFBB86FC), size: 18.sp),
+                                    SizedBox(width: 6.w),
+                                    Consumer(
+                                      builder: (context, ref, _) {
+                                        final sort = ref.watch(librarySortProvider);
+                                        return Text(
+                                          _getSortName(sort),
+                                          style: TextStyle(color: Colors.white70, fontSize: 13.sp, fontWeight: FontWeight.w500),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Spacer(),
+                              Consumer(
+                                builder: (context, ref, _) {
+                                  final view = ref.watch(libraryViewProvider);
+                                  return IconButton(
+                                    icon: Icon(
+                                      view == LibraryView.list ? Icons.list_rounded : Icons.grid_view_rounded,
+                                      color: Colors.white54,
+                                      size: 20.sp,
+                                    ),
+                                    onPressed: () => ref.read(libraryViewProvider.notifier).state = 
+                                      view == LibraryView.list ? LibraryView.compact : LibraryView.list,
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: 8.h),
+                      ],
+                    ),
+                  ),
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: _SliverAppBarDelegate(
+                      TabBar(
+                        controller: _tabController,
+                        isScrollable: true,
+                        labelColor: const Color(0xFF6200EE),
+                        unselectedLabelColor: Colors.white54,
+                        indicatorColor: const Color(0xFF6200EE),
+                        indicatorSize: TabBarIndicatorSize.label,
+                        tabAlignment: TabAlignment.start,
+                        tabs: const [
+                          Tab(text: 'Downloads'),
+                          Tab(text: 'Playlists'),
+                          Tab(text: 'Liked'),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: 20.h),
-                // Search Bar for Library
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16.w),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(12.r),
-                    ),
-                    child: TextField(
-                      onChanged: (val) => ref.read(librarySearchProvider.notifier).state = val,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: 'Search in library...',
-                        hintStyle: TextStyle(color: Colors.white38, fontSize: 14.sp),
-                        prefixIcon: const Icon(Icons.search_rounded, color: Colors.white38),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(vertical: 12.h),
-                      ),
                     ),
                   ),
-                ),
-                SizedBox(height: 12.h),
-                // Tabs
-                TabBar(
-                  controller: _tabController,
-                  isScrollable: true,
-                  labelColor: const Color(0xFF6200EE),
-                  unselectedLabelColor: Colors.white54,
-                  indicatorColor: const Color(0xFF6200EE),
-                  indicatorSize: TabBarIndicatorSize.label,
-                  tabs: const [
-                    Tab(text: 'Downloads'),
-                    Tab(text: 'Playlists'),
-                    Tab(text: 'Liked'),
-                  ],
-                ),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _DownloadsTab(),
-                      _PlaylistsTab(onCreatePlaylist: () => _showCreatePlaylistDialog(context)),
-                      _LikedSongsTab(),
-                    ],
-                  ),
-                ),
-              ],
+                ];
+              },
+              body: TabBarView(
+                controller: _tabController,
+                children: [
+                  _DownloadsTab(),
+                  _PlaylistsTab(onCreatePlaylist: () => _showCreatePlaylistDialog(context)),
+                  _LikedSongsTab(),
+                ],
+              ),
             ),
             Positioned(
               left: 0,
@@ -148,6 +207,85 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
           ],
         ),
       ),
+    );
+  }
+
+  String _getSortName(LibrarySort sort) {
+    switch (sort) {
+      case LibrarySort.title: return 'Title';
+      case LibrarySort.artist: return 'Artist';
+      case LibrarySort.album: return 'Album';
+      case LibrarySort.recentlyAdded: return 'Recently added';
+      case LibrarySort.duration: return 'Duration';
+      case LibrarySort.custom: return 'Custom order';
+    }
+  }
+
+  void _showSortBottomSheet(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF16142E),
+      isScrollControlled: true, // Allow it to expand
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24.r))),
+      builder: (context) => Consumer(
+        builder: (context, ref, _) {
+          final currentSort = ref.watch(librarySortProvider);
+          final currentView = ref.watch(libraryViewProvider);
+
+          return Container(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
+            padding: EdgeInsets.symmetric(vertical: 20.h),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 8.h),
+                    child: Text('Sort by', style: TextStyle(color: Colors.white, fontSize: 16.sp, fontWeight: FontWeight.bold)),
+                  ),
+                  ...LibrarySort.values.map((sort) => _buildSortOption(context, ref, sort, currentSort)),
+                  const Divider(color: Colors.white10),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 8.h),
+                    child: Text('View as', style: TextStyle(color: Colors.white, fontSize: 16.sp, fontWeight: FontWeight.bold)),
+                  ),
+                  _buildViewOption(context, ref, LibraryView.list, currentView, Icons.list_rounded, 'List'),
+                  _buildViewOption(context, ref, LibraryView.compact, currentView, Icons.grid_view_rounded, 'Compact'),
+                  SizedBox(height: 12.h), // Safe space at bottom
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSortOption(BuildContext context, WidgetRef ref, LibrarySort sort, LibrarySort current) {
+    final isSelected = sort == current;
+    return ListTile(
+      onTap: () {
+        ref.read(librarySortProvider.notifier).state = sort;
+        Navigator.pop(context);
+      },
+      contentPadding: EdgeInsets.symmetric(horizontal: 24.w),
+      title: Text(_getSortName(sort), style: TextStyle(color: isSelected ? const Color(0xFFBB86FC) : Colors.white70, fontSize: 14.sp)),
+      trailing: isSelected ? Icon(Icons.check_rounded, color: const Color(0xFFBB86FC), size: 20.sp) : null,
+    );
+  }
+
+  Widget _buildViewOption(BuildContext context, WidgetRef ref, LibraryView view, LibraryView current, IconData icon, String label) {
+    final isSelected = view == current;
+    return ListTile(
+      onTap: () {
+        ref.read(libraryViewProvider.notifier).state = view;
+        Navigator.pop(context);
+      },
+      contentPadding: EdgeInsets.symmetric(horizontal: 24.w),
+      leading: Icon(icon, color: isSelected ? const Color(0xFFBB86FC) : Colors.white38),
+      title: Text(label, style: TextStyle(color: isSelected ? const Color(0xFFBB86FC) : Colors.white70, fontSize: 14.sp)),
+      trailing: isSelected ? Icon(Icons.check_rounded, color: const Color(0xFFBB86FC), size: 20.sp) : null,
     );
   }
 
@@ -193,20 +331,51 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
   }
 }
 
+List<Song> _getSortedSongs(List<Song> songs, LibrarySort sort) {
+  final sorted = List<Song>.from(songs);
+  switch (sort) {
+    case LibrarySort.title:
+      sorted.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+      break;
+    case LibrarySort.artist:
+      sorted.sort((a, b) => a.artist.toLowerCase().compareTo(b.artist.toLowerCase()));
+      break;
+    case LibrarySort.album:
+      sorted.sort((a, b) => a.albumName.toLowerCase().compareTo(b.albumName.toLowerCase()));
+      break;
+    case LibrarySort.recentlyAdded:
+      // Assuming original order is recently added (Hive behavior or insertion order)
+      // If we had a timestamp, we'd use it. For now, reverse of insertion if desired.
+      return sorted.reversed.toList();
+    case LibrarySort.duration:
+      sorted.sort((a, b) => b.duration.compareTo(a.duration));
+      break;
+    case LibrarySort.custom:
+      break;
+  }
+  return sorted;
+}
+
 class _DownloadsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playerNotifier = ref.read(playerNotifierProvider.notifier);
+    final sortMode = ref.watch(librarySortProvider);
+    final viewMode = ref.watch(libraryViewProvider);
 
     return ValueListenableBuilder(
       valueListenable: Hive.box<Song>(HiveBoxes.downloads).listenable(),
       builder: (context, Box<Song> box, _) {
         if (box.isEmpty) {
-// ...
+          return _emptyState(icon: Icons.download_done_rounded, message: 'No downloads yet');
         }
 
         final searchQuery = ref.watch(librarySearchProvider).toLowerCase();
         var songs = box.values.toList();
+        
+        // Apply Sort
+        songs = _getSortedSongs(songs, sortMode);
+
         if (searchQuery.isNotEmpty) {
           songs = songs.where((s) => 
             s.title.toLowerCase().contains(searchQuery) || 
@@ -221,6 +390,7 @@ class _DownloadsTab extends ConsumerWidget {
             final song = songs[index];
             return _SongListTile(
               song: song,
+              viewMode: viewMode,
               onTap: () {
                 playerNotifier.setQueueAndPlay(
                   List<Song>.from(songs),
@@ -365,16 +535,22 @@ class _LikedSongsTab extends ConsumerWidget {
     final likedSongs = ref.watch(likedSongsNotifierProvider);
     final searchQuery = ref.watch(librarySearchProvider).toLowerCase();
     final playerNotifier = ref.read(playerNotifierProvider.notifier);
+    final sortMode = ref.watch(librarySortProvider);
+    final viewMode = ref.watch(libraryViewProvider);
 
-    var filteredSongs = likedSongs;
+    var songs = List<Song>.from(likedSongs);
+    
+    // Apply Sort
+    songs = _getSortedSongs(songs, sortMode);
+
     if (searchQuery.isNotEmpty) {
-      filteredSongs = likedSongs.where((s) => 
+      songs = songs.where((s) => 
         s.title.toLowerCase().contains(searchQuery) || 
         s.artist.toLowerCase().contains(searchQuery)
       ).toList();
     }
 
-    if (filteredSongs.isEmpty) {
+    if (songs.isEmpty) {
       return _emptyState(
         icon: Icons.favorite_rounded,
         message: 'Songs you like\nwill appear here',
@@ -383,18 +559,19 @@ class _LikedSongsTab extends ConsumerWidget {
 
     return ListView.builder(
       padding: EdgeInsets.fromLTRB(0, 12.h, 0, 120.h),
-      itemCount: filteredSongs.length,
+      itemCount: songs.length,
       itemBuilder: (context, index) {
-        final song = filteredSongs[index];
+        final song = songs[index];
         return _SongListTile(
           song: song,
+          viewMode: viewMode,
           trailing: IconButton(
             icon: const Icon(Icons.favorite_rounded, color: Colors.redAccent),
             onPressed: () => ref.read(likedSongsNotifierProvider.notifier).toggle(song),
           ),
           onTap: () {
             playerNotifier.setQueueAndPlay(
-              List<Song>.from(filteredSongs),
+              List<Song>.from(songs),
               startIndex: index,
             );
             Future.delayed(const Duration(milliseconds: 200), () {
@@ -413,10 +590,46 @@ class _SongListTile extends StatelessWidget {
   final Song song;
   final VoidCallback onTap;
   final Widget? trailing;
-  const _SongListTile({required this.song, required this.onTap, this.trailing});
+  final LibraryView viewMode;
+  const _SongListTile({
+    required this.song, 
+    required this.onTap, 
+    this.trailing, 
+    this.viewMode = LibraryView.list
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (viewMode == LibraryView.compact) {
+      return ListTile(
+        contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 0.h),
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(4.r),
+          child: CachedNetworkImage(
+            imageUrl: song.imageUrl,
+            width: 32.w,
+            height: 32.w,
+            fit: BoxFit.cover,
+            errorWidget: (_, __, ___) => const Icon(Icons.music_note, size: 16),
+          ),
+        ),
+        title: Text(
+          song.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: Colors.white, fontSize: 13.sp),
+        ),
+        subtitle: Text(
+          song.artist,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: Colors.white54, fontSize: 11.sp),
+        ),
+        onTap: onTap,
+        trailing: trailing,
+      );
+    }
+
     return ListTile(
       contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
       leading: ClipRRect(
@@ -476,4 +689,28 @@ Widget _emptyState({
       ],
     ),
   );
+}
+
+class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
+  _SliverAppBarDelegate(this._tabBar);
+
+  final TabBar _tabBar;
+
+  @override
+  double get minExtent => _tabBar.preferredSize.height;
+  @override
+  double get maxExtent => _tabBar.preferredSize.height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: const Color(0xFF0D0B1F),
+      child: _tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
+    return false;
+  }
 }
