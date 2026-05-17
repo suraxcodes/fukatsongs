@@ -335,6 +335,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         await _repairAndPlay(song, sessionId);
       } else {
         state = state.copyWith(processingState: AudioProcessingState.error);
+        print('--- PLAYBACK ERROR: Auto-skipping to next song in 2 seconds ---');
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted && state.processingState == AudioProcessingState.error) {
+            skipToNext();
+          }
+        });
       }
     }
   }
@@ -368,6 +374,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     } else {
       if (_playbackSessionId != sessionId) return;
       state = state.copyWith(processingState: AudioProcessingState.error);
+      print('--- REPAIR FAILED: Auto-skipping to next song in 2 seconds ---');
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted && state.processingState == AudioProcessingState.error) {
+          skipToNext();
+        }
+      });
     }
   }
 

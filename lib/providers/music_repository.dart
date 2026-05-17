@@ -60,6 +60,8 @@ class MusicRepository {
       }
     }
 
+    final finalResults = unifiedMap.values.toList();
+
     // --- SMART SEARCH FILTER ---
     // Remove remixes, covers, slowed versions unless user explicitly searched for them
     const blocklist = [
