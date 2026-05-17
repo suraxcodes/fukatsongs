@@ -14,6 +14,7 @@ class AppSettings with _$AppSettings {
     @Default(false) bool loudnessEnhancement,
     @Default(true) bool isAutoplayEnabled,
     @Default(false) bool isGaplessPlayback,
+    @Default(false) bool lowPerformanceMode,
   }) = _AppSettings;
 
   factory AppSettings.fromJson(Map<String, dynamic> json) =>

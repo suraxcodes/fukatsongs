@@ -28,6 +28,7 @@ mixin _$AppSettings {
   bool get loudnessEnhancement => throw _privateConstructorUsedError;
   bool get isAutoplayEnabled => throw _privateConstructorUsedError;
   bool get isGaplessPlayback => throw _privateConstructorUsedError;
+  bool get lowPerformanceMode => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -49,7 +50,8 @@ abstract class $AppSettingsCopyWith<$Res> {
       bool highFidelityMode,
       bool loudnessEnhancement,
       bool isAutoplayEnabled,
-      bool isGaplessPlayback});
+      bool isGaplessPlayback,
+      bool lowPerformanceMode});
 }
 
 /// @nodoc
@@ -73,6 +75,7 @@ class _$AppSettingsCopyWithImpl<$Res, $Val extends AppSettings>
     Object? loudnessEnhancement = null,
     Object? isAutoplayEnabled = null,
     Object? isGaplessPlayback = null,
+    Object? lowPerformanceMode = null,
   }) {
     return _then(_value.copyWith(
       streamingQuality: null == streamingQuality
@@ -107,6 +110,10 @@ class _$AppSettingsCopyWithImpl<$Res, $Val extends AppSettings>
           ? _value.isGaplessPlayback
           : isGaplessPlayback // ignore: cast_nullable_to_non_nullable
               as bool,
+      lowPerformanceMode: null == lowPerformanceMode
+          ? _value.lowPerformanceMode
+          : lowPerformanceMode // ignore: cast_nullable_to_non_nullable
+              as bool,
     ) as $Val);
   }
 }
@@ -127,7 +134,8 @@ abstract class _$$AppSettingsImplCopyWith<$Res>
       bool highFidelityMode,
       bool loudnessEnhancement,
       bool isAutoplayEnabled,
-      bool isGaplessPlayback});
+      bool isGaplessPlayback,
+      bool lowPerformanceMode});
 }
 
 /// @nodoc
@@ -149,6 +157,7 @@ class __$$AppSettingsImplCopyWithImpl<$Res>
     Object? loudnessEnhancement = null,
     Object? isAutoplayEnabled = null,
     Object? isGaplessPlayback = null,
+    Object? lowPerformanceMode = null,
   }) {
     return _then(_$AppSettingsImpl(
       streamingQuality: null == streamingQuality
@@ -183,6 +192,10 @@ class __$$AppSettingsImplCopyWithImpl<$Res>
           ? _value.isGaplessPlayback
           : isGaplessPlayback // ignore: cast_nullable_to_non_nullable
               as bool,
+      lowPerformanceMode: null == lowPerformanceMode
+          ? _value.lowPerformanceMode
+          : lowPerformanceMode // ignore: cast_nullable_to_non_nullable
+              as bool,
     ));
   }
 }
@@ -198,7 +211,8 @@ class _$AppSettingsImpl implements _AppSettings {
       this.highFidelityMode = true,
       this.loudnessEnhancement = false,
       this.isAutoplayEnabled = true,
-      this.isGaplessPlayback = false});
+      this.isGaplessPlayback = false,
+      this.lowPerformanceMode = false});
 
   factory _$AppSettingsImpl.fromJson(Map<String, dynamic> json) =>
       _$$AppSettingsImplFromJson(json);
@@ -227,10 +241,13 @@ class _$AppSettingsImpl implements _AppSettings {
   @override
   @JsonKey()
   final bool isGaplessPlayback;
+  @override
+  @JsonKey()
+  final bool lowPerformanceMode;
 
   @override
   String toString() {
-    return 'AppSettings(streamingQuality: $streamingQuality, downloadQuality: $downloadQuality, useSystemTheme: $useSystemTheme, isDarkMode: $isDarkMode, highFidelityMode: $highFidelityMode, loudnessEnhancement: $loudnessEnhancement, isAutoplayEnabled: $isAutoplayEnabled, isGaplessPlayback: $isGaplessPlayback)';
+    return 'AppSettings(streamingQuality: $streamingQuality, downloadQuality: $downloadQuality, useSystemTheme: $useSystemTheme, isDarkMode: $isDarkMode, highFidelityMode: $highFidelityMode, loudnessEnhancement: $loudnessEnhancement, isAutoplayEnabled: $isAutoplayEnabled, isGaplessPlayback: $isGaplessPlayback, lowPerformanceMode: $lowPerformanceMode)';
   }
 
   @override
@@ -253,7 +270,9 @@ class _$AppSettingsImpl implements _AppSettings {
             (identical(other.isAutoplayEnabled, isAutoplayEnabled) ||
                 other.isAutoplayEnabled == isAutoplayEnabled) &&
             (identical(other.isGaplessPlayback, isGaplessPlayback) ||
-                other.isGaplessPlayback == isGaplessPlayback));
+                other.isGaplessPlayback == isGaplessPlayback) &&
+            (identical(other.lowPerformanceMode, lowPerformanceMode) ||
+                other.lowPerformanceMode == lowPerformanceMode));
   }
 
   @JsonKey(ignore: true)
@@ -267,7 +286,8 @@ class _$AppSettingsImpl implements _AppSettings {
       highFidelityMode,
       loudnessEnhancement,
       isAutoplayEnabled,
-      isGaplessPlayback);
+      isGaplessPlayback,
+      lowPerformanceMode);
 
   @JsonKey(ignore: true)
   @override
@@ -292,7 +312,8 @@ abstract class _AppSettings implements AppSettings {
       final bool highFidelityMode,
       final bool loudnessEnhancement,
       final bool isAutoplayEnabled,
-      final bool isGaplessPlayback}) = _$AppSettingsImpl;
+      final bool isGaplessPlayback,
+      final bool lowPerformanceMode}) = _$AppSettingsImpl;
 
   factory _AppSettings.fromJson(Map<String, dynamic> json) =
       _$AppSettingsImpl.fromJson;
@@ -313,6 +334,8 @@ abstract class _AppSettings implements AppSettings {
   bool get isAutoplayEnabled;
   @override
   bool get isGaplessPlayback;
+  @override
+  bool get lowPerformanceMode;
   @override
   @JsonKey(ignore: true)
   _$$AppSettingsImplCopyWith<_$AppSettingsImpl> get copyWith =>

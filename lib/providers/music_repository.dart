@@ -43,18 +43,55 @@ class MusicRepository {
     }
     final Map<String, Song> unifiedMap = {};
 
+    // 1. Add all official Saavn results first
     for (var song in saavnResults) {
       final key = _normalizeTitle(song.title, song.artist);
       unifiedMap[key] = song;
     }
 
+    // 2. Process YouTube results with smart deduplication and unofficial channel merging
     for (var song in youtubeResults) {
       final key = _normalizeTitle(song.title, song.artist);
+      
+      // Look for a title match from Saavn
+      final cleanYTTitle = _cleanTitleOnly(song.title);
+      Song? saavnMatch;
+      for (var saavnSong in saavnResults) {
+        if (_cleanTitleOnly(saavnSong.title) == cleanYTTitle) {
+          saavnMatch = saavnSong;
+          break;
+        }
+      }
+
       if (unifiedMap.containsKey(key)) {
         final existing = unifiedMap[key]!;
         unifiedMap[key] = existing.copyWith(
           providers: {...existing.providers, 'youtube': song.id},
         );
+      } else if (saavnMatch != null) {
+        // We have an official Saavn version! 
+        // If this YouTube version is from an unofficial/generic channel, merge its video ID and discard the duplicate card
+        final artistLower = song.artist.toLowerCase();
+        final isUnofficial = artistLower.contains('vibe') || 
+                             artistLower.contains('channel') || 
+                             artistLower.contains('lyrics') || 
+                             artistLower.contains('lofi') || 
+                             artistLower.contains('reverb') || 
+                             artistLower.contains('slowed') ||
+                             artistLower.contains('cover') ||
+                             artistLower.contains('nation') ||
+                             artistLower.contains('music video');
+        if (isUnofficial) {
+          final saavnKey = _normalizeTitle(saavnMatch.title, saavnMatch.artist);
+          final existing = unifiedMap[saavnKey]!;
+          unifiedMap[saavnKey] = existing.copyWith(
+            providers: {...existing.providers, 'youtube_fan': song.id},
+          );
+          print('--- MusicRepository: Merged unofficial duplicate "${song.title}" (${song.artist}) into official "${saavnMatch.title}" ---');
+        } else {
+          // Different official version, keep separate
+          unifiedMap[key] = song;
+        }
       } else {
         unifiedMap[key] = song;
       }
@@ -98,9 +135,20 @@ class MusicRepository {
 
   Future<String?> getStreamUrl(Song song, {String? preferredProvider, String quality = '320'}) async {
     final provider = preferredProvider ?? song.source;
-    final providerId = song.providers[provider];
+    String? providerId = song.providers[provider];
 
-    if (providerId == null) return null;
+    if (providerId == null) {
+      if (provider == 'saavn') {
+        if (song.providers.containsKey('youtube')) {
+          print('--- MusicRepository: saavn id missing, falling back to YouTube official stream ---');
+          return _youtube.getStreamUrl(song.providers['youtube']!, quality: quality);
+        } else if (song.providers.containsKey('youtube_fan')) {
+          print('--- MusicRepository: saavn id missing, falling back to YouTube fan stream ---');
+          return _youtube.getStreamUrl(song.providers['youtube_fan']!, quality: quality);
+        }
+      }
+      return null;
+    }
 
     final cacheKey = '${song.id}_${provider}_$quality';
     if (_streamUrlCache.containsKey(cacheKey)) {
@@ -116,7 +164,21 @@ class MusicRepository {
 
     String? url;
     if (provider == 'saavn') {
-      url = await _saavn.getStreamUrl(providerId, quality: quality);
+      try {
+        url = await _saavn.getStreamUrl(providerId, quality: quality);
+      } catch (e) {
+        print('--- MusicRepository: Saavn stream failed: $e ---');
+      }
+
+      if (url == null) {
+        if (song.providers.containsKey('youtube')) {
+          print('--- MusicRepository: Saavn failed, falling back to YouTube official stream ---');
+          url = await _youtube.getStreamUrl(song.providers['youtube']!, quality: quality);
+        } else if (song.providers.containsKey('youtube_fan')) {
+          print('--- MusicRepository: Saavn failed, falling back to YouTube fan stream (last resort) ---');
+          url = await _youtube.getStreamUrl(song.providers['youtube_fan']!, quality: quality);
+        }
+      }
     } else {
       url = await _youtube.getStreamUrl(providerId, quality: quality);
     }
@@ -140,6 +202,15 @@ class MusicRepository {
         .trim();
 
     return '$cleanTitle|$cleanArtist';
+  }
+
+  String _cleanTitleOnly(String title) {
+    return title.toLowerCase()
+        .replaceAll(RegExp(r'\(.*?\)|\[.*?\]'), '') // Remove brackets
+        .replaceAll(RegExp(r'official (video|audio|lyric|audio|hd|4k|mv)'), '')
+        .replaceAll(RegExp(r'[^\w\s]'), '') // Remove special chars
+        .replaceAll(RegExp(r'\s+'), '') // Remove spaces
+        .trim();
   }
 }
 

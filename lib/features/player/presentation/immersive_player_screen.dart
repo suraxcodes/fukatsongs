@@ -15,6 +15,7 @@ import 'package:fukat_songs/features/player/logic/lyrics_notifier.dart';
 import 'package:fukat_songs/features/player/presentation/player_state.dart';
 import 'package:fukat_songs/features/player/presentation/widgets/lyrics_view.dart';
 import 'package:fukat_songs/features/search/presentation/browse_screen.dart';
+import 'package:fukat_songs/features/settings/logic/settings_notifier.dart';
 
 /// Guard flag — prevents duplicate player sheets from stacking
 bool _isPlayerOpen = false;
@@ -79,6 +80,10 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
     final isLoading = playerState.processingState == AudioProcessingState.loading ||
         playerState.processingState == AudioProcessingState.buffering;
 
+    final lowPerf = ref.watch(settingsNotifierProvider.select((s) => s.lowPerformanceMode));
+    final width = MediaQuery.of(context).size.width;
+    final isWide = width > 600;
+
     return DraggableScrollableSheet(
       initialChildSize: 1.0,
       minChildSize: 0.5,
@@ -90,187 +95,340 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
           backgroundColor: const Color(0xFF0D0B1F),
           body: Stack(
             children: [
-              // Blurred background artwork
-              _buildBackground(song),
-              // Frosted overlay
-              BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                child: Container(
-                  decoration: BoxDecoration(
+              if (!lowPerf) ...[
+                // Blurred background artwork
+                _buildBackground(song),
+                // Frosted overlay
+                BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          const Color(0xFF0D0B1F).withOpacity(0.6),
+                          const Color(0xFF0D0B1F).withOpacity(0.95),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ] else ...[
+                // Solid high-performance deep dark background
+                Container(
+                  decoration: const BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        const Color(0xFF0D0B1F).withOpacity(0.6),
-                        const Color(0xFF0D0B1F).withOpacity(0.95),
+                        Color(0xFF0D0B1F),
+                        Color(0xFF06050F),
                       ],
                     ),
                   ),
                 ),
-              ),
+              ],
               // Content
               SafeArea(
-                child: SingleChildScrollView(
-                  controller: scrollController,
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 24.w),
-                    child: Column(
-                      children: [
-                        SizedBox(height: 12.h),
-                        // Drag handle
-                        Container(
-                          width: 40.w,
-                          height: 4.h,
-                          decoration: BoxDecoration(
-                            color: Colors.white30,
-                            borderRadius: BorderRadius.circular(2.r),
-                          ),
-                        ),
-                        SizedBox(height: 16.h),
-                        // Header row
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 32, color: Colors.white),
-                              onPressed: () => Navigator.pop(context),
-                            ),
-                            Column(
-                              children: [
-                                Text(
-                                  'NOW PLAYING',
-                                  style: TextStyle(
-                                    fontSize: 10.sp,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white54,
-                                    letterSpacing: 2,
-                                  ),
-                                ),
-                                _buildSourceBadge(song),
-                              ],
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.more_vert_rounded, color: Colors.white70),
-                              onPressed: () => showSongOptions(context, song),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 24.h),
-                        // Artwork or Lyrics
-                        RepaintBoundary(
-                          child: AnimatedCrossFade(
-                            duration: const Duration(milliseconds: 300),
-                            crossFadeState: _showLyrics ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-                            firstChild: ScaleTransition(
-                              scale: _artworkScale,
-                              child: Container(
-                                width: 300.w,
-                                height: 300.w,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(24.r),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFF6200EE).withOpacity(0.5),
-                                      blurRadius: 40,
-                                      spreadRadius: 8,
-                                      offset: const Offset(0, 12),
-                                    ),
-                                  ],
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(24.r),
-                                  child: CachedNetworkImage(
-                                    imageUrl: song.imageUrl.replaceAll('150x150', '500x500'),
-                                    fit: BoxFit.cover,
-                                    memCacheWidth: 600,
-                                    placeholder: (context, url) => Container(
-                                      color: Colors.white10,
-                                      child: const Icon(Icons.music_note, size: 80, color: Colors.white24),
-                                    ),
-                                    errorWidget: (context, url, error) => Container(
-                                      color: Colors.white10,
-                                      child: const Icon(Icons.music_note, size: 80, color: Colors.white24),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            secondChild: Container(
-                              width: 300.w,
-                              height: 300.w,
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.3),
-                                borderRadius: BorderRadius.circular(24.r),
-                                border: Border.all(color: Colors.white10),
-                              ),
-                              child: const LyricsView(),
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: 32.h),
-                        // Title, Artist & Like row
-                        Row(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24.w),
+                  child: isWide
+                      ? Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
+                            // Left Half: Artwork / Lyrics
                             Expanded(
+                              flex: 1,
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Text(
-                                    song.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 22.sp,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
+                                  IconButton(
+                                    icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 32, color: Colors.white),
+                                    onPressed: () => Navigator.pop(context),
                                   ),
-                                  SizedBox(height: 4.h),
-                                  GestureDetector(
-                                    onTap: () {
-                                      Navigator.push(context, MaterialPageRoute(
-                                        builder: (_) => BrowseScreen(
-                                          title: song.artist,
-                                          query: song.artist,
-                                          imageUrl: song.imageUrl,
+                                  const SizedBox(height: 16),
+                                  // Artwork or Lyrics
+                                  RepaintBoundary(
+                                    child: AnimatedCrossFade(
+                                      duration: const Duration(milliseconds: 300),
+                                      crossFadeState: _showLyrics ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                                      firstChild: ScaleTransition(
+                                        scale: _artworkScale,
+                                        child: Container(
+                                          width: 320,
+                                          height: 320,
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(24),
+                                            boxShadow: lowPerf ? null : [
+                                              BoxShadow(
+                                                color: const Color(0xFF6200EE).withOpacity(0.5),
+                                                blurRadius: 40,
+                                                spreadRadius: 8,
+                                                offset: const Offset(0, 12),
+                                              ),
+                                            ],
+                                          ),
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(24),
+                                            child: CachedNetworkImage(
+                                              imageUrl: song.imageUrl.replaceAll('150x150', '500x500'),
+                                              fit: BoxFit.cover,
+                                              memCacheWidth: 600,
+                                              placeholder: (context, url) => Container(
+                                                color: Colors.white10,
+                                                child: const Icon(Icons.music_note, size: 80, color: Colors.white24),
+                                              ),
+                                              errorWidget: (context, url, error) => Container(
+                                                color: Colors.white10,
+                                                child: const Icon(Icons.music_note, size: 80, color: Colors.white24),
+                                              ),
+                                            ),
+                                          ),
                                         ),
-                                      ));
-                                    },
-                                    child: Text(
-                                      song.artist,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 16.sp,
-                                        color: Colors.white60,
-                                        decoration: TextDecoration.underline,
-                                        decorationColor: Colors.white30,
+                                      ),
+                                      secondChild: Container(
+                                        width: 320,
+                                        height: 320,
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.3),
+                                          borderRadius: BorderRadius.circular(24),
+                                          border: Border.all(color: Colors.white10),
+                                        ),
+                                        child: const LyricsView(),
                                       ),
                                     ),
                                   ),
+                                  const SizedBox(height: 16),
+                                  _buildSourceBadge(song),
                                 ],
                               ),
                             ),
-                            _buildQualityBadge(),
+                            const SizedBox(width: 40),
+                            // Right Half: Controls, Queue & details
+                            Expanded(
+                              flex: 1,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              song.title,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                fontSize: 24,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            GestureDetector(
+                                              onTap: () {
+                                                Navigator.push(context, MaterialPageRoute(
+                                                  builder: (_) => BrowseScreen(
+                                                    title: song.artist,
+                                                    query: song.artist,
+                                                    imageUrl: song.imageUrl,
+                                                  ),
+                                                ));
+                                              },
+                                              child: Text(
+                                                song.artist,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                  color: Colors.white60,
+                                                  decoration: TextDecoration.underline,
+                                                  decorationColor: Colors.white30,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      _buildQualityBadge(),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 28),
+                                  _buildSeekBar(playerState, notifier),
+                                  const SizedBox(height: 24),
+                                  _buildControls(playerState, notifier, isLoading),
+                                  const SizedBox(height: 24),
+                                  _buildBottomActions(song, playerState, notifier),
+                                  const SizedBox(height: 16),
+                                ],
+                              ),
+                            ),
                           ],
+                        )
+                      : SingleChildScrollView(
+                          controller: scrollController,
+                          child: Column(
+                            children: [
+                              SizedBox(height: 12.h),
+                              // Drag handle
+                              Container(
+                                width: 40.w,
+                                height: 4.h,
+                                decoration: BoxDecoration(
+                                  color: Colors.white30,
+                                  borderRadius: BorderRadius.circular(2.r),
+                                ),
+                              ),
+                              SizedBox(height: 16.h),
+                              // Header row
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 32, color: Colors.white),
+                                    onPressed: () => Navigator.pop(context),
+                                  ),
+                                  Column(
+                                    children: [
+                                      Text(
+                                        'NOW PLAYING',
+                                        style: TextStyle(
+                                          fontSize: 10.sp,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white54,
+                                          letterSpacing: 2,
+                                        ),
+                                      ),
+                                      _buildSourceBadge(song),
+                                    ],
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.more_vert_rounded, color: Colors.white70),
+                                    onPressed: () => showSongOptions(context, song),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 24.h),
+                              // Artwork or Lyrics
+                              RepaintBoundary(
+                                child: AnimatedCrossFade(
+                                  duration: const Duration(milliseconds: 300),
+                                  crossFadeState: _showLyrics ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                                  firstChild: ScaleTransition(
+                                    scale: _artworkScale,
+                                    child: Container(
+                                      width: 300.w,
+                                      height: 300.w,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(24.r),
+                                        boxShadow: lowPerf ? null : [
+                                          BoxShadow(
+                                            color: const Color(0xFF6200EE).withOpacity(0.5),
+                                            blurRadius: 40,
+                                            spreadRadius: 8,
+                                            offset: const Offset(0, 12),
+                                          ),
+                                        ],
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(24.r),
+                                        child: CachedNetworkImage(
+                                          imageUrl: song.imageUrl.replaceAll('150x150', '500x500'),
+                                          fit: BoxFit.cover,
+                                          memCacheWidth: 600,
+                                          placeholder: (context, url) => Container(
+                                            color: Colors.white10,
+                                            child: const Icon(Icons.music_note, size: 80, color: Colors.white24),
+                                          ),
+                                          errorWidget: (context, url, error) => Container(
+                                            color: Colors.white10,
+                                            child: const Icon(Icons.music_note, size: 80, color: Colors.white24),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  secondChild: Container(
+                                    width: 300.w,
+                                    height: 300.w,
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.3),
+                                      borderRadius: BorderRadius.circular(24.r),
+                                      border: Border.all(color: Colors.white10),
+                                    ),
+                                    child: const LyricsView(),
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: 32.h),
+                              // Title, Artist & Like row
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          song.title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 22.sp,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        SizedBox(height: 4.h),
+                                        GestureDetector(
+                                          onTap: () {
+                                            Navigator.push(context, MaterialPageRoute(
+                                              builder: (_) => BrowseScreen(
+                                                title: song.artist,
+                                                query: song.artist,
+                                                imageUrl: song.imageUrl,
+                                              ),
+                                            ));
+                                          },
+                                          child: Text(
+                                            song.artist,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 16.sp,
+                                              color: Colors.white60,
+                                              decoration: TextDecoration.underline,
+                                              decorationColor: Colors.white30,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  _buildQualityBadge(),
+                                ],
+                              ),
+                              SizedBox(height: 28.h),
+                              // Seek Bar
+                              _buildSeekBar(playerState, notifier),
+                              SizedBox(height: 24.h),
+                              // Controls
+                              _buildControls(playerState, notifier, isLoading),
+                              SizedBox(height: 24.h),
+                              // Up Next queue
+                              _buildUpNext(playerState, notifier),
+                              SizedBox(height: 24.h),
+                              // Volume & More row
+                              _buildBottomActions(song, playerState, notifier),
+                              SizedBox(height: 24.h),
+                            ],
+                          ),
                         ),
-                        SizedBox(height: 28.h),
-                        // Seek Bar
-                        _buildSeekBar(playerState, notifier),
-                        SizedBox(height: 24.h),
-                        // Controls
-                        _buildControls(playerState, notifier, isLoading),
-                        SizedBox(height: 24.h),
-                        // Up Next queue
-                        _buildUpNext(playerState, notifier),
-                        SizedBox(height: 24.h),
-                        // Volume & More row
-                        _buildBottomActions(song, playerState, notifier),
-                        SizedBox(height: 24.h),
-                      ],
-                    ),
-                  ),
                 ),
               ),
             ],

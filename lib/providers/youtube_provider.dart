@@ -100,7 +100,14 @@ class YouTubeProvider implements MusicProvider {
           .whereType<Song>()
           .toList();
     } catch (e) {
-      // Fallback to basic search if internal API fails
+      print('--- YouTube Provider: Primary search failed. Trying Piped search... ---');
+      try {
+        final pipedResults = await _searchPipedMirrors(query);
+        if (pipedResults.isNotEmpty) return pipedResults;
+      } catch (_) {}
+
+      // Ultimate backup: Fallback to basic YoutubeExplode search
+      print('--- YouTube Provider: Piped search failed. Trying basic YoutubeExplode search... ---');
       try {
         final results = await _yt.search.search(query);
         return results.map((video) => _mapBasicVideoToSong(video)).toList();
@@ -108,6 +115,56 @@ class YouTubeProvider implements MusicProvider {
         return [];
       }
     }
+  }
+
+  Future<List<Song>> _searchPipedMirrors(String query) async {
+    final List<String> mirrorsToTry = (_pipedMirrors..shuffle()).take(3).toList();
+    for (final mirror in mirrorsToTry) {
+      try {
+        print('--- YouTube Provider: Trying Piped search mirror: $mirror ---');
+        final response = await _dio.get(
+          '$mirror/search',
+          queryParameters: {
+            'q': query,
+            'filter': 'music_songs',
+          },
+        ).timeout(const Duration(seconds: 4));
+        
+        if (response.statusCode == 200) {
+          final List items = response.data['items'] ?? [];
+          if (items.isNotEmpty) {
+            print('--- YouTube Provider: Piped search mirror SUCCESS: $mirror ---');
+            final List<Song> songs = [];
+            for (var item in items) {
+              final url = item['url']?.toString() ?? '';
+              if (url.contains('/watch?v=')) {
+                final videoId = url.replaceAll('/watch?v=', '');
+                final title = item['title'] ?? 'Unknown';
+                final artist = item['uploaderName'] ?? 'Unknown';
+                final imageUrl = item['thumbnail'] ?? '';
+                final duration = item['duration'] as int? ?? 0;
+                
+                songs.add(Song(
+                  id: videoId,
+                  title: title,
+                  artist: artist,
+                  albumName: 'YouTube Music',
+                  year: '2024',
+                  imageUrl: imageUrl,
+                  duration: duration,
+                  source: 'youtube',
+                  providers: {'youtube': videoId},
+                ));
+              }
+            }
+            if (songs.isNotEmpty) return songs;
+          }
+        }
+      } catch (e) {
+        print('--- Piped search mirror FAILED: $mirror ($e) ---');
+      }
+    }
+    return [];
   }
 
   @override
@@ -132,15 +189,33 @@ class YouTubeProvider implements MusicProvider {
       );
     }
 
-    // --- STAGE 1: DIRECT EXTRACTION ---
+    // --- STAGE 1: DIRECT EXTRACTION (WITH HTTP VERIFICATION) ---
     try {
       print('--- YouTube Provider: Layer 1 - Direct Extraction ---');
       final manifest = await _yt.videos.streamsClient.getManifest(songId);
       final audioStream = manifest.audioOnly.withHighestBitrate();
       final url = audioStream.url.toString();
-      _streamCache[songId] = _CachedStream(url, DateTime.now().add(const Duration(hours: 2)));
-      print('--- YouTube Provider: Layer 1 SUCCESS ---');
-      return url;
+
+      // ✅ RAPID HTTP VERIFICATION: Verify the URL is not blocked (403) before returning
+      print('--- YouTube Provider: Layer 1 - Verifying stream URL validity... ---');
+      final response = await _dio.get(
+        url,
+        options: Options(
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Range': 'bytes=0-0', // Request just 1 byte to keep it ultra-fast and lightweight
+          },
+          validateStatus: (status) => true,
+        ),
+      ).timeout(const Duration(milliseconds: 2500));
+
+      if (response.statusCode != 403) {
+        _streamCache[songId] = _CachedStream(url, DateTime.now().add(const Duration(hours: 2)));
+        print('--- YouTube Provider: Layer 1 SUCCESS (Verified ${response.statusCode}) ---');
+        return url;
+      } else {
+        print('--- YouTube Provider: Layer 1 FAILED (Verified 403 Forbidden). Triggering Fallbacks... ---');
+      }
     } catch (e) {
       print('--- YouTube Provider: Layer 1 FAILED: $e ---');
     }

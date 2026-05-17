@@ -16,6 +16,7 @@ _$AppSettingsImpl _$$AppSettingsImplFromJson(Map<String, dynamic> json) =>
       loudnessEnhancement: json['loudnessEnhancement'] as bool? ?? false,
       isAutoplayEnabled: json['isAutoplayEnabled'] as bool? ?? true,
       isGaplessPlayback: json['isGaplessPlayback'] as bool? ?? false,
+      lowPerformanceMode: json['lowPerformanceMode'] as bool? ?? false,
     );
 
 Map<String, dynamic> _$$AppSettingsImplToJson(_$AppSettingsImpl instance) =>
@@ -28,4 +29,5 @@ Map<String, dynamic> _$$AppSettingsImplToJson(_$AppSettingsImpl instance) =>
       'loudnessEnhancement': instance.loudnessEnhancement,
       'isAutoplayEnabled': instance.isAutoplayEnabled,
       'isGaplessPlayback': instance.isGaplessPlayback,
+      'lowPerformanceMode': instance.lowPerformanceMode,
     };

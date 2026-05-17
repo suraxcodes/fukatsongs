@@ -106,6 +106,12 @@ class SettingsScreen extends ConsumerWidget {
             value: settings.isGaplessPlayback,
             onChanged: (val) => ref.read(settingsNotifierProvider.notifier).toggleGapless(val),
           ),
+          SwitchListTile(
+            title: const Text('Low Performance Mode'),
+            subtitle: const Text('Disable glassmorphism/blurs to reduce lag on low-end devices'),
+            value: settings.lowPerformanceMode,
+            onChanged: (val) => ref.read(settingsNotifierProvider.notifier).toggleLowPerformanceMode(val),
+          ),
           const Divider(color: Colors.white10),
           _buildSectionHeader(context, 'Storage'),
           ListTile(
@@ -149,24 +155,12 @@ class SettingsScreen extends ConsumerWidget {
           _buildSectionHeader(context, 'About'),
           const ListTile(
             title: Text('Version'),
-            trailing: Text('1.0.0 (v2.0 Beta)', style: TextStyle(color: Colors.white54)),
+            trailing: Text('1.2.0', style: TextStyle(color: Colors.white54)),
           ),
-          ListTile(
-            leading: const Icon(Icons.person_outline_rounded),
-            title: const Text('Developer'),
-            subtitle: const Text('Suraj Gawas'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.email_outlined),
-            title: const Text('Contact'),
-            subtitle: const Text('gawassuraj090@gmail.com'),
-            onTap: () => launchUrl(Uri.parse('mailto:gawassuraj090@gmail.com')),
-          ),
-          ListTile(
-            leading: const Icon(Icons.code_rounded),
-            title: const Text('GitHub'),
-            subtitle: const Text('https://github.com/suraxcodes'),
-            onTap: () => launchUrl(Uri.parse('https://github.com/suraxcodes'), mode: LaunchMode.externalApplication),
+          const ListTile(
+            leading: Icon(Icons.person_outline_rounded),
+            title: Text('Developer'),
+            subtitle: Text('fukatSongs Personal Client'),
           ),
         ],
       ),

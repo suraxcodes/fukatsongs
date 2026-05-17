@@ -33,6 +33,7 @@ class MusicAudioHandler extends BaseAudioHandler
     _player = AudioPlayer(
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     );
+    _player.setVolume(0.45); // Spotify/YouTube Music Loudness Normalization (-10dB)
   }
 
   AndroidEqualizer get equalizer => _equalizer;
@@ -57,7 +58,7 @@ class MusicAudioHandler extends BaseAudioHandler
             pause();
             break;
           case AudioInterruptionType.duck:
-            _player.setVolume(0.5);
+            _player.setVolume(0.2); // Duck to 20%
             break;
         }
       } else {
@@ -67,7 +68,7 @@ class MusicAudioHandler extends BaseAudioHandler
             play();
             break;
           case AudioInterruptionType.duck:
-            _player.setVolume(1.0);
+            _player.setVolume(0.45); // Restore to normalized 45% level
             break;
         }
       }

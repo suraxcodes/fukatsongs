@@ -20,6 +20,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   List<Song> _shuffledQueue = [];
   int _playbackSessionId = 0;
 
+  DateTime _lastPositionSaveTime = DateTime.now();
+
   PlayerNotifier(this.ref) : super(const PlayerState()) {
     _init();
   }
@@ -56,10 +58,109 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     (handler as MusicAudioHandler).positionStream.listen((pos) {
       state = state.copyWith(position: pos);
       _checkPreloadTrigger(pos);
+      _persistPlaybackProgress(pos);
     });
 
     (handler as MusicAudioHandler).onSkipToNext = skipToNext;
     (handler as MusicAudioHandler).onSkipToPrevious = skipToPrevious;
+
+    // Restore last session in a paused state after initialization completes
+    Future.microtask(() => restoreLastSession());
+  }
+
+  void _persistPlaybackProgress(Duration pos) {
+    if (state.currentSong == null) return;
+    
+    final now = DateTime.now();
+    if (now.difference(_lastPositionSaveTime) >= const Duration(seconds: 2)) {
+      _lastPositionSaveTime = now;
+      try {
+        final settingsBox = Hive.box(HiveBoxes.settings);
+        settingsBox.put('last_played_song_json', state.currentSong!.toJson());
+        settingsBox.put('last_played_position_ms', pos.inMilliseconds);
+        
+        if (state.queue.isNotEmpty) {
+          final queueJsonList = state.queue.map((s) => s.toJson()).toList();
+          settingsBox.put('last_played_queue', queueJsonList);
+          settingsBox.put('last_played_index', state.currentIndex);
+        }
+      } catch (e) {
+        debugPrint('Failed to save playback progress: $e');
+      }
+    }
+  }
+
+  Future<void> restoreLastSession() async {
+    try {
+      final settingsBox = Hive.box(HiveBoxes.settings);
+      final songJson = settingsBox.get('last_played_song_json');
+      final positionMs = settingsBox.get('last_played_position_ms', defaultValue: 0) as int;
+      final queueJsonList = settingsBox.get('last_played_queue') as List?;
+      final index = settingsBox.get('last_played_index', defaultValue: 0) as int;
+
+      if (songJson != null) {
+        final Song song = Song.fromJson(Map<String, dynamic>.from(songJson));
+        
+        List<Song> restoredQueue = [song];
+        if (queueJsonList != null && queueJsonList.isNotEmpty) {
+          restoredQueue = queueJsonList
+              .map((item) => Song.fromJson(Map<String, dynamic>.from(item)))
+              .toList();
+        }
+
+        _originalQueue = List.from(restoredQueue);
+        _shuffledQueue = List.from(restoredQueue);
+
+        state = state.copyWith(
+          currentSong: song,
+          queue: restoredQueue,
+          currentIndex: index,
+          position: Duration(milliseconds: positionMs),
+          isPlaying: false,
+          processingState: AudioProcessingState.ready,
+        );
+
+        final audioHandler = ref.read(audioHandlerProvider) as MusicAudioHandler;
+        
+        // 1. Check if the restored song exists in offline downloads first
+        final downloadsBox = Hive.box<Song>(HiveBoxes.downloads);
+        final downloadedSong = downloadsBox.get(song.id);
+
+        if (downloadedSong != null && downloadedSong.localPath != null) {
+          final file = File(downloadedSong.localPath!);
+          if (await file.exists()) {
+            await audioHandler.playFile(
+              downloadedSong.localPath!,
+              downloadedSong,
+              initialPosition: Duration(milliseconds: positionMs),
+            );
+            await audioHandler.pause(); // Make sure it stays paused!
+            return;
+          }
+        }
+
+        // 2. Otherwise load the online URL in a paused state
+        final repository = ref.read(musicRepositoryProvider);
+        final streamUrl = await repository.getStreamUrl(
+          song.id,
+          song.title,
+          song.artist,
+          song.source,
+          '160',
+        );
+
+        if (streamUrl != null) {
+          await audioHandler.playUrl(
+            streamUrl,
+            song,
+            initialPosition: Duration(milliseconds: positionMs),
+          );
+          await audioHandler.pause(); // Make sure it stays paused!
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to restore last playback session: $e');
+    }
   }
 
   Future<void> playSong(Song song, {bool isRetry = false, Duration? initialPosition}) async {
@@ -319,15 +420,57 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         }
       }
 
-      final url = await repository.getStreamUrl(
-        song,
-        quality: quality,
-      );
+      // --- RESILIENT MULTI-PROVIDER STREAMING PIPELINE ---
+      String? url;
+      String actualProvider = song.source;
+      
+      // Attempt 1: Preferred / Original Provider (JioSaavn or YouTube)
+      try {
+        print('--- PLAYBACK: Attempt 1 - Trying original source "$actualProvider" ---');
+        url = await repository.getStreamUrl(
+          song,
+          preferredProvider: actualProvider,
+          quality: quality,
+        );
+      } catch (e) {
+        print('--- PLAYBACK: Original source "$actualProvider" failed: $e ---');
+      }
+
+      // Attempt 2: Official YouTube/Piped fallback (if Saavn failed)
+      if (url == null && song.source == 'saavn' && song.providers.containsKey('youtube')) {
+        print('--- PLAYBACK: Attempt 2 - Falling back to official YouTube/Piped stream... ---');
+        actualProvider = 'youtube';
+        try {
+          url = await repository.getStreamUrl(
+            song,
+            preferredProvider: 'youtube',
+            quality: quality,
+          );
+        } catch (e) {
+          print('--- PLAYBACK: Official YouTube fallback failed: $e ---');
+        }
+      }
+
+      // Attempt 3: Unofficial Fan Channel last resort fallback (if both failed)
+      if (url == null && song.providers.containsKey('youtube_fan')) {
+        print('--- PLAYBACK: Attempt 3 (LAST RESORT) - Playing fan channel video stream... ---');
+        actualProvider = 'youtube_fan';
+        try {
+          url = await repository.getStreamUrl(
+            song,
+            preferredProvider: 'youtube_fan',
+            quality: quality,
+          );
+        } catch (e) {
+          print('--- PLAYBACK: Last resort fan channel failed: $e ---');
+        }
+      }
+
       if (url != null) {
         if (_playbackSessionId != sessionId) return;
         await audioHandler.playUrl(url, song, initialPosition: initialPosition);
       } else {
-        throw Exception('No URL found');
+        throw Exception('No playable stream URL could be fetched across Saavn, YouTube, and Piped');
       }
     } catch (e) {
       if (_playbackSessionId != sessionId) return;
@@ -386,6 +529,13 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   void pause() => ref.read(audioHandlerProvider).pause();
   void resume() => ref.read(audioHandlerProvider).play();
   void seek(Duration position) => ref.read(audioHandlerProvider).seek(position);
+  void togglePlayPause() {
+    if (state.isPlaying) {
+      pause();
+    } else {
+      resume();
+    }
+  }
 
   Stream<Duration> get positionStream => (ref.read(audioHandlerProvider) as MusicAudioHandler).positionStream;
 

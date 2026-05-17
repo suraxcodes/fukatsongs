@@ -50,16 +50,28 @@ class _SplashScreenState extends State<SplashScreen>
     // Check if user already unlocked this install
     final authBox = Hive.box(HiveBoxes.auth);
     final bool isUnlocked = authBox.get('is_unlocked', defaultValue: false);
+    final String? nickname = authBox.get('device_nickname');
 
     if (!mounted) return;
 
     if (isUnlocked) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const MainScreen()),
-      );
+      if (nickname == null || nickname.trim().isEmpty) {
+        // Upgrade flow: User is unlocked but doesn't have a device nickname
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => const GatekeeperScreen(isUpgradeFlow: true),
+          ),
+        );
+      } else {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const MainScreen()),
+        );
+      }
     } else {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const GatekeeperScreen()),
+        MaterialPageRoute(
+          builder: (_) => const GatekeeperScreen(isUpgradeFlow: false),
+        ),
       );
     }
   }

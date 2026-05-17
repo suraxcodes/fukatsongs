@@ -3,16 +3,31 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'models/song.dart';
 import 'features/main/main_screen.dart';
 import 'features/main/presentation/splash_screen.dart';
 import 'core/audio/audio_handler.dart';
 import 'core/audio/audio_handler_provider.dart';
 import 'core/constants/hive_boxes.dart';
+import 'features/auth/logic/kill_switch_provider.dart';
+import 'features/auth/presentation/banned_screen.dart';
+
+import 'firebase_options.dart';
 
 void main() async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
+
+    // Safely try initializing Firebase
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      debugPrint('Firebase successfully initialized.');
+    } catch (e) {
+      debugPrint('Firebase not initialized (missing config or offline): $e');
+    }
 
     // Initialize Hive
     await Hive.initFlutter();
@@ -70,21 +85,24 @@ void main() async {
   }
 }
 
-class FukatSongsApp extends StatelessWidget {
+class FukatSongsApp extends ConsumerWidget {
   const FukatSongsApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isBanned = ref.watch(killSwitchProvider);
+
     return ScreenUtilInit(
       designSize: const Size(360, 690),
       minTextAdapt: true,
       splitScreenMode: true,
       builder: (context, child) {
         return MaterialApp(
+          key: ValueKey(isBanned),
           title: 'fukatSongs',
           debugShowCheckedModeBanner: false,
           theme: _buildTheme(),
-          home: const SplashScreen(),
+          home: isBanned ? const BannedScreen() : const SplashScreen(),
         );
       },
     );
