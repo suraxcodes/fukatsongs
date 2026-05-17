@@ -11,6 +11,9 @@ import '../../features/library/logic/song_download_notifier.dart';
 
 class MusicAudioHandler extends BaseAudioHandler
     with QueueHandler, SeekHandler {
+  VoidCallback? onSkipToNext;
+  VoidCallback? onSkipToPrevious;
+  
   late final AndroidEqualizer _equalizer;
   late final AndroidLoudnessEnhancer _loudnessEnhancer;
   final yt_exp.YoutubeExplode _yt = yt_exp.YoutubeExplode();
@@ -136,10 +139,22 @@ class MusicAudioHandler extends BaseAudioHandler
   Future<void> stop() => _player.stop();
 
   @override
-  Future<void> skipToNext() => _player.seekToNext();
+  Future<void> skipToNext() async {
+    if (onSkipToNext != null) {
+      onSkipToNext!();
+    } else {
+      await _player.seekToNext();
+    }
+  }
 
   @override
-  Future<void> skipToPrevious() => _player.seekToPrevious();
+  Future<void> skipToPrevious() async {
+    if (onSkipToPrevious != null) {
+      onSkipToPrevious!();
+    } else {
+      await _player.seekToPrevious();
+    }
+  }
 
   @override
   Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
@@ -160,7 +175,7 @@ class MusicAudioHandler extends BaseAudioHandler
 
   int _playSessionId = 0;
 
-  Future<void> playUrl(String url, Song song) async {
+  Future<void> playUrl(String url, Song song, {Duration? initialPosition}) async {
     final sessionId = ++_playSessionId;
     print('--- PLAYURL CALLED: ${song.title} (${song.source}) ---');
 
@@ -186,6 +201,7 @@ class MusicAudioHandler extends BaseAudioHandler
 
     await _player.setAudioSource(
       AudioSource.uri(Uri.parse(url), headers: headers),
+      initialPosition: initialPosition,
       preload: true,
     );
 
@@ -212,13 +228,16 @@ class MusicAudioHandler extends BaseAudioHandler
     await _player.play();
   }
 
-  Future<void> playFile(String path, Song song) async {
+  Future<void> playFile(String path, Song song, {Duration? initialPosition}) async {
     final sessionId = ++_playSessionId;
     try {
       final mediaItem = _toMediaItem(song);
       this.mediaItem.add(mediaItem);
 
-      await _player.setAudioSource(AudioSource.file(path));
+      await _player.setAudioSource(
+        AudioSource.file(path),
+        initialPosition: initialPosition,
+      );
       if (_playSessionId != sessionId) {
         print('--- FILE PLAYBACK ABORTED ---');
         return;

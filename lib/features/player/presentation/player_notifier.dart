@@ -35,7 +35,15 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       );
 
       if (s.processingState == AudioProcessingState.completed) {
-        _onSongCompleted();
+        if (state.repeatMode == AudioServiceRepeatMode.none) {
+          if (state.currentIndex >= state.queue.length - 1) {
+            _triggerAutoplay();
+          } else {
+            skipToNext();
+          }
+        } else if (state.repeatMode == AudioServiceRepeatMode.all) {
+          skipToNext();
+        }
       }
     });
 
@@ -48,9 +56,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     (handler as MusicAudioHandler).positionStream.listen((pos) {
       state = state.copyWith(position: pos);
     });
+
+    (handler as MusicAudioHandler).onSkipToNext = skipToNext;
+    (handler as MusicAudioHandler).onSkipToPrevious = skipToPrevious;
   }
 
-  Future<void> playSong(Song song, {bool isRetry = false}) async {
+  Future<void> playSong(Song song, {bool isRetry = false, Duration? initialPosition}) async {
     final sessionId = ++_playbackSessionId;
     final audioHandler = ref.read(audioHandlerProvider);
 
@@ -60,12 +71,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     state = state.copyWith(
       currentSong: song,
       isPlaying: false,
-      position: Duration.zero,
+      position: initialPosition ?? Duration.zero,
       processingState: AudioProcessingState.loading,
     );
 
     ref.read(historyRepositoryProvider).addToPlaybackHistory(song);
-    await _doPlay(song, sessionId, isRetry: isRetry);
+    await _doPlay(song, sessionId, isRetry: isRetry, initialPosition: initialPosition);
   }
 
   Future<void> setQueueAndPlay(List<Song> songs, {int startIndex = 0}) async {
@@ -89,11 +100,22 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     if (_originalQueue.isEmpty && state.currentSong != null) {
       _originalQueue = [state.currentSong!, song];
     } else {
-      _originalQueue.add(song);
+      // Insert right after the current song so it's "at the start" of upcoming
+      final insertIndex = state.currentIndex + 1;
+      if (insertIndex >= _originalQueue.length) {
+        _originalQueue.add(song);
+      } else {
+        _originalQueue.insert(insertIndex, song);
+      }
     }
 
     if (state.isShuffleModeEnabled) {
-      _shuffledQueue.add(song);
+      final insertIndex = state.currentIndex + 1;
+      if (insertIndex >= _shuffledQueue.length) {
+        _shuffledQueue.add(song);
+      } else {
+        _shuffledQueue.insert(insertIndex, song);
+      }
     }
     state = state.copyWith(
       queue: state.isShuffleModeEnabled ? _shuffledQueue : _originalQueue,
@@ -228,9 +250,39 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     playSong(queue[index]);
   }
 
-  Future<void> _doPlay(Song song, int sessionId, {bool isRetry = false}) async {
+  void reorderQueue(int oldIndex, int newIndex) {
+    if (newIndex > oldIndex) newIndex -= 1;
+    
+    final queue = List<Song>.from(state.queue);
+    final item = queue.removeAt(oldIndex);
+    queue.insert(newIndex, item);
+    
+    // Update underlying lists too
+    if (state.isShuffleModeEnabled) {
+      _shuffledQueue = List.from(queue);
+    } else {
+      _originalQueue = List.from(queue);
+    }
+    
+    // Calculate new currentIndex if necessary
+    int newCurrentIndex = state.currentIndex;
+    if (state.currentIndex == oldIndex) {
+      newCurrentIndex = newIndex;
+    } else if (oldIndex < state.currentIndex && newIndex >= state.currentIndex) {
+      newCurrentIndex -= 1;
+    } else if (oldIndex > state.currentIndex && newIndex <= state.currentIndex) {
+      newCurrentIndex += 1;
+    }
+    
+    state = state.copyWith(
+      queue: queue,
+      currentIndex: newCurrentIndex,
+    );
+  }
+
+  Future<void> _doPlay(Song song, int sessionId, {bool isRetry = false, Duration? initialPosition}) async {
     final settings = ref.read(settingsNotifierProvider);
-    final audioHandler = ref.read(audioHandlerProvider);
+    final audioHandler = ref.read(audioHandlerProvider) as MusicAudioHandler;
     final repository = ref.read(musicRepositoryProvider);
 
     try {
@@ -246,6 +298,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           await audioHandler.playFile(
             downloadedSong.localPath!,
             downloadedSong,
+            initialPosition: initialPosition,
           );
           return;
         }
@@ -269,7 +322,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       );
       if (url != null) {
         if (_playbackSessionId != sessionId) return;
-        await audioHandler.playUrl(url, song);
+        await audioHandler.playUrl(url, song, initialPosition: initialPosition);
       } else {
         throw Exception('No URL found');
       }
@@ -307,7 +360,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         await playlistRepo.updateSongInAllPlaylists(repairedSong);
 
         if (_playbackSessionId != sessionId) return;
-        await playSong(repairedSong, isRetry: true);
+        await playSong(repairedSong, isRetry: true, initialPosition: state.position);
       }
     } else {
       if (_playbackSessionId != sessionId) return;
@@ -320,6 +373,30 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   void seek(Duration position) => ref.read(audioHandlerProvider).seek(position);
 
   Stream<Duration> get positionStream => (ref.read(audioHandlerProvider) as MusicAudioHandler).positionStream;
+
+  Future<void> _triggerAutoplay() async {
+    final settings = ref.read(settingsNotifierProvider);
+    if (!settings.isAutoplayEnabled) return;
+    
+    final lastSong = state.currentSong;
+    if (lastSong == null) return;
+
+    print('--- AUTOPLAY TRIGGERED for artist: ${lastSong.artist} ---');
+    
+    try {
+      final results = await ref.read(musicRepositoryProvider).search(lastSong.artist);
+      final newSongs = results.where((s) => !state.queue.any((qs) => qs.id == s.id)).take(5).toList();
+      
+      if (newSongs.isNotEmpty) {
+        for (var s in newSongs) {
+          addSongToQueue(s);
+        }
+        skipToNext();
+      }
+    } catch (e) {
+      print('--- Autoplay Failed: $e ---');
+    }
+  }
 }
 
 final playerNotifierProvider =
