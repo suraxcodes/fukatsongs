@@ -132,9 +132,22 @@ class YouTubeProvider implements MusicProvider {
       );
     }
 
-    // 1. Try Piped Mirrors in parallel (RACING MODE)
+    // --- STAGE 1: DIRECT EXTRACTION ---
+    try {
+      print('--- YouTube Provider: Layer 1 - Direct Extraction ---');
+      final manifest = await _yt.videos.streamsClient.getManifest(songId);
+      final audioStream = manifest.audioOnly.withHighestBitrate();
+      final url = audioStream.url.toString();
+      _streamCache[songId] = _CachedStream(url, DateTime.now().add(const Duration(hours: 2)));
+      print('--- YouTube Provider: Layer 1 SUCCESS ---');
+      return url;
+    } catch (e) {
+      print('--- YouTube Provider: Layer 1 FAILED: $e ---');
+    }
+
+    // --- STAGE 2: PIPED MIRRORS (Racing Mode) ---
     // We launch all requests and take the FIRST successful one immediately.
-    print('--- YouTube Provider: Racing 4 mirrors...');
+    print('--- YouTube Provider: Layer 2 - Racing ${_pipedMirrors.length} Piped mirrors...');
     
     final successfulUrl = await _raceMirrors(songId);
     
@@ -147,9 +160,9 @@ class YouTubeProvider implements MusicProvider {
       return successfulUrl;
     }
 
-    print('--- All Stealth Tunnels failed or timed out.');
-    // --- STAGE 3: THE MAGIC SWITCH (Saavn Matching Fallback) ---
-    print('--- YouTube Provider: Tunnels failed. Activating Magic Switch...');
+    print('--- All layers failed or timed out.');
+    // --- STAGE 3: JIOSAAVN MAGIC SWITCH ---
+    print('--- YouTube Provider: Layer 3 - Activating JioSaavn Magic Switch...');
     try {
       // Clean title for better Saavn matching
       final cleanTitle = (songTitle ?? "Music")

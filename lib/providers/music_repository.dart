@@ -60,14 +60,32 @@ class MusicRepository {
       }
     }
 
-    final finalResults = unifiedMap.values.toList();
+    // --- SMART SEARCH FILTER ---
+    // Remove remixes, covers, slowed versions unless user explicitly searched for them
+    const blocklist = [
+      'slowed', 'reverb', 'lofi', 'lo-fi', 'remix', 'cover',
+      'karaoke', 'instrumental', 'sped up', 'nightcore', '8d audio',
+      'slowed + reverb', 'slowed reverb', '8d',
+    ];
 
-    // 3. Save to Cache (30 min TTL)
+    final queryLower = query.toLowerCase();
+    final userWantsFiltered = blocklist.any((term) => queryLower.contains(term));
+
+    List<Song> filteredResults = finalResults;
+    if (!userWantsFiltered) {
+      filteredResults = finalResults.where((song) {
+        final titleLower = song.title.toLowerCase();
+        return !blocklist.any((term) => titleLower.contains(term));
+      }).toList();
+      print('--- MusicRepository: Search filter removed ${finalResults.length - filteredResults.length} remix/cover results ---');
+    }
+
+    // 3. Save filtered results to Cache (30 min TTL)
     final expiry = DateTime.now().add(const Duration(minutes: 30)).millisecondsSinceEpoch;
-    final cacheValue = '$expiry|EXPIRY|${jsonEncode(finalResults)}';
+    final cacheValue = '$expiry|EXPIRY|${jsonEncode(filteredResults)}';
     await cacheBox.put(cacheKey, cacheValue);
 
-    return finalResults;
+    return filteredResults;
   }
 
   final Map<String, _CachedStreamUrl> _streamUrlCache = {};
