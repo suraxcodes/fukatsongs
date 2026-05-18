@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: fukatsongs-stream-proxy
+    env: node
+    plan: free
+    rootDir: api
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
