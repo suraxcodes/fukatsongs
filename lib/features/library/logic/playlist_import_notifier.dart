@@ -185,6 +185,7 @@ class PlaylistImportNotifier extends _$PlaylistImportNotifier {
             failedSongs: List.from(missed),
           );
         }
+      }
       if (found.isNotEmpty) {
         ref.read(musicQueueServiceProvider).loadNewPlaylistContext(found);
       }
@@ -304,6 +305,7 @@ class PlaylistImportNotifier extends _$PlaylistImportNotifier {
             failedSongs: List.from(missed),
           );
         }
+      }
       if (found.isNotEmpty) {
         ref.read(musicQueueServiceProvider).loadNewPlaylistContext(found);
       }
