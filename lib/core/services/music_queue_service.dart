@@ -7,14 +7,12 @@ import 'package:fukat_songs/models/song.dart';
 import 'package:fukat_songs/providers/music_repository.dart';
 import 'package:fukat_songs/providers/music_repository_provider.dart';
 import '../network/audio_pre_fetch_cache.dart';
-import '../network/client_link_resolver.dart';
 
 part 'music_queue_service.g.dart';
 
 class MusicQueueService {
   final MusicAudioHandler _audioHandler;
   final MusicRepository _musicRepository;
-  final ClientLinkResolver _linkResolver = ClientLinkResolver();
   final AudioPreFetchCache _cache = AudioPreFetchCache();
 
   // Active tracklist matching the current playlist view models
@@ -120,23 +118,10 @@ class MusicQueueService {
     try {
       String? clearStreamingUrl;
       
-      // If it is a YouTube song, use the premium ClientLinkResolver Vercel/Render proxy deciphering bridge!
-      if (song.source == 'youtube') {
-        try {
-          clearStreamingUrl = await _linkResolver.resolveStreamLinkLocally(
-            song.id,
-            source: song.source,
-          );
-        } catch (e) {
-          print('--- MusicQueueService: Premium ClientLinkResolver failed ($e). Falling back to central MusicRepository resolution... ---');
-          clearStreamingUrl = await _musicRepository.getStreamUrl(song);
-        }
-      } 
-      // If it is any other source (like Saavn or Spotify), resolve it directly via the central MusicRepository!
-      else {
-        print('--- MusicQueueService: Resolving non-YouTube track "${song.title}" via MusicRepository ---');
-        clearStreamingUrl = await _musicRepository.getStreamUrl(song);
-      }
+      // Directly resolve all tracks (both YouTube and Saavn) via the central MusicRepository
+      // This will use direct client-side extraction which is 100% IP-valid for the phone!
+      print('--- MusicQueueService: Resolving track "${song.title}" via MusicRepository ---');
+      clearStreamingUrl = await _musicRepository.getStreamUrl(song);
 
       if (clearStreamingUrl == null || clearStreamingUrl.isEmpty) {
         throw Exception('Failed to resolve streaming URL for track: ${song.title}');

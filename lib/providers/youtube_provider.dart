@@ -288,11 +288,27 @@ class YouTubeProvider implements MusicProvider {
     }
 
     if (!forceSaavn) {
-      // --- STAGE 1: PIPED MIRRORS (Racing Mode) ---
-      // We launch all requests and take the FIRST successful one immediately.
+      // --- STAGE 1: DIRECT EXTRACTION (CLIENT-SIDE) ---
+      try {
+        print('--- YouTube Provider: Layer 1 - Direct Client-Side Extraction ---');
+        final manifest = await _yt.videos.streamsClient.getManifest(songId).timeout(const Duration(milliseconds: 5000));
+        final audioStream = manifest.audioOnly.withHighestBitrate();
+        final url = audioStream.url.toString();
+
+        _streamCache[songId] = _CachedStream(
+          url,
+          DateTime.now().add(const Duration(hours: 2)),
+        );
+        print('--- YouTube Provider: Layer 1 SUCCESS (Direct Client Stream resolved) ---');
+        return url;
+      } catch (e) {
+        print('--- YouTube Provider: Layer 1 Direct Client Extraction FAILED: $e ---');
+      }
+
+      // --- STAGE 2: PIPED MIRRORS (Racing Mode Fallback) ---
       try {
         print(
-          '--- YouTube Provider: Layer 1 - Racing ${_pipedMirrors.length} Piped mirrors...',
+          '--- YouTube Provider: Layer 2 - Racing ${_pipedMirrors.length} Piped mirrors...',
         );
 
         final successfulUrl = await _raceMirrors(songId);
@@ -303,57 +319,13 @@ class YouTubeProvider implements MusicProvider {
             successfulUrl,
             DateTime.now().add(const Duration(hours: 2)),
           );
-          print('--- YouTube Provider: Layer 1 Piped/Invidious Racing SUCCESS ---');
+          print('--- YouTube Provider: Layer 2 Piped/Invidious Racing SUCCESS ---');
           return successfulUrl;
         } else {
-          print('--- YouTube Provider: Layer 1 Piped/Invidious Racing FAILED. Trying Stage 2 Fallback... ---');
+          print('--- YouTube Provider: Layer 2 Piped/Invidious Racing FAILED. Trying Magic Switch... ---');
         }
       } catch (e) {
-        print('--- YouTube Provider: Layer 1 Piped Racing FAILED: $e ---');
-      }
-
-      // --- STAGE 2: DIRECT EXTRACTION (WITH HTTP VERIFICATION) ---
-      try {
-        print('--- YouTube Provider: Layer 2 - Direct Extraction ---');
-        final manifest = await _yt.videos.streamsClient.getManifest(songId).timeout(const Duration(milliseconds: 5000));
-        final audioStream = manifest.audioOnly.withHighestBitrate();
-        final url = audioStream.url.toString();
-
-        // ✅ RAPID HTTP VERIFICATION: Verify the URL is not blocked (403) before returning
-        print(
-          '--- YouTube Provider: Layer 2 - Verifying stream URL validity... ---',
-        );
-        final response = await _dio
-            .get(
-              url,
-              options: Options(
-                headers: {
-                  'User-Agent':
-                      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                  'Range':
-                      'bytes=0-0', // Request just 1 byte to keep it ultra-fast and lightweight
-                },
-                validateStatus: (status) => true,
-              ),
-            )
-            .timeout(const Duration(milliseconds: 4000));
-
-        if (response.statusCode != 403) {
-          _streamCache[songId] = _CachedStream(
-            url,
-            DateTime.now().add(const Duration(hours: 2)),
-          );
-          print(
-            '--- YouTube Provider: Layer 2 SUCCESS (Verified ${response.statusCode}) ---',
-          );
-          return url;
-        } else {
-          print(
-            '--- YouTube Provider: Layer 2 FAILED (Verified 403 Forbidden). ---',
-          );
-        }
-      } catch (e) {
-        print('--- YouTube Provider: Layer 2 FAILED: $e ---');
+        print('--- YouTube Provider: Layer 2 Piped Racing FAILED: $e ---');
       }
 
       print('--- All YouTube layers failed or timed out.');
