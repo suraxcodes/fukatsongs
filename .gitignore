@@ -109,3 +109,9 @@ lib/firebase_options.dart
 
 # GSD Planning
 .planning/
+
+# Node.js backend proxy
+api/node_modules/
+api/package-lock.json
+api/*-watch.html
+
