@@ -112,7 +112,7 @@ class SpotifyChartService {
   /// to ensure the app works beautifully out of the box with zero user configuration!
   List<Song> _buildMockChartTracks() {
     return [
-      const Song(
+      Song(
         id: "track_believer_imagine",
         title: "Believer",
         artist: "Imagine Dragons",
@@ -121,9 +121,9 @@ class SpotifyChartService {
         imageUrl: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=400",
         duration: 204,
         source: 'youtube',
-        providers: {'youtube': '7wtfhZwyrcc'},
+        providers: const {'youtube': '7wtfhZwyrcc'},
       ),
-      const Song(
+      Song(
         id: "track_let_me_love_dj",
         title: "Let Me Love You",
         artist: "DJ Snake, Justin Bieber",
@@ -132,9 +132,9 @@ class SpotifyChartService {
         imageUrl: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=400",
         duration: 205,
         source: 'youtube',
-        providers: {'youtube': 'euCqAq6dda4'},
+        providers: const {'youtube': 'euCqAq6dda4'},
       ),
-      const Song(
+      Song(
         id: "track_kesariya_arijit",
         title: "Kesariya",
         artist: "Arijit Singh, Pritam",
@@ -143,9 +143,9 @@ class SpotifyChartService {
         imageUrl: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=400",
         duration: 268,
         source: 'youtube',
-        providers: {'youtube': 'BddP6PYo2Gs'},
+        providers: const {'youtube': 'BddP6PYo2Gs'},
       ),
-      const Song(
+      Song(
         id: "track_shape_of_you_ed",
         title: "Shape of You",
         artist: "Ed Sheeran",
@@ -154,7 +154,7 @@ class SpotifyChartService {
         imageUrl: "https://images.unsplash.com/photo-1516280440614-37939bbacd6a?q=80&w=400",
         duration: 233,
         source: 'youtube',
-        providers: {'youtube': 'JGwWNGJdvx8'},
+        providers: const {'youtube': 'JGwWNGJdvx8'},
       ),
     ];
   }

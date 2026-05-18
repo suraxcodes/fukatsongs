@@ -23,18 +23,31 @@ class Song {
   @HiveField(9)
   final String? localPath;
 
-  const Song({
+  Song({
     required this.id,
     required this.title,
     required this.artist,
     required this.albumName,
     required this.year,
-    required this.imageUrl,
+    required String imageUrl,
     required this.duration,
     required this.source,
     required this.providers,
     this.localPath,
-  });
+  }) : this.imageUrl = sanitizeImageUrl(imageUrl);
+
+  static String sanitizeImageUrl(String url) {
+    if (url.contains('host=')) {
+      try {
+        final uri = Uri.parse(url);
+        final host = uri.queryParameters['host'];
+        if (host != null && host.isNotEmpty) {
+          return 'https://$host${uri.path}';
+        }
+      } catch (_) {}
+    }
+    return url;
+  }
 
   Song copyWith({
     String? id,
