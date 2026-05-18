@@ -1,4 +1,5 @@
 import 'package:fukat_songs/core/utils/audio_decipher_isolate.dart';
+import 'package:dio/dio.dart';
 
 class ClientLinkResolver {
   final Dio _dio = Dio(
