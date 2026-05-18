@@ -35,6 +35,14 @@ class _YTTestScreenState extends State<YTTestScreen> {
     'https://inv.nadeko.net',
   ];
 
+  final List<String> pipedKeys = [
+    'https://api.piped.private.coffee',
+    'https://piped-api.lunar.icu',
+    'https://api-piped.mha.fi',
+    'https://pipedapi.oxen.moe',
+    'https://pipedapi.kavin.rocks',
+  ];
+
   Future<void> startTest() async {
     setState(() {
       isLoading = true;
@@ -134,6 +142,65 @@ class _YTTestScreenState extends State<YTTestScreen> {
     });
   }
 
+  Future<void> startPipedOnlyTest() async {
+    setState(() {
+      isLoading = true;
+      status = 'Searching Piped-ONLY Tunnels...';
+    });
+
+    const videoId = '7wtfhZwyrcc'; // Believer
+
+    for (var instance in pipedKeys) {
+      try {
+        setState(() => status = 'Probing Piped: $instance');
+        print('--- PROBING PIPED: $instance');
+        
+        final response = await dio.get('$instance/streams/$videoId');
+        
+        print('--- STATUS: ${response.statusCode}');
+        
+        if (response.statusCode == 200) {
+          var data = response.data;
+          if (data is String) {
+            data = jsonDecode(data);
+          }
+          
+          final List? audioStreams = data['audioStreams'];
+          if (audioStreams == null || audioStreams.isEmpty) {
+            print('--- FAIL: No audio streams found on Piped $instance');
+            continue;
+          }
+          
+          audioStreams.sort(
+            (a, b) => (b['bitrate'] ?? 0).compareTo(a['bitrate'] ?? 0),
+          );
+          
+          final streamUrl = audioStreams.first['url'];
+          print('--- WINNER PIPED! Stream URL: $streamUrl');
+          
+          setState(() => status = 'SUCCESS! Piped Tunnel Cracked.\nLoading Sound...');
+          
+          await player.setUrl(streamUrl);
+          player.play();
+          
+          setState(() {
+            status = 'PLAYING! 🔊\nListening via Piped ONLY: $instance';
+            isLoading = false;
+          });
+          return;
+        }
+      } catch (e) {
+        print('--- PIPED PROBE FAILED: $instance | Error: $e');
+        continue;
+      }
+    }
+
+    setState(() {
+      status = 'PIPED ONLY BLOCK. ❌\nAll Piped mirrors failed.';
+      isLoading = false;
+    });
+  }
+
   Future<void> startSaavnTest() async {
     setState(() {
       isLoading = true;
@@ -203,6 +270,16 @@ class _YTTestScreenState extends State<YTTestScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                   ),
                   child: const Text('Test YouTube (Red Key)', style: TextStyle(color: Colors.white)),
+                ),
+                const SizedBox(height: 15),
+                ElevatedButton(
+                  onPressed: startPipedOnlyTest,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber,
+                    minimumSize: const Size(250, 50),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                  ),
+                  child: const Text('Test Piped ONLY (Yellow Key)', style: TextStyle(color: Colors.black)),
                 ),
                 const SizedBox(height: 15),
                 ElevatedButton(

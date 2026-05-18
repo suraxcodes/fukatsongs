@@ -101,7 +101,7 @@ class BannedScreen extends ConsumerWidget {
                   const SizedBox(height: 16),
                   // Subtitle description
                   const Text(
-                    'This device has been blacklisted from using the fukatSongs service. Private distributions are monitored, and access is controlled by the application administration.',
+                    'This device app is banned by developer. Thank you.',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.white38,

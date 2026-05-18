@@ -129,11 +129,22 @@ class MusicRepository {
 
   final Map<String, _CachedStreamUrl> _streamUrlCache = {};
 
+  void clearStreamCache(String songId) {
+    _streamUrlCache.remove('${songId}_saavn_160');
+    _streamUrlCache.remove('${songId}_saavn_320');
+    _streamUrlCache.remove('${songId}_youtube_160');
+    _streamUrlCache.remove('${songId}_youtube_320');
+    _streamUrlCache.remove('${songId}_youtube_fan_160');
+    _streamUrlCache.remove('${songId}_youtube_fan_320');
+    _youtube.clearCache(songId);
+    print('--- MusicRepository: Fully cleared stream cache for $songId ---');
+  }
+
   Future<List<Song>> getTrending() async {
     return _saavn.getTrending();
   }
 
-  Future<String?> getStreamUrl(Song song, {String? preferredProvider, String quality = '320'}) async {
+  Future<String?> getStreamUrl(Song song, {String? preferredProvider, String quality = '320', bool isRetry = false}) async {
     final provider = preferredProvider ?? song.source;
     String? providerId = song.providers[provider];
 
@@ -141,10 +152,22 @@ class MusicRepository {
       if (provider == 'saavn') {
         if (song.providers.containsKey('youtube')) {
           print('--- MusicRepository: saavn id missing, falling back to YouTube official stream ---');
-          return _youtube.getStreamUrl(song.providers['youtube']!, quality: quality);
+          return _youtube.getStreamUrl(
+            song.providers['youtube']!,
+            quality: quality,
+            fallbackSearchTitle: isRetry 
+                ? '${song.title}|${song.artist}|force_saavn' 
+                : '${song.title}|${song.artist}',
+          );
         } else if (song.providers.containsKey('youtube_fan')) {
           print('--- MusicRepository: saavn id missing, falling back to YouTube fan stream ---');
-          return _youtube.getStreamUrl(song.providers['youtube_fan']!, quality: quality);
+          return _youtube.getStreamUrl(
+            song.providers['youtube_fan']!,
+            quality: quality,
+            fallbackSearchTitle: isRetry 
+                ? '${song.title}|${song.artist}|force_saavn' 
+                : '${song.title}|${song.artist}',
+          );
         }
       }
       return null;
@@ -173,14 +196,32 @@ class MusicRepository {
       if (url == null) {
         if (song.providers.containsKey('youtube')) {
           print('--- MusicRepository: Saavn failed, falling back to YouTube official stream ---');
-          url = await _youtube.getStreamUrl(song.providers['youtube']!, quality: quality);
+          url = await _youtube.getStreamUrl(
+            song.providers['youtube']!,
+            quality: quality,
+            fallbackSearchTitle: isRetry 
+                ? '${song.title}|${song.artist}|force_saavn' 
+                : '${song.title}|${song.artist}',
+          );
         } else if (song.providers.containsKey('youtube_fan')) {
           print('--- MusicRepository: Saavn failed, falling back to YouTube fan stream (last resort) ---');
-          url = await _youtube.getStreamUrl(song.providers['youtube_fan']!, quality: quality);
+          url = await _youtube.getStreamUrl(
+            song.providers['youtube_fan']!,
+            quality: quality,
+            fallbackSearchTitle: isRetry 
+                ? '${song.title}|${song.artist}|force_saavn' 
+                : '${song.title}|${song.artist}',
+          );
         }
       }
     } else {
-      url = await _youtube.getStreamUrl(providerId, quality: quality);
+      url = await _youtube.getStreamUrl(
+        providerId,
+        quality: quality,
+        fallbackSearchTitle: isRetry 
+            ? '${song.title}|${song.artist}|force_saavn' 
+            : '${song.title}|${song.artist}',
+      );
     }
 
     if (url != null) {

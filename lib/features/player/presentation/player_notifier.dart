@@ -19,6 +19,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   List<Song> _originalQueue = [];
   List<Song> _shuffledQueue = [];
   int _playbackSessionId = 0;
+  bool _isRetrying = false;
 
   DateTime _lastPositionSaveTime = DateTime.now();
 
@@ -35,6 +36,26 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         processingState: s.processingState,
         bufferedPosition: s.bufferedPosition,
       );
+
+      if (s.processingState == AudioProcessingState.error) {
+        if (state.currentSong != null && !_isRetrying) {
+          _isRetrying = true;
+          print('--- PLAYBACK STATE ERROR: Asynchronous player error! Clearing stream cache and retrying play... ---');
+          ref.read(musicRepositoryProvider).clearStreamCache(state.currentSong!.id);
+          
+          Future.microtask(() async {
+            try {
+              await playSong(state.currentSong!, isRetry: true, initialPosition: state.position);
+            } finally {
+              _isRetrying = false;
+            }
+          });
+        } else if (state.currentSong != null && _isRetrying) {
+          print('--- REPLAY ATTEMPT FAILED ASYNCHRONOUSLY: Auto-skipping to next song... ---');
+          _isRetrying = false;
+          skipToNext();
+        }
+      }
 
       if (s.processingState == AudioProcessingState.completed) {
         if (state.repeatMode == AudioServiceRepeatMode.none) {
@@ -116,47 +137,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
           queue: restoredQueue,
           currentIndex: index,
           position: Duration(milliseconds: positionMs),
+          totalDuration: Duration(seconds: song.duration),
           isPlaying: false,
           processingState: AudioProcessingState.ready,
         );
 
-        final audioHandler = ref.read(audioHandlerProvider) as MusicAudioHandler;
-        
-        // 1. Check if the restored song exists in offline downloads first
-        final downloadsBox = Hive.box<Song>(HiveBoxes.downloads);
-        final downloadedSong = downloadsBox.get(song.id);
-
-        if (downloadedSong != null && downloadedSong.localPath != null) {
-          final file = File(downloadedSong.localPath!);
-          if (await file.exists()) {
-            await audioHandler.playFile(
-              downloadedSong.localPath!,
-              downloadedSong,
-              initialPosition: Duration(milliseconds: positionMs),
-            );
-            await audioHandler.pause(); // Make sure it stays paused!
-            return;
-          }
-        }
-
-        // 2. Otherwise load the online URL in a paused state
-        final repository = ref.read(musicRepositoryProvider);
-        final streamUrl = await repository.getStreamUrl(
-          song.id,
-          song.title,
-          song.artist,
-          song.source,
-          '160',
-        );
-
-        if (streamUrl != null) {
-          await audioHandler.playUrl(
-            streamUrl,
-            song,
-            initialPosition: Duration(milliseconds: positionMs),
-          );
-          await audioHandler.pause(); // Make sure it stays paused!
-        }
+        // restored in a perfect paused state
       }
     } catch (e) {
       debugPrint('Failed to restore last playback session: $e');
@@ -426,11 +412,12 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       
       // Attempt 1: Preferred / Original Provider (JioSaavn or YouTube)
       try {
-        print('--- PLAYBACK: Attempt 1 - Trying original source "$actualProvider" ---');
+        print('--- PLAYBACK: Attempt 1 - Trying original source "$actualProvider" (isRetry: $isRetry) ---');
         url = await repository.getStreamUrl(
           song,
           preferredProvider: actualProvider,
           quality: quality,
+          isRetry: isRetry,
         );
       } catch (e) {
         print('--- PLAYBACK: Original source "$actualProvider" failed: $e ---');
@@ -445,6 +432,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             song,
             preferredProvider: 'youtube',
             quality: quality,
+            isRetry: isRetry,
           );
         } catch (e) {
           print('--- PLAYBACK: Official YouTube fallback failed: $e ---');
@@ -460,6 +448,7 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
             song,
             preferredProvider: 'youtube_fan',
             quality: quality,
+            isRetry: isRetry,
           );
         } catch (e) {
           print('--- PLAYBACK: Last resort fan channel failed: $e ---');
@@ -527,7 +516,14 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
   }
 
   void pause() => ref.read(audioHandlerProvider).pause();
-  void resume() => ref.read(audioHandlerProvider).play();
+  void resume() {
+    final audioHandler = ref.read(audioHandlerProvider) as MusicAudioHandler;
+    if (state.currentSong != null && audioHandler.mediaItem.value == null) {
+      playSong(state.currentSong!, initialPosition: state.position);
+    } else {
+      audioHandler.play();
+    }
+  }
   void seek(Duration position) => ref.read(audioHandlerProvider).seek(position);
   void togglePlayPause() {
     if (state.isPlaying) {

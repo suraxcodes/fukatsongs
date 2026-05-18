@@ -420,11 +420,11 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
                               // Controls
                               _buildControls(playerState, notifier, isLoading),
                               SizedBox(height: 24.h),
+                              // Bottom Actions (Lyrics, Download, etc.)
+                              _buildBottomActions(song, playerState, notifier),
+                              SizedBox(height: 24.h),
                               // Up Next queue
                               _buildUpNext(playerState, notifier),
-                              SizedBox(height: 24.h),
-                              // Volume & More row
-                              _buildBottomActions(song, playerState, notifier),
                               SizedBox(height: 24.h),
                             ],
                           ),
@@ -726,75 +726,78 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
     final playlists = ref.watch(playlistNotifierProvider);
     final isInPlaylist = playlists.any((pl) => pl.songs.any((s) => s.id == song.id));
     
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: EdgeInsets.symmetric(horizontal: 16.w),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-        _actionButton(Icons.devices_rounded, 'Devices', () {
-          final messenger = ScaffoldMessenger.of(context);
-          messenger.showSnackBar(const SnackBar(content: Text('Device switching coming soon')));
-        }),
-        SizedBox(width: 15.w),
-        _actionButton(
-          isInPlaylist ? Icons.playlist_add_check_rounded : Icons.playlist_add_rounded, 
-          isInPlaylist ? 'Added' : 'Playlist', 
-          () {
-            if (isInPlaylist) {
-              _showPlaylistOptions(context, ref, song);
-            } else {
-              showAddToPlaylistSheet(context, ref, song);
-            }
-          },
-          color: isInPlaylist ? const Color(0xFFBB86FC) : Colors.white70,
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 12.w),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _actionButton(
+              _showLyrics ? Icons.lyrics_rounded : Icons.lyrics_outlined,
+              'Lyrics',
+              () {
+                setState(() {
+                  _showLyrics = !_showLyrics;
+                });
+                if (_showLyrics) {
+                  ref.read(lyricsProvider.notifier).fetchLyrics(
+                    song,
+                    duration: playerState.totalDuration.inSeconds > 0
+                        ? playerState.totalDuration.inSeconds
+                        : null,
+                  );
+                }
+              },
+              color: _showLyrics ? const Color(0xFFBB86FC) : Colors.white70,
+            ),
+            _actionButton(
+              isDownloading ? Icons.downloading_rounded : (isDownloaded ? Icons.download_done_rounded : Icons.download_rounded), 
+              isDownloading ? '${(progress * 100).toInt()}%' : (isDownloaded ? 'Saved' : 'Download'),
+              () {
+                final messenger = ScaffoldMessenger.of(context);
+                if (isDownloaded) {
+                  messenger.showSnackBar(const SnackBar(content: Text('Already downloaded')));
+                } else if (isDownloading) {
+                  ref.read(downloadNotifierProvider.notifier).cancelDownload(song.id);
+                  messenger.showSnackBar(const SnackBar(content: Text('Download cancelled')));
+                } else {
+                  ref.read(downloadNotifierProvider.notifier).downloadSong(song);
+                  messenger.showSnackBar(const SnackBar(content: Text('Starting download...')));
+                }
+              },
+              color: isDownloaded ? Colors.greenAccent : (isDownloading ? const Color(0xFF6200EE) : Colors.white70),
+              trailing: isDownloading ? SizedBox(
+                width: 14.w,
+                height: 14.w,
+                child: CircularProgressIndicator(value: progress, strokeWidth: 2, color: const Color(0xFF6200EE)),
+              ) : null,
+            ),
+            _actionButton(
+              isInPlaylist ? Icons.playlist_add_check_rounded : Icons.playlist_add_rounded, 
+              isInPlaylist ? 'Added' : 'Playlist', 
+              () {
+                if (isInPlaylist) {
+                  _showPlaylistOptions(context, ref, song);
+                } else {
+                  showAddToPlaylistSheet(context, ref, song);
+                }
+              },
+              color: isInPlaylist ? const Color(0xFFBB86FC) : Colors.white70,
+            ),
+            _actionButton(Icons.share_rounded, 'Share', () {
+              final messenger = ScaffoldMessenger.of(context);
+              messenger.showSnackBar(const SnackBar(content: Text('Sharing coming soon')));
+            }),
+            _actionButton(Icons.devices_rounded, 'Devices', () {
+              final messenger = ScaffoldMessenger.of(context);
+              messenger.showSnackBar(const SnackBar(content: Text('Device switching coming soon')));
+            }),
+          ],
         ),
-        SizedBox(width: 15.w),
-        _actionButton(
-          isDownloading ? Icons.downloading_rounded : (isDownloaded ? Icons.download_done_rounded : Icons.download_rounded), 
-          isDownloading ? '${(progress * 100).toInt()}%' : (isDownloaded ? 'Saved' : 'Download'),
-          () {
-            final messenger = ScaffoldMessenger.of(context);
-            if (isDownloaded) {
-              messenger.showSnackBar(const SnackBar(content: Text('Already downloaded')));
-            } else if (isDownloading) {
-              ref.read(downloadNotifierProvider.notifier).cancelDownload(song.id);
-              messenger.showSnackBar(const SnackBar(content: Text('Download cancelled')));
-            } else {
-              ref.read(downloadNotifierProvider.notifier).downloadSong(song);
-              messenger.showSnackBar(const SnackBar(content: Text('Starting download...')));
-            }
-          },
-          color: isDownloaded ? Colors.greenAccent : (isDownloading ? const Color(0xFF6200EE) : Colors.white70),
-          trailing: isDownloading ? SizedBox(
-            width: 14.w,
-            height: 14.w,
-            child: CircularProgressIndicator(value: progress, strokeWidth: 2, color: const Color(0xFF6200EE)),
-          ) : null,
-        ),
-        SizedBox(width: 15.w),
-        _actionButton(Icons.share_rounded, 'Share', () {
-          final messenger = ScaffoldMessenger.of(context);
-          messenger.showSnackBar(const SnackBar(content: Text('Sharing coming soon')));
-        }),
-        SizedBox(width: 15.w),
-        _actionButton(
-          _showLyrics ? Icons.lyrics_rounded : Icons.lyrics_outlined,
-          'Lyrics',
-          () {
-            setState(() {
-              _showLyrics = !_showLyrics;
-            });
-            if (_showLyrics) {
-              ref.read(lyricsProvider.notifier).fetchLyrics(song);
-            }
-          },
-          color: _showLyrics ? const Color(0xFFBB86FC) : Colors.white70,
-        ),
-      ],
-    ),
-  );
-}
+      ),
+    );
+  }
 
   Widget _actionButton(IconData icon, String label, VoidCallback onTap, {Color color = Colors.white70, Widget? trailing}) {
     return Material(
@@ -803,7 +806,7 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
         onTap: onTap,
         borderRadius: BorderRadius.circular(32.r),
         child: Padding(
-          padding: EdgeInsets.all(8.w),
+          padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 8.h),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [

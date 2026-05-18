@@ -55,17 +55,101 @@ class _GatekeeperScreenState extends ConsumerState<GatekeeperScreen> {
     });
 
     try {
-      // Silently try Firebase Registration
+      // ✅ 1. Check global ban registry BEFORE letting them register or unlock
+      final killSwitchNotifier = ref.read(killSwitchProvider.notifier);
+      final hardwareId = await killSwitchNotifier.getHardwareId();
+
+      if (hardwareId != null) {
+        try {
+          // Check static banned_devices node first
+          final banSnapshot = await FirebaseDatabase.instance
+              .ref('banned_devices/$hardwareId')
+              .get();
+
+          if (banSnapshot.exists && banSnapshot.value != null) {
+            setState(() {
+              _isLoading = false;
+              _passwordError = 'This device app is banned by developer. Thank you.';
+            });
+            final authBox = Hive.box(HiveBoxes.auth);
+            await authBox.put('is_banned', true);
+            return;
+          }
+
+          // ✅ CHECK 2: Query historical user nodes to see if this physical hardware ID is linked to any banned/deleted accounts
+          final usersSnapshot = await FirebaseDatabase.instance
+              .ref('users')
+              .orderByChild('device_id')
+              .equalTo(hardwareId)
+              .get();
+
+          if (usersSnapshot.exists && usersSnapshot.value != null) {
+            final dynamic rawData = usersSnapshot.value;
+            String? existingNickname;
+            bool isGloballyBanned = false;
+
+            if (rawData is Map) {
+              for (final entry in rawData.values) {
+                if (entry is Map) {
+                  final status = entry['status'] as String?;
+                  final nick = entry['nickname'] as String?;
+                  if (status != null && status != 'active') {
+                    isGloballyBanned = true;
+                    existingNickname = nick;
+                    break;
+                  } else if (status == 'active') {
+                    existingNickname = nick;
+                  }
+                }
+              }
+            }
+
+            if (isGloballyBanned) {
+              setState(() {
+                _isLoading = false;
+                _passwordError = 'This device app is banned by developer. Thank you.';
+              });
+              final authBox = Hive.box(HiveBoxes.auth);
+              await authBox.put('is_banned', true);
+
+              // Auto-register this hardware ID globally so future checks are instant!
+              FirebaseDatabase.instance.ref('banned_devices/$hardwareId').set(existingNickname ?? nickname);
+              return;
+            }
+
+            // B: If already registered and active, log them into their existing node path
+            if (existingNickname != null) {
+              final authBox = Hive.box(HiveBoxes.auth);
+              await authBox.put('is_unlocked', true);
+              await authBox.put('device_nickname', existingNickname);
+
+              // Trigger status check to start the real-time kill switch listener
+              ref.read(killSwitchProvider.notifier).triggerStatusCheck();
+
+              if (!mounted) return;
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const MainScreen()),
+              );
+              return;
+            }
+          }
+        } catch (banErr) {
+          debugPrint('Gatekeeper pre-check global ban lookup error/bypassed: $banErr');
+        }
+      }
+
+      // 2. Silently try Firebase Registration
       try {
         final credential = await FirebaseAuth.instance.signInAnonymously();
         final user = credential.user;
         if (user != null) {
-          final databaseRef = FirebaseDatabase.instance.ref('users/${user.uid}');
+          final databaseRef = FirebaseDatabase.instance.ref('users/${nickname}_$hardwareId');
           await databaseRef.set({
             'nickname': nickname,
             'status': 'active',
             'registered_at': DateTime.now().toIso8601String(),
             'last_login': DateTime.now().toIso8601String(),
+            'device_id': hardwareId,
           });
           debugPrint('Device registered with Firebase uid: ${user.uid}');
         }
@@ -167,7 +251,7 @@ class _GatekeeperScreenState extends ConsumerState<GatekeeperScreen> {
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: Colors.white.withOpacity(0.06),
-                    hintText: "Your Device Nickname (e.g. Rahul's Phone)",
+                    hintText: "Your Nickname (e.g. Rahul )",
                     hintStyle: const TextStyle(color: Colors.white24, fontSize: 14),
                     errorText: _nicknameError,
                     errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 13),

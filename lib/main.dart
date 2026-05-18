@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -5,7 +6,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'models/song.dart';
-import 'features/main/main_screen.dart';
 import 'features/main/presentation/splash_screen.dart';
 import 'core/audio/audio_handler.dart';
 import 'core/audio/audio_handler_provider.dart';
@@ -92,8 +92,15 @@ class FukatSongsApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isBanned = ref.watch(killSwitchProvider);
 
+    // Safely calculate screen size at root level without MediaQuery context
+    final physicalSize = ui.PlatformDispatcher.instance.views.first.physicalSize;
+    final devicePixelRatio = ui.PlatformDispatcher.instance.views.first.devicePixelRatio;
+    final width = physicalSize.width / (devicePixelRatio > 0 ? devicePixelRatio : 1.0);
+    final height = physicalSize.height / (devicePixelRatio > 0 ? devicePixelRatio : 1.0);
+    final isDesktop = width > 800;
+
     return ScreenUtilInit(
-      designSize: const Size(360, 690),
+      designSize: isDesktop ? Size(width, height) : const Size(360, 690),
       minTextAdapt: true,
       splitScreenMode: true,
       builder: (context, child) {

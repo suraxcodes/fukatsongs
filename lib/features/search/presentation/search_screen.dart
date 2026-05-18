@@ -256,11 +256,22 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
             ),
           ),
-          title: Text(
-            song.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14.sp),
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  song.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14.sp),
+                ),
+              ),
+              if (song.providers.containsKey('saavn'))
+                _buildProviderBadge('saavn'),
+              if (song.providers.containsKey('youtube') || song.providers.containsKey('youtube_fan'))
+                _buildProviderBadge('youtube'),
+            ],
           ),
           subtitle: Text(
             song.artist,
@@ -274,6 +285,42 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           },
         );
       },
+    );
+  }
+
+  Widget _buildProviderBadge(String provider) {
+    final isYt = provider == 'youtube' || provider == 'youtube_fan';
+    final label = isYt ? 'YT' : 'SN';
+    return Container(
+      margin: EdgeInsets.only(left: 6.w),
+      padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 1.5.h),
+      decoration: BoxDecoration(
+        color: isYt ? Colors.red.withOpacity(0.15) : Colors.teal.withOpacity(0.15),
+        border: Border.all(
+          color: isYt ? Colors.redAccent.withOpacity(0.4) : Colors.tealAccent.withOpacity(0.4),
+          width: 1,
+        ),
+        borderRadius: BorderRadius.circular(4.r),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isYt ? Icons.play_circle_fill : Icons.music_note_rounded,
+            color: isYt ? Colors.redAccent : Colors.tealAccent,
+            size: 9.sp,
+          ),
+          SizedBox(width: 2.w),
+          Text(
+            label,
+            style: TextStyle(
+              color: isYt ? Colors.redAccent : Colors.tealAccent,
+              fontSize: 8.sp,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

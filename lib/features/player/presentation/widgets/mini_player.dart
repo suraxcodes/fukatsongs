@@ -100,6 +100,13 @@ class MiniPlayer extends ConsumerWidget {
                   IconButton(
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
+                    icon: const Icon(Icons.skip_previous_rounded, color: Colors.white),
+                    onPressed: () => notifier.skipToPrevious(),
+                  ),
+                  SizedBox(width: 8.w),
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                     icon: Icon(
                       playerState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                       color: Colors.white,

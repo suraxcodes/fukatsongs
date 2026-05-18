@@ -740,17 +740,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildSpeedDialGrid(List<dynamic> items) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: EdgeInsets.symmetric(horizontal: 16.w),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 12.h,
-        crossAxisSpacing: 12.w,
-        childAspectRatio: 2.8,
-      ),
-      itemCount: items.length.clamp(0, 6),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth > 800;
+        final isMedium = constraints.maxWidth > 600 && constraints.maxWidth <= 800;
+        
+        final crossAxisCount = isWide ? 3 : (isMedium ? 3 : 2);
+        final childAspectRatio = isWide ? 4.0 : (isMedium ? 3.2 : 2.8);
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: EdgeInsets.symmetric(horizontal: 16.w),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisSpacing: 12.h,
+            crossAxisSpacing: 12.w,
+            childAspectRatio: childAspectRatio,
+          ),
+          itemCount: items.length.clamp(0, 6),
       itemBuilder: (context, index) {
         final item = items[index];
         final String title = item is Song
@@ -813,6 +821,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
         );
+      },
+    );
       },
     );
   }

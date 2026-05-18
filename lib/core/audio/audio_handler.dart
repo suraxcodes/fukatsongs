@@ -120,6 +120,14 @@ class MusicAudioHandler extends BaseAudioHandler
           queueIndex: event.currentIndex,
         ),
       );
+    }, onError: (Object e, StackTrace stackTrace) {
+      print('--- AUDIO HANDLER PLAYBACK ERROR: $e ---');
+      playbackState.add(
+        playbackState.value.copyWith(
+          processingState: AudioProcessingState.error,
+          errorMessage: e.toString(),
+        ),
+      );
     });
   }
 
@@ -172,6 +180,25 @@ class MusicAudioHandler extends BaseAudioHandler
 
   int _playSessionId = 0;
 
+  Future<String?> _testUrl(String url) async {
+    try {
+      final dio = Dio();
+      final response = await dio.get(
+        url,
+        options: Options(
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Range': 'bytes=0-0',
+          },
+          validateStatus: (status) => true,
+        ),
+      ).timeout(const Duration(seconds: 4));
+      return response.statusCode != 403 ? url : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> playUrl(String url, Song song, {Duration? initialPosition}) async {
     final sessionId = ++_playSessionId;
     print('--- PLAYURL CALLED: ${song.title} (${song.source}) ---');
@@ -190,35 +217,51 @@ class MusicAudioHandler extends BaseAudioHandler
       playbackState.value.copyWith(processingState: AudioProcessingState.loading),
     );
 
-    // Load the audio source with appropriate headers
-    final headers = <String, String>{
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-      if (song.source == 'saavn') 'Referer': 'https://www.jiosaavn.com/',
-    };
+    // YouTube URLs are IP/UA signed. Passing a generic desktop UA header to ExoPlayer 
+    // for a YouTube Google Video CDN link will often cause immediate connection reset or 403.
+    // JioSaavn, however, strictly requires custom headers.
+    final Map<String, String>? headers = song.source == 'saavn'
+        ? {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Referer': 'https://www.jiosaavn.com/',
+          }
+        : {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          };
 
-    await _player.setAudioSource(
-      AudioSource.uri(Uri.parse(url), headers: headers),
-      initialPosition: initialPosition,
-      preload: true,
-    );
+    try {
+      await _player.setAudioSource(
+        AudioSource.uri(Uri.parse(url), headers: headers),
+        initialPosition: initialPosition,
+        preload: true,
+      ).timeout(const Duration(milliseconds: 7500));
+    } catch (e) {
+      print('--- AUDIO HANDLER: setAudioSource failed or timed out: $e ---');
+      if (_playSessionId == sessionId) {
+        playbackState.add(
+          playbackState.value.copyWith(
+            processingState: AudioProcessingState.error,
+            errorMessage: e.toString(),
+          ),
+        );
+      }
+      rethrow; // propagate to triggers (e.g. PlayerNotifier._repairAndPlay)
+    }
 
     if (_playSessionId != sessionId) {
       print('--- PLAYBACK ABORTED (session expired) ---');
       return;
     }
 
-    // Smart Wait: buffer at least 1.5s before playing — but cap at 1.5s total
-    // so switching songs never feels frozen. If player is 'ready', start immediately.
+    // Smart Wait: if player is ready, start playing immediately. Otherwise, wait up to 1.6s.
     int attempts = 0;
     while (attempts < 8) {
+      if (_player.processingState == ProcessingState.ready) {
+        break;
+      }
       await Future.delayed(const Duration(milliseconds: 200));
       attempts++;
       if (_playSessionId != sessionId) return;
-      // If player is ready or we have 1.5s buffered, start now
-      if (_player.processingState == ProcessingState.ready &&
-          _player.bufferedPosition >= const Duration(milliseconds: 1500)) {
-        break;
-      }
     }
 
     print('--- PLAYBACK STARTING (${song.source}) ---');
