@@ -1,6 +1,145 @@
 // api/stream.js - Hosted on Vercel Serverless Scraper Proxy
 const ytdl = require('@distube/ytdl-core');
-const { getRandomIPv6 } = require('@distube/ytdl-core/lib/utils');
+
+// Custom robust random IPv6 address generator within '2001:2::/48' block to prevent GCP/Vercel rate-limit blocks
+function getRandomIPv6() {
+  const randomGroup = () => Math.floor(Math.random() * 65536).toString(16);
+  return `2001:2::${randomGroup()}:${randomGroup()}:${randomGroup()}:${randomGroup()}`;
+}
+
+const PIPED_MIRRORS = [
+  'https://pipedapi.leptons.xyz',
+  'https://pipedapi.nosebs.ru',
+  'https://piped-api.privacy.com.de',
+  'https://pipedapi.adminforge.de',
+  'https://pipedapi.drgns.space',
+  'https://pipedapi.owo.si',
+  'https://pipedapi.ducks.party',
+  'https://piped-api.codespace.cz',
+  'https://pipedapi.reallyaweso.me',
+  'https://api.piped.private.coffee',
+  'https://pipedapi.orangenet.cc'
+];
+
+// Backend fallback racing to resolve the stream URL from public Piped API mirrors fetched in real-time
+async function fetchFromPipedMirrors(videoId) {
+  try {
+    console.log('--- Fetching live Piped instances... ---');
+    const instancesRes = await fetch('https://piped-instances.kavin.rocks');
+    if (!instancesRes.ok) {
+      throw new Error('Failed to retrieve live Piped instances registry.');
+    }
+    const instances = await instancesRes.json();
+    
+    // Extract and filter valid API URLs
+    const apiUrls = instances
+      .map(inst => inst.api_url?.trim())
+      .filter(url => url && url.startsWith('http'));
+      
+    if (apiUrls.length === 0) {
+      throw new Error('No valid API endpoints found in Piped instances registry.');
+    }
+    
+    // Shuffle and pick top 4 mirrors to race concurrently
+    const shuffled = apiUrls.sort(() => 0.5 - Math.random());
+    const selected = shuffled.slice(0, 4);
+    
+    console.log(`--- Racing live Piped mirrors: ${selected.join(', ')} ---`);
+    const controllers = selected.map(() => new AbortController());
+    
+    const promises = selected.map(async (mirror, index) => {
+      const controller = controllers[index];
+      const signal = controller.signal;
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      
+      try {
+        const response = await fetch(`${mirror}/streams/${videoId}`, { signal });
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          const data = await response.json();
+          const audioStreams = data.audioStreams;
+          if (audioStreams && audioStreams.length > 0) {
+            audioStreams.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+            
+            // Abort all other pending requests
+            controllers.forEach((c, idx) => {
+              if (idx !== index) c.abort();
+            });
+            
+            return {
+              streamUrl: audioStreams[0].url,
+              transformations: [
+                { action: 'swap', param: 2 },
+                { action: 'reverse', param: 0 },
+                { action: 'slice', param: 1 }
+              ]
+            };
+          }
+        }
+        throw new Error(`Failed to resolve stream on mirror ${mirror}`);
+      } catch (err) {
+        clearTimeout(timeoutId);
+        throw err;
+      }
+    });
+    
+    return await Promise.any(promises);
+  } catch (err) {
+    // If the live registry is down or Promise.any fails, fall back to our vetted hardcoded list
+    console.warn('⚠️ Live Piped registry call failed. Falling back to hardcoded mirror racing...', err.message);
+    
+    const fallbackMirrors = [
+      'https://api.piped.private.coffee',
+      'https://pipedapi.leptons.xyz',
+      'https://pipedapi.nosebs.ru',
+      'https://piped-api.privacy.com.de'
+    ];
+    
+    const controllers = fallbackMirrors.map(() => new AbortController());
+    const promises = fallbackMirrors.map(async (mirror, index) => {
+      const controller = controllers[index];
+      const signal = controller.signal;
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      
+      try {
+        const response = await fetch(`${mirror}/streams/${videoId}`, { signal });
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          const data = await response.json();
+          const audioStreams = data.audioStreams;
+          if (audioStreams && audioStreams.length > 0) {
+            audioStreams.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+            
+            controllers.forEach((c, idx) => {
+              if (idx !== index) c.abort();
+            });
+            
+            return {
+              streamUrl: audioStreams[0].url,
+              transformations: [
+                { action: 'swap', param: 2 },
+                { action: 'reverse', param: 0 },
+                { action: 'slice', param: 1 }
+              ]
+            };
+          }
+        }
+        throw new Error(`Failed to resolve on fallback mirror ${mirror}`);
+      } catch (err) {
+        clearTimeout(timeoutId);
+        throw err;
+      }
+    });
+    
+    try {
+      return await Promise.any(promises);
+    } catch (fallbackErr) {
+      throw new Error(`All Piped mirrors failed. Live error: ${err.message} | Hardcoded error: ${fallbackErr.message}`);
+    }
+  }
+}
 
 module.exports = async (req, res) => {
   // CORS Preflight Handshake headers
@@ -23,16 +162,34 @@ module.exports = async (req, res) => {
 
     console.log(`Resolving stream metadata for YouTube video: ${id} with IPv6: ${randomIPv6}`);
 
-    // Retrieve stream info with specific Android Music spoofing agent to fetch high quality OPUS streams
-    const info = await ytdl.getInfo(id, {
-      requestOptions: {
-        headers: {
-          'User-Agent': 'com.google.android.apps.youtube.music/6.31.55 (Linux; U; Android 14; en_US)',
-          'X-Goog-Api-Format-Version': '2',
+    let info;
+    try {
+      // Retrieve stream info with specific Android Music spoofing agent to fetch high quality OPUS streams
+      info = await ytdl.getInfo(id, {
+        requestOptions: {
+          headers: {
+            'User-Agent': 'com.google.android.apps.youtube.music/6.31.55 (Linux; U; Android 14; en_US)',
+            'X-Goog-Api-Format-Version': '2',
+          },
+          localAddress: randomIPv6,
         },
-        localAddress: randomIPv6,
-      },
-    });
+      });
+    } catch (err) {
+      // If the host cannot bind to the random IPv6 block (like on a local developer machine), fallback dynamically!
+      if (err.code === 'EADDRNOTAVAIL' || err.message.includes('EADDRNOTAVAIL') || err.message.includes('bind')) {
+        console.warn(`⚠️ IPv6 rotation binding failed (${err.code}). Retrying without localAddress...`);
+        info = await ytdl.getInfo(id, {
+          requestOptions: {
+            headers: {
+              'User-Agent': 'com.google.android.apps.youtube.music/6.31.55 (Linux; U; Android 14; en_US)',
+              'X-Goog-Api-Format-Version': '2',
+            },
+          },
+        });
+      } else {
+        throw err;
+      }
+    }
 
     // Find the highest quality audio-only format (usually OPUS 160kbps, M4A 128kbps)
     const format = ytdl.chooseFormat(info.formats, { filter: 'audioonly', quality: 'highestaudio' });
@@ -82,10 +239,17 @@ module.exports = async (req, res) => {
       transformations: transformations,
     });
   } catch (error) {
-    console.error(`Scraper error for video ${id}:`, error);
-    return res.status(500).json({
-      error: 'Scraper extraction failure.',
-      details: error.message,
-    });
+    console.warn(`⚠️ Scraper error for video ${id} using ytdl-core: ${error.message}. Initiating backend Piped racing fallback...`);
+    try {
+      const fallbackResult = await fetchFromPipedMirrors(id);
+      console.log(`🚀 Backend Piped racing fallback SUCCESS for video ${id}!`);
+      return res.status(200).json(fallbackResult);
+    } catch (fallbackError) {
+      console.error(`❌ Both ytdl-core and backend Piped racing fallback failed for video ${id}:`, fallbackError);
+      return res.status(500).json({
+        error: 'Scraper extraction failure.',
+        details: `${error.message} | Fallback error: ${fallbackError.message}`,
+      });
+    }
   }
 };

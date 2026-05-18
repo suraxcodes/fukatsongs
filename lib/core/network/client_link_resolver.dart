@@ -11,7 +11,7 @@ class ClientLinkResolver {
 
   // Configuration for your Vercel Node.js Serverless Scraper Backend
   // Modify this to match your deployed Vercel domain (e.g., 'https://fukatsongs.vercel.app')
-  static const String _vercelBaseUrl = 'https://fukat-songs-proxy.vercel.app';
+  static const String _vercelBaseUrl = 'https://fukatsongs-stream-proxy.onrender.com';
 
   /// Resolves the final direct streaming URL using Vercel token deciphering with fallback to repo racing
   Future<String> resolveStreamLinkLocally(String trackId, {String source = 'youtube'}) async {

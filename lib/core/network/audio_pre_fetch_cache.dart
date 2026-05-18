@@ -24,10 +24,9 @@ class AudioPreFetchCache {
 
   void trackActiveResolution(String trackId, Future<String> generationTask) {
     _activeResolutions[trackId] = generationTask;
-    generationTask.then(
-      (_) => _activeResolutions.remove(trackId),
-      onError: (_) => _activeResolutions.remove(trackId),
-    );
+    generationTask.whenComplete(() {
+      _activeResolutions.remove(trackId);
+    });
   }
 
   Future<String>? getActiveResolution(String trackId) => _activeResolutions[trackId];
