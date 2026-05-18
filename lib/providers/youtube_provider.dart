@@ -24,11 +24,20 @@ class YouTubeProvider implements MusicProvider {
 
   List<String> _pipedMirrors = [
     'https://pipedapi.kavin.rocks',
+    'https://pipedapi.leptons.xyz',
+    'https://pipedapi.nosebs.ru',
+    'https://pipedapi-libre.kavin.rocks',
+    'https://piped-api.privacy.com.de',
+    'https://pipedapi.adminforge.de',
+    'https://api.piped.yt',
+    'https://pipedapi.drgns.space',
+    'https://pipedapi.owo.si',
+    'https://pipedapi.ducks.party',
+    'https://piped-api.codespace.cz',
+    'https://pipedapi.reallyaweso.me',
     'https://api.piped.private.coffee',
-    'https://pipedapi.colby.land',
-    'https://piped-api.lunar.icu',
-    'https://pipedapi.tokhmi.xyz',
-    'https://pipedapi.oxen.moe',
+    'https://pipedapi.darkness.services',
+    'https://pipedapi.orangenet.cc',
   ];
 
   List<String> _invidiousMirrors = [
@@ -36,7 +45,6 @@ class YouTubeProvider implements MusicProvider {
     'https://invidious.nerdvpn.de',
     'https://yt.chocolatemoo53.com',
     'https://inv.thepixora.com',
-    'https://yewtu.be',
   ];
 
   // Layer 3: Stream Caching
@@ -277,16 +285,40 @@ class YouTubeProvider implements MusicProvider {
     }
 
     if (!forceSaavn) {
-      // --- STAGE 1: DIRECT EXTRACTION (WITH HTTP VERIFICATION) ---
+      // --- STAGE 1: PIPED MIRRORS (Racing Mode) ---
+      // We launch all requests and take the FIRST successful one immediately.
       try {
-        print('--- YouTube Provider: Layer 1 - Direct Extraction ---');
+        print(
+          '--- YouTube Provider: Layer 1 - Racing ${_pipedMirrors.length} Piped mirrors...',
+        );
+
+        final successfulUrl = await _raceMirrors(songId);
+
+        if (successfulUrl != null) {
+          // Cache for 2 hours
+          _streamCache[songId] = _CachedStream(
+            successfulUrl,
+            DateTime.now().add(const Duration(hours: 2)),
+          );
+          print('--- YouTube Provider: Layer 1 Piped/Invidious Racing SUCCESS ---');
+          return successfulUrl;
+        } else {
+          print('--- YouTube Provider: Layer 1 Piped/Invidious Racing FAILED. Trying Stage 2 Fallback... ---');
+        }
+      } catch (e) {
+        print('--- YouTube Provider: Layer 1 Piped Racing FAILED: $e ---');
+      }
+
+      // --- STAGE 2: DIRECT EXTRACTION (WITH HTTP VERIFICATION) ---
+      try {
+        print('--- YouTube Provider: Layer 2 - Direct Extraction ---');
         final manifest = await _yt.videos.streamsClient.getManifest(songId).timeout(const Duration(milliseconds: 5000));
         final audioStream = manifest.audioOnly.withHighestBitrate();
         final url = audioStream.url.toString();
 
         // ✅ RAPID HTTP VERIFICATION: Verify the URL is not blocked (403) before returning
         print(
-          '--- YouTube Provider: Layer 1 - Verifying stream URL validity... ---',
+          '--- YouTube Provider: Layer 2 - Verifying stream URL validity... ---',
         );
         final response = await _dio
             .get(
@@ -309,36 +341,19 @@ class YouTubeProvider implements MusicProvider {
             DateTime.now().add(const Duration(hours: 2)),
           );
           print(
-            '--- YouTube Provider: Layer 1 SUCCESS (Verified ${response.statusCode}) ---',
+            '--- YouTube Provider: Layer 2 SUCCESS (Verified ${response.statusCode}) ---',
           );
           return url;
         } else {
           print(
-            '--- YouTube Provider: Layer 1 FAILED (Verified 403 Forbidden). Triggering Fallbacks... ---',
+            '--- YouTube Provider: Layer 2 FAILED (Verified 403 Forbidden). ---',
           );
         }
       } catch (e) {
-        print('--- YouTube Provider: Layer 1 FAILED: $e ---');
+        print('--- YouTube Provider: Layer 2 FAILED: $e ---');
       }
 
-      // --- STAGE 2: PIPED MIRRORS (Racing Mode) ---
-      // We launch all requests and take the FIRST successful one immediately.
-      print(
-        '--- YouTube Provider: Layer 2 - Racing ${_pipedMirrors.length} Piped mirrors...',
-      );
-
-      final successfulUrl = await _raceMirrors(songId);
-
-      if (successfulUrl != null) {
-        // Cache for 2 hours
-        _streamCache[songId] = _CachedStream(
-          successfulUrl,
-          DateTime.now().add(const Duration(hours: 2)),
-        );
-        return successfulUrl;
-      }
-
-      print('--- All layers failed or timed out.');
+      print('--- All YouTube layers failed or timed out.');
     } else {
       print('--- YouTube Provider: force_saavn detected! Skipping Stage 1 and 2 to activate JioSaavn Magic Switch directly... ---');
     }
