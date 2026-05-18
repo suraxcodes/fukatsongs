@@ -5,7 +5,6 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt_exp;
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
-import 'package:fukat_songs/core/audio/youtube_audio_source.dart';
 import 'package:fukat_songs/models/song.dart';
 import '../../features/library/logic/song_download_notifier.dart';
 
@@ -218,31 +217,40 @@ class MusicAudioHandler extends BaseAudioHandler
     );
 
     try {
-      // Determine the YouTube video ID if we need YouTubeAudioSource:
-      // - song.source == 'youtube'/'youtube_fan': use providers[source] or song.id
-      // - url == 'youtube_stream_placeholder': Saavn song falling back to YouTube
+      AudioSource audioSource;
+
+      // Determine if this is a YouTube play
       String? youtubeVideoId;
       if (song.source == 'youtube' || song.source == 'youtube_fan') {
         youtubeVideoId = song.providers[song.source] ?? song.id;
       } else if (url == 'youtube_stream_placeholder') {
-        // Saavn song that fell back to YouTube — grab the video ID from providers
         youtubeVideoId = song.providers['youtube'] ?? song.providers['youtube_fan'];
       }
 
-      AudioSource audioSource;
       if (youtubeVideoId != null) {
-        // 🔑 KEY FIX: For YouTube, we MUST NOT feed the raw googlevideo.com URL directly
-        // to ExoPlayer's DefaultHttpDataSource — Google CDN will 403 it because ExoPlayer
-        // doesn't carry YouTube's internal token headers.
-        //
-        // YouTubeAudioSource (StreamAudioSource) proxies all byte-fetching through
-        // youtube_explode_dart's own HTTP client, which carries the correct headers.
-        // This is 100% immune to the IP-lock / 403 problem.
-        print('--- AUDIO HANDLER: Using YouTubeAudioSource proxy for videoId: $youtubeVideoId ---');
-        audioSource = YouTubeAudioSource(youtubeVideoId, _yt);
+        // Resolve manifest ON the device so the googlevideo.com URL is IP-bound
+        // to the device's own IP — not the Render/Piped server's IP.
+        print('--- AUDIO HANDLER: Resolving YouTube manifest on-device for $youtubeVideoId ---');
+        final manifest = await _yt.videos.streamsClient
+            .getManifest(youtubeVideoId)
+            .timeout(const Duration(seconds: 10));
+        final audioStream = manifest.audioOnly.withHighestBitrate();
+        final ytUrl = audioStream.url.toString();
+        print('--- AUDIO HANDLER: Got IP-bound URL (c=ANDROID). Playing via ExoPlayer with Android UA. ---');
+
+        // CRITICAL: The URL has &c=ANDROID&rqh=1 — it was generated with the Android
+        // YouTube client. ExoPlayer MUST send the matching Android YouTube user-agent,
+        // otherwise Google CDN returns 403 on &rqh=1 (required query headers).
+        audioSource = AudioSource.uri(
+          Uri.parse(ytUrl),
+          headers: {
+            'User-Agent': 'com.google.android.youtube/19.09.37 (Linux; U; Android 12) gzip',
+            'X-YouTube-Client-Name': '3',
+            'X-YouTube-Client-Version': '19.09.37',
+          },
+        );
       } else {
-        // For Saavn and all other sources, pass the resolved URL directly.
-        // Saavn CDN does NOT apply IP-locking, so ExoPlayer can fetch bytes directly.
+        // Saavn: pass resolved URL with Saavn Referer header
         audioSource = AudioSource.uri(
           Uri.parse(url),
           headers: {
@@ -255,8 +263,8 @@ class MusicAudioHandler extends BaseAudioHandler
       await _player.setAudioSource(
         audioSource,
         initialPosition: initialPosition,
-        preload: true,
-      ).timeout(const Duration(milliseconds: 12000)); // YouTube StreamAudioSource needs more time
+        preload: false, // Don't block — let ExoPlayer buffer in background
+      ).timeout(const Duration(milliseconds: 8000));
     } catch (e) {
       print('--- AUDIO HANDLER: setAudioSource failed or timed out: $e ---');
       if (_playSessionId == sessionId) {
