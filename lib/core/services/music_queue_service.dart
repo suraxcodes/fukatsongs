@@ -4,6 +4,8 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:fukat_songs/core/audio/audio_handler.dart';
 import 'package:fukat_songs/core/audio/audio_handler_provider.dart';
 import 'package:fukat_songs/models/song.dart';
+import 'package:fukat_songs/providers/music_repository.dart';
+import 'package:fukat_songs/providers/music_repository_provider.dart';
 import '../network/audio_pre_fetch_cache.dart';
 import '../network/client_link_resolver.dart';
 
@@ -11,6 +13,7 @@ part 'music_queue_service.g.dart';
 
 class MusicQueueService {
   final MusicAudioHandler _audioHandler;
+  final MusicRepository _musicRepository;
   final ClientLinkResolver _linkResolver = ClientLinkResolver();
   final AudioPreFetchCache _cache = AudioPreFetchCache();
 
@@ -19,7 +22,9 @@ class MusicQueueService {
   
   MusicQueueService({
     required MusicAudioHandler audioHandler,
-  }) : _audioHandler = audioHandler;
+    required MusicRepository musicRepository,
+  }) : _audioHandler = audioHandler,
+       _musicRepository = musicRepository;
 
   /// Sets up a playlist structure and immediately launches background pre-fetching
   void loadNewPlaylistContext(List<Song> songs) {
@@ -113,11 +118,25 @@ class MusicQueueService {
   /// Internal worker pipeline to resolve and cache the string result
   Future<String> _resolveAndCacheTrack(Song song) async {
     try {
-      // Passes through your client-side decipher engine locally on device IP
-      final String clearStreamingUrl = await _linkResolver.resolveStreamLinkLocally(
-        song.id,
-        source: song.source,
-      );
+      String? clearStreamingUrl;
+      
+      // If it is a YouTube song, use the premium ClientLinkResolver Vercel/Render proxy deciphering bridge!
+      if (song.source == 'youtube') {
+        clearStreamingUrl = await _linkResolver.resolveStreamLinkLocally(
+          song.id,
+          source: song.source,
+        );
+      } 
+      // If it is any other source (like Saavn or Spotify), resolve it directly via the central MusicRepository!
+      else {
+        print('--- MusicQueueService: Resolving non-YouTube track "${song.title}" via MusicRepository ---');
+        clearStreamingUrl = await _musicRepository.getStreamUrl(song);
+      }
+
+      if (clearStreamingUrl == null || clearStreamingUrl.isEmpty) {
+        throw Exception('Failed to resolve streaming URL for track: ${song.title}');
+      }
+
       _cache.insert(song.id, clearStreamingUrl);
       return clearStreamingUrl;
     } catch (e) {
@@ -130,5 +149,9 @@ class MusicQueueService {
 @Riverpod(keepAlive: true)
 MusicQueueService musicQueueService(MusicQueueServiceRef ref) {
   final handler = ref.watch(audioHandlerProvider);
-  return MusicQueueService(audioHandler: handler);
+  final repository = ref.watch(musicRepositoryProvider);
+  return MusicQueueService(
+    audioHandler: handler,
+    musicRepository: repository,
+  );
 }

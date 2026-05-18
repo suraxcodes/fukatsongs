@@ -31,7 +31,7 @@ class ClientLinkResolver {
         final String? encryptedUrl = data['streamUrl']?.toString();
         final List<dynamic>? transformations = data['transformations'] as List<dynamic>?;
 
-        if (encryptedUrl != null && transformations != null) {
+        if (encryptedUrl != null && transformations != null && transformations.isNotEmpty) {
           print('--- ClientLinkResolver: Backend returned transformations. Initiating Isolate Deciphering... ---');
           
           // Execute the deciphering steps locally using the background Isolate

@@ -7,7 +7,7 @@ part of 'playlist_import_notifier.dart';
 // **************************************************************************
 
 String _$playlistImportNotifierHash() =>
-    r'201ced222b78b8ecbe02858cc78518a4864c6d99';
+    r'cfd732ec966f9e07c8e46cf9495cebbb0bba10b2';
 
 /// See also [PlaylistImportNotifier].
 @ProviderFor(PlaylistImportNotifier)

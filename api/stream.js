@@ -69,11 +69,7 @@ async function fetchFromPipedMirrors(videoId) {
             
             return {
               streamUrl: audioStreams[0].url,
-              transformations: [
-                { action: 'swap', param: 2 },
-                { action: 'reverse', param: 0 },
-                { action: 'slice', param: 1 }
-              ]
+              transformations: []
             };
           }
         }
@@ -118,11 +114,7 @@ async function fetchFromPipedMirrors(videoId) {
             
             return {
               streamUrl: audioStreams[0].url,
-              transformations: [
-                { action: 'swap', param: 2 },
-                { action: 'reverse', param: 0 },
-                { action: 'slice', param: 1 }
-              ]
+              transformations: []
             };
           }
         }
