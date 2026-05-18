@@ -115,3 +115,11 @@ api/node_modules/
 api/package-lock.json
 api/*-watch.html
 
+# Rust related
+**/target/
+**/*.rs.bk
+
+# Backup folders (Local only)
+/backup/
+/backup_lib/
+/bloomee_source/

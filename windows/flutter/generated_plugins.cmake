@@ -3,15 +3,21 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  audio_service_win
   connectivity_plus
   firebase_auth
   firebase_core
   firebase_database
+  isar_community_flutter_libs
+  media_kit_libs_windows_audio
+  permission_handler_windows
+  share_plus
   url_launcher_windows
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
   jni
+  rust_lib_Bloomee
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)
