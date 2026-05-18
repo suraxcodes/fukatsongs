@@ -81,6 +81,20 @@ Plans:
 Plans:
 - [ ] TBD (run /gsd-plan-phase 15 to break down)
 
+### Phase 16: Custom Serverless Decryption & Isolate Engine
+
+**Goal:** Implement a secure, self-contained Vercel Node.js streaming proxy with client-side deciphering rules executed in a background Dart Isolate and optimistic pre-fetching to eliminate playback buffering.
+**Requirements**:
+- Create `lib/core/network/audio_pre_fetch_cache.dart` to manage cached streaming URLs.
+- Create `lib/data/repositories/music_queue_service.dart` to pre-fetch URLs in a background queue.
+- Implement background Isolate signature decryption in `lib/core/utils/audio_decipher_isolate.dart` to offload work from UI thread.
+- Establish Vercel serverless function `api/stream.js` using `@distube/ytdl-core` with PoToken and IPv6 rotation.
+**Depends on:** Phase 12, Phase 12.1
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 16 to break down)
+
 ---
 
 ## Success Criteria (Milestone v2.0)

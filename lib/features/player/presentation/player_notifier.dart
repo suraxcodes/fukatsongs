@@ -13,6 +13,7 @@ import 'package:fukat_songs/features/settings/logic/settings_notifier.dart';
 import 'package:fukat_songs/core/repositories/history_repository.dart';
 import 'package:fukat_songs/core/constants/hive_boxes.dart';
 import 'package:fukat_songs/features/player/presentation/player_state.dart';
+import 'package:fukat_songs/core/services/music_queue_service.dart';
 
 class PlayerNotifier extends StateNotifier<PlayerState> {
   final Ref ref;
@@ -177,6 +178,10 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
     final activeQueue = state.isShuffleModeEnabled
         ? _shuffledQueue
         : _originalQueue;
+
+    // Load queue context inside pre-fetch cache to trigger optimistic look-ahead pre-fetching
+    ref.read(musicQueueServiceProvider).loadNewPlaylistContext(activeQueue);
+
     final song = activeQueue[startIndex];
     state = state.copyWith(
       queue: activeQueue,
@@ -413,12 +418,18 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       // Attempt 1: Preferred / Original Provider (JioSaavn or YouTube)
       try {
         print('--- PLAYBACK: Attempt 1 - Trying original source "$actualProvider" (isRetry: $isRetry) ---');
-        url = await repository.getStreamUrl(
-          song,
-          preferredProvider: actualProvider,
-          quality: quality,
-          isRetry: isRetry,
-        );
+        if (actualProvider == 'youtube') {
+          url = await ref.read(musicQueueServiceProvider).getDecipheredUrl(song);
+        }
+
+        if (url == null) {
+          url = await repository.getStreamUrl(
+            song,
+            preferredProvider: actualProvider,
+            quality: quality,
+            isRetry: isRetry,
+          );
+        }
       } catch (e) {
         print('--- PLAYBACK: Original source "$actualProvider" failed: $e ---');
       }
@@ -428,12 +439,16 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         print('--- PLAYBACK: Attempt 2 - Falling back to official YouTube/Piped stream... ---');
         actualProvider = 'youtube';
         try {
-          url = await repository.getStreamUrl(
-            song,
-            preferredProvider: 'youtube',
-            quality: quality,
-            isRetry: isRetry,
-          );
+          url = await ref.read(musicQueueServiceProvider).getDecipheredUrl(song);
+          
+          if (url == null) {
+            url = await repository.getStreamUrl(
+              song,
+              preferredProvider: 'youtube',
+              quality: quality,
+              isRetry: isRetry,
+            );
+          }
         } catch (e) {
           print('--- PLAYBACK: Official YouTube fallback failed: $e ---');
         }
@@ -458,6 +473,9 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       if (url != null) {
         if (_playbackSessionId != sessionId) return;
         await audioHandler.playUrl(url, song, initialPosition: initialPosition);
+
+        // Cascade Look-Ahead: Once current track plays, pre-fetch upcoming tracks
+        ref.read(musicQueueServiceProvider).triggerPreFetchForIndex(state.currentIndex);
       } else {
         throw Exception('No playable stream URL could be fetched across Saavn, YouTube, and Piped');
       }

@@ -16,6 +16,7 @@ import 'package:fukat_songs/features/player/presentation/player_state.dart';
 import 'package:fukat_songs/features/player/presentation/widgets/lyrics_view.dart';
 import 'package:fukat_songs/features/search/presentation/browse_screen.dart';
 import 'package:fukat_songs/features/settings/logic/settings_notifier.dart';
+import 'package:fukat_songs/features/player/presentation/widgets/audio_visualizer.dart';
 
 /// Guard flag — prevents duplicate player sheets from stacking
 bool _isPlayerOpen = false;
@@ -201,6 +202,8 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
                                   ),
                                   const SizedBox(height: 16),
                                   _buildSourceBadge(song),
+                                  const SizedBox(height: 24),
+                                  AudioVisualizer(isPlaying: playerState.isPlaying, barCount: 20, height: 32),
                                 ],
                               ),
                             ),
@@ -365,7 +368,9 @@ class _ImmersivePlayerScreenState extends ConsumerState<ImmersivePlayerScreen>
                                   ),
                                 ),
                               ),
-                              SizedBox(height: 32.h),
+                              SizedBox(height: 24.h),
+                              AudioVisualizer(isPlaying: playerState.isPlaying, barCount: 24, height: 36),
+                              SizedBox(height: 24.h),
                               // Title, Artist & Like row
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.center,

@@ -32,6 +32,11 @@ Last activity: 2026-05-17 -- Phase 15 execution started
 | 10 | Immersive Player | ✅ Completed |
 | 11 | Playlist & Library | ✅ Completed |
 | 12 | Caching & Offline Capabilities | 📝 Planned |
+| 12.1 | Urgent bug fixes UI updates & optimizations | 📝 Planned |
+| 13 | Multi-layered fallback structure | 📝 Planned |
+| 14 | Desktop Windows macOS Support | 📝 Planned |
+| 15 | Desktop support & low-end optimization | ⚡ Active |
+| 16 | Custom Serverless Decryption & Isolate Engine | 📝 Planned |
 
 ---
 
@@ -44,6 +49,7 @@ Last activity: 2026-05-17 -- Phase 15 execution started
 - Phase 14 added: Desktop Windows macOS Support
 - Phase 15 added: Desktop support and low-end mobile performance optimization
 - Phase 12.1 inserted after Phase 12: Urgent bug fixes UI updates and performance optimizations (URGENT)
+- Phase 16 added: Custom Serverless Decryption & Isolate Engine (PoToken / Decryptor Backend & client Isolates / Queue pre-fetching)
 
 ---
 
@@ -68,3 +74,4 @@ Last activity: 2026-05-17 -- Phase 15 execution started
 |------|------|-------------|--------|
 | 2026-05-18 | fix-streaming-fallbacks | Fix YouTube Streaming Failure & JioSaavn Cover Song Matches | ✅ Complete |
 | 2026-05-18 | fix-youtube-user-agent-403 | Fix YouTube 403 Forbidden Asynchronous Playback Errors | ✅ Complete |
+| 2026-05-18 | render-deployment-compatibility | Render.com Deployment Compatibility for YouTube Stream Scraper | ✅ Complete |

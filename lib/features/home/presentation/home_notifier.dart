@@ -7,6 +7,7 @@ import '../../player/presentation/player_notifier.dart';
 import '../../library/logic/playlist_notifier.dart';
 import '../../../core/audio/audio_handler_provider.dart';
 import '../../../core/repositories/history_repository.dart';
+import '../../../core/network/spotify_chart_service.dart';
 
 part 'home_notifier.g.dart';
 
@@ -81,10 +82,18 @@ class HomeNotifier extends _$HomeNotifier {
     List<Song> trendingSongs = [];
     List<Song> sampleSongs = [];
     List<Song> initialFeed = [];
+
+    final spotifyChartService = ref.read(spotifyChartServiceProvider);
     try {
-      trendingSongs = await musicRepo.getTrending();
+      // 37i9dQZEVXbLZ3370vK7gZ is the official "Top 50 - India" playlist ID on Spotify
+      trendingSongs = await spotifyChartService.fetchPlaylistTracks("37i9dQZEVXbLZ3370vK7gZ");
     } catch (e) {
-      debugPrint('Failed to fetch trending: $e');
+      debugPrint('Failed to fetch Spotify trending: $e');
+      try {
+        trendingSongs = await musicRepo.getTrending();
+      } catch (err) {
+        debugPrint('Failed to fetch backup JioSaavn trending: $err');
+      }
     }
 
     try {

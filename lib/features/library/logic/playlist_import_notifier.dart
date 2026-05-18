@@ -7,6 +7,7 @@ import 'package:fukat_songs/models/song.dart';
 import 'package:fukat_songs/providers/music_repository_provider.dart';
 import 'package:fukat_songs/features/library/logic/song_download_notifier.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:fukat_songs/core/services/music_queue_service.dart';
 
 part 'playlist_import_notifier.g.dart';
 
@@ -184,8 +185,9 @@ class PlaylistImportNotifier extends _$PlaylistImportNotifier {
             failedSongs: List.from(missed),
           );
         }
+      if (found.isNotEmpty) {
+        ref.read(musicQueueServiceProvider).loadNewPlaylistContext(found);
       }
-
       state = state.copyWith(status: ImportStatus.completed);
     } catch (e) {
       if (!_shouldStop) {
@@ -302,8 +304,9 @@ class PlaylistImportNotifier extends _$PlaylistImportNotifier {
             failedSongs: List.from(missed),
           );
         }
+      if (found.isNotEmpty) {
+        ref.read(musicQueueServiceProvider).loadNewPlaylistContext(found);
       }
-
       state = state.copyWith(status: ImportStatus.completed);
     } catch (e) {
       if (!_shouldStop) {
