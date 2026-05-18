@@ -40,8 +40,9 @@ async function fetchFromPipedMirrors(videoId) {
       throw new Error('No valid API endpoints found in Piped instances registry.');
     }
     
-    // Shuffle and pick top 4 mirrors to race concurrently
-    const shuffled = apiUrls.sort(() => 0.5 - Math.random());
+    // Merge live apiUrls with our vetted hardcoded list to ensure a healthy racing pool
+    const combinedMirrors = Array.from(new Set([...apiUrls, ...PIPED_MIRRORS]));
+    const shuffled = combinedMirrors.sort(() => 0.5 - Math.random());
     const selected = shuffled.slice(0, 4);
     
     console.log(`--- Racing live Piped mirrors: ${selected.join(', ')} ---`);

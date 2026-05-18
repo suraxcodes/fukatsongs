@@ -44,11 +44,8 @@ class ClientLinkResolver {
       }
       throw Exception('Invalid response or missing payload from Vercel scraper proxy.');
     } catch (e) {
-      print('--- ClientLinkResolver: Vercel Proxy Resolution failed ($e). Falling back to direct Piped/Saavn Racing. ---');
-      
-      // Fallback: If Vercel is offline/misconfigured, resolve dynamically via fukatSongs music repository
-      // This ensures 100% playback continuity even under worst-case server conditions.
-      return _fallbackRepositoryResolution(trackId);
+      print('--- ClientLinkResolver: Vercel Proxy Resolution failed ($e). Rethrowing to trigger repository fallback... ---');
+      rethrow;
     }
   }
 
@@ -58,12 +55,5 @@ class ClientLinkResolver {
       encryptedUrl: encryptedUrl,
       transformations: transformations,
     );
-  }
-
-  Future<String> _fallbackRepositoryResolution(String trackId) async {
-    // In fukatSongs, the repository already implements premium Piped racing fallbacks
-    // We will leverage this dynamic self-healing layer in worst-case scenarios.
-    // For inline safety, return a direct signature-agnostic piped proxy format
-    return 'https://pipedapi.kavin.rocks/playback/video?video_id=$trackId';
   }
 }

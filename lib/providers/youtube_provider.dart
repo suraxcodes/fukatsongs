@@ -76,9 +76,12 @@ class YouTubeProvider implements MusicProvider {
           }
         }
         
-        if (newMirrors.isNotEmpty) {
+        if (newMirrors.isNotEmpty && newMirrors.length >= 4) {
           _pipedMirrors = newMirrors;
           print('--- YouTube Provider: Dynamic Piped mirrors refreshed: ${_pipedMirrors.length} mirrors ---');
+        } else if (newMirrors.isNotEmpty) {
+          _pipedMirrors = {..._pipedMirrors, ...newMirrors}.toList();
+          print('--- YouTube Provider: Registry returned small pool. Merged to active pool: ${_pipedMirrors.length} mirrors ---');
         }
       }
     } catch (e) {

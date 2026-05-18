@@ -122,10 +122,15 @@ class MusicQueueService {
       
       // If it is a YouTube song, use the premium ClientLinkResolver Vercel/Render proxy deciphering bridge!
       if (song.source == 'youtube') {
-        clearStreamingUrl = await _linkResolver.resolveStreamLinkLocally(
-          song.id,
-          source: song.source,
-        );
+        try {
+          clearStreamingUrl = await _linkResolver.resolveStreamLinkLocally(
+            song.id,
+            source: song.source,
+          );
+        } catch (e) {
+          print('--- MusicQueueService: Premium ClientLinkResolver failed ($e). Falling back to central MusicRepository resolution... ---');
+          clearStreamingUrl = await _musicRepository.getStreamUrl(song);
+        }
       } 
       // If it is any other source (like Saavn or Spotify), resolve it directly via the central MusicRepository!
       else {
