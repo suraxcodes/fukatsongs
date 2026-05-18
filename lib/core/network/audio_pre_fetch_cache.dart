@@ -31,6 +31,11 @@ class AudioPreFetchCache {
 
   Future<String>? getActiveResolution(String trackId) => _activeResolutions[trackId];
 
+  void clearTrack(String trackId) {
+    _urlCache.remove(trackId);
+    _activeResolutions.remove(trackId);
+  }
+
   void clearAllCache() {
     _urlCache.clear();
     _activeResolutions.clear();

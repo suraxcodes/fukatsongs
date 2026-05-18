@@ -418,11 +418,15 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
       // Attempt 1: Preferred / Original Provider (JioSaavn or YouTube)
       try {
         print('--- PLAYBACK: Attempt 1 - Trying original source "$actualProvider" (isRetry: $isRetry) ---');
-        if (actualProvider == 'youtube') {
-          url = await ref.read(musicQueueServiceProvider).getDecipheredUrl(song);
+        if (actualProvider == 'youtube' || actualProvider == 'youtube_fan') {
+          // For YouTube, we don't pre-resolve the URL here.
+          // audio_handler.playUrl will detect song.source == 'youtube' and use
+          // YouTubeAudioSource, which fetches bytes through youtube_explode_dart's
+          // own authenticated HTTP client — bypassing ExoPlayer's 403-prone DefaultHttpDataSource.
+          url = 'youtube_stream_placeholder'; // non-null signals "go ahead and play"
         }
 
-        if (url == null) {
+        if (url == null || url == '') {
           url = await repository.getStreamUrl(
             song,
             preferredProvider: actualProvider,
@@ -439,16 +443,8 @@ class PlayerNotifier extends StateNotifier<PlayerState> {
         print('--- PLAYBACK: Attempt 2 - Falling back to official YouTube/Piped stream... ---');
         actualProvider = 'youtube';
         try {
-          url = await ref.read(musicQueueServiceProvider).getDecipheredUrl(song);
-          
-          if (url == null) {
-            url = await repository.getStreamUrl(
-              song,
-              preferredProvider: 'youtube',
-              quality: quality,
-              isRetry: isRetry,
-            );
-          }
+          // Again, let the audio handler's YouTubeAudioSource resolve it.
+          url = 'youtube_stream_placeholder';
         } catch (e) {
           print('--- PLAYBACK: Official YouTube fallback failed: $e ---');
         }

@@ -217,24 +217,46 @@ class MusicAudioHandler extends BaseAudioHandler
       playbackState.value.copyWith(processingState: AudioProcessingState.loading),
     );
 
-    // YouTube URLs are IP/UA signed. Passing a generic desktop UA header to ExoPlayer 
-    // for a YouTube Google Video CDN link will often cause immediate connection reset or 403.
-    // JioSaavn, however, strictly requires custom headers.
-    final Map<String, String>? headers = song.source == 'saavn'
-        ? {
+    try {
+      // Determine the YouTube video ID if we need YouTubeAudioSource:
+      // - song.source == 'youtube'/'youtube_fan': use providers[source] or song.id
+      // - url == 'youtube_stream_placeholder': Saavn song falling back to YouTube
+      String? youtubeVideoId;
+      if (song.source == 'youtube' || song.source == 'youtube_fan') {
+        youtubeVideoId = song.providers[song.source] ?? song.id;
+      } else if (url == 'youtube_stream_placeholder') {
+        // Saavn song that fell back to YouTube — grab the video ID from providers
+        youtubeVideoId = song.providers['youtube'] ?? song.providers['youtube_fan'];
+      }
+
+      AudioSource audioSource;
+      if (youtubeVideoId != null) {
+        // 🔑 KEY FIX: For YouTube, we MUST NOT feed the raw googlevideo.com URL directly
+        // to ExoPlayer's DefaultHttpDataSource — Google CDN will 403 it because ExoPlayer
+        // doesn't carry YouTube's internal token headers.
+        //
+        // YouTubeAudioSource (StreamAudioSource) proxies all byte-fetching through
+        // youtube_explode_dart's own HTTP client, which carries the correct headers.
+        // This is 100% immune to the IP-lock / 403 problem.
+        print('--- AUDIO HANDLER: Using YouTubeAudioSource proxy for videoId: $youtubeVideoId ---');
+        audioSource = YouTubeAudioSource(youtubeVideoId, _yt);
+      } else {
+        // For Saavn and all other sources, pass the resolved URL directly.
+        // Saavn CDN does NOT apply IP-locking, so ExoPlayer can fetch bytes directly.
+        audioSource = AudioSource.uri(
+          Uri.parse(url),
+          headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
             'Referer': 'https://www.jiosaavn.com/',
-          }
-        : {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          };
+          },
+        );
+      }
 
-    try {
       await _player.setAudioSource(
-        AudioSource.uri(Uri.parse(url), headers: headers),
+        audioSource,
         initialPosition: initialPosition,
         preload: true,
-      ).timeout(const Duration(milliseconds: 7500));
+      ).timeout(const Duration(milliseconds: 12000)); // YouTube StreamAudioSource needs more time
     } catch (e) {
       print('--- AUDIO HANDLER: setAudioSource failed or timed out: $e ---');
       if (_playSessionId == sessionId) {
