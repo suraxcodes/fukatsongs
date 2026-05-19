@@ -28,7 +28,7 @@ Future<void> setupAudioSession() async {
         AVAudioSessionRouteSharingPolicy.defaultPolicy,
     avAudioSessionSetActiveOptions: AVAudioSessionSetActiveOptions.none,
     // Android
-    androidAudioAttributes: AndroidAudioAttributes(
+    androidAudioAttributes: const AndroidAudioAttributes(
       contentType: AndroidAudioContentType.music,
       usage: AndroidAudioUsage.media,
     ),

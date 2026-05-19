@@ -351,7 +351,7 @@ class _UrlInputView extends StatelessWidget {
               Switch(
                 value: downloadOnComplete,
                 onChanged: onDownloadOnCompleteChanged,
-                activeColor: Default_Theme.accentColor2,
+                activeThumbColor: Default_Theme.accentColor2,
                 activeTrackColor: Default_Theme.accentColor2.withValues(alpha: 0.3),
                 inactiveThumbColor: Default_Theme.primaryColor2,
                 inactiveTrackColor: Default_Theme.primaryColor1.withValues(alpha: 0.1),

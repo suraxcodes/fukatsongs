@@ -66,6 +66,34 @@ import 'package:fukatsongs/screens/widgets/plugin_bootstrap_overlay.dart';
 import 'package:fukatsongs/services/onboarding_service.dart';
 import 'package:fukatsongs/services/plugin_bootstrap_service.dart';
 import 'package:fukatsongs/services/shared_url_resolver_service.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:fukatsongs/screens/widgets/dynamic_island_overlay.dart';
+import 'package:fukatsongs/services/dynamic_island_service.dart';
+
+// Top-level function for flutter_overlay_window
+@pragma("vm:entry-point")
+void overlayMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(
+    MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: DynamicIslandOverlay(
+          onPlayPause: () {
+            FlutterOverlayWindow.shareData("play_pause");
+          },
+          onNext: () {
+            FlutterOverlayWindow.shareData("next");
+          },
+          onPrevious: () {
+            FlutterOverlayWindow.shareData("previous");
+          },
+        ),
+      ),
+    ),
+  );
+}
 
 void processIncomingIntent(SharedMedia sharedMedia) {
   if (sharedMedia.content != null && isUrl(sharedMedia.content!)) {
@@ -150,6 +178,7 @@ Future<void> setupPlayerCubit() async {
   await setupAudioSession();
   final player = await PlayerInitializer().getBloomeeMusicPlayer();
   bloomeePlayerCubit = BloomeePlayerCubit(player);
+  DynamicIslandService.initListener(player);
 }
 
 Future<void> main() async {

@@ -800,7 +800,9 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     if (fromPlaylist.isClosed ||
         isOffline.isClosed ||
         loopMode.isClosed ||
-        isResolving.isClosed) return false;
+        isResolving.isClosed) {
+      return false;
+    }
     try {
       final _ = engine.state;
       return true;
@@ -820,11 +822,13 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       _savedPositionForRevive = engine.position;
     } catch (_) {}
 
-    if (fromPlaylist.isClosed)
+    if (fromPlaylist.isClosed) {
       fromPlaylist = BehaviorSubject<bool>.seeded(false);
+    }
     if (isOffline.isClosed) isOffline = BehaviorSubject<bool>.seeded(false);
-    if (loopMode.isClosed)
+    if (loopMode.isClosed) {
       loopMode = BehaviorSubject<LoopMode>.seeded(LoopMode.off);
+    }
     if (isResolving.isClosed) isResolving = BehaviorSubject<bool>.seeded(false);
 
     _shouldResumeAfterInterruption = false;

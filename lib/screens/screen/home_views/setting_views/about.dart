@@ -221,7 +221,7 @@ class About extends StatelessWidget {
                       tooltip: l10n.aboutSendInquiry,
                       onTap: () {
                         launchUrl(
-                          Uri.parse('https://x.com/iamhemantindia'),
+                          Uri.parse(''),
                           mode: LaunchMode.externalApplication,
                         );
                       }),
@@ -232,7 +232,7 @@ class About extends StatelessWidget {
                       tooltip: l10n.aboutCreativeHighlights,
                       onTap: () {
                         launchUrl(
-                            Uri.parse('https://linkedin.com/in/iamhemantindia'),
+                            Uri.parse(''),
                             mode: LaunchMode.externalApplication);
                       }),
                 ],

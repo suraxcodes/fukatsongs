@@ -58,7 +58,7 @@ class PluginBootstrapProgress {
 
 class PluginBootstrapService {
   static const String hostedRepositoriesUrl =
-      'https://github.com/suraxcodes/fukatsongs';
+      'https://raw.githubusercontent.com/suraxcodes/fukatsongs/master/repositories.json';
 
   static const int maxRetries = 3;
 

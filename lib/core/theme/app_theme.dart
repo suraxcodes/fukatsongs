@@ -41,7 +41,6 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       scaffoldBackgroundColor: themeColor,
-      dialogBackgroundColor: themeColor,
       primaryColorDark: accentColor2,
       fontFamily: 'Gilroy',
       primarySwatch: MaterialColor(
@@ -116,7 +115,7 @@ class AppTheme {
       cardTheme: const CardThemeData(
         color: themeColor,
         surfaceTintColor: Colors.transparent,
-      ),
+      ), dialogTheme: DialogThemeData(backgroundColor: themeColor),
     );
   }
 }

@@ -1638,7 +1638,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Keine Importer-Plugins geladen.\nInstalliere ein Plugin, um Playlists externer Dienste zu importieren.';
 
   @override
-  String get importFukatMusicFiles => 'FukatMusic-Dateien importieren';
+  String get importBloomeeFiles => 'FukatMusic-Dateien importieren';
 
   @override
   String get importM3UFiles => 'M3U-Playlist importieren';

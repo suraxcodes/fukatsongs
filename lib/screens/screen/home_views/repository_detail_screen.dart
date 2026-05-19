@@ -320,7 +320,7 @@ class _RepositoryDetailScreenState extends State<RepositoryDetailScreen> {
                         const SizedBox(width: 6),
                         Tooltip(
                             message: l10n.pluginRepositoryOutdatedManifest,
-                            child: Icon(Icons.warning_amber_rounded,
+                            child: const Icon(Icons.warning_amber_rounded,
                                 color: Colors.orange, size: 16)),
                       ]
                     ],

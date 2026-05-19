@@ -15,7 +15,7 @@ class _LruEntry {
 
 class _LruMap {
   final int capacity;
-  final _map = LinkedHashMap<String, _LruEntry>();
+  final _map = <String, _LruEntry>{};
 
   _LruMap(this.capacity);
 

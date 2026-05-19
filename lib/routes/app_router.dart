@@ -9,7 +9,6 @@ import 'package:fukatsongs/screens/screen/library_views/import_media_view.dart';
 import 'package:fukatsongs/screens/screen/library_views/import_process_screen.dart';
 import 'package:fukatsongs/screens/screen/library_views/playlist_screen.dart';
 import 'package:fukatsongs/screens/screen/offline_screen.dart';
-import 'package:fukatsongs/screens/screen/local_music_screen.dart';
 import 'package:fukatsongs/screens/screen/search_screen.dart';
 import 'package:fukatsongs/screens/screen/chart/chart_view.dart';
 import 'package:fukatsongs/screens/screen/gatekeeper_screen.dart';

@@ -501,7 +501,7 @@ class _VersionCardState extends State<VersionCard> {
         : const SizedBox.shrink();
 
     // New badges: CURRENT and UPDATE (if applicable)
-    Widget _badge(String text, Color bg, Color textColor) => Container(
+    Widget badge(String text, Color bg, Color textColor) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         margin: const EdgeInsets.only(left: 6),
         decoration: BoxDecoration(
@@ -517,10 +517,10 @@ class _VersionCardState extends State<VersionCard> {
                 letterSpacing: 0.3)));
 
     final currentBadge = showCurrentBadge
-        ? _badge('CURRENT', Colors.blueAccent.shade700, Colors.white)
+        ? badge('CURRENT', Colors.blueAccent.shade700, Colors.white)
         : const SizedBox.shrink();
     final updateBadge = showUpdateBadge
-        ? _badge('UPDATE', Colors.deepOrangeAccent.shade200, Colors.white)
+        ? badge('UPDATE', Colors.deepOrangeAccent.shade200, Colors.white)
         : const SizedBox.shrink();
 
     return Container(

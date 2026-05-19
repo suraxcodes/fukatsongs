@@ -92,7 +92,7 @@ class ImportExportService {
         );
       }
 
-      Artwork thumbnail = Artwork(url: '', layout: ImageLayout.square);
+      Artwork thumbnail = const Artwork(url: '', layout: ImageLayout.square);
       if (m['thumbnail'] is Map) {
         final t = m['thumbnail'] as Map;
         thumbnail = Artwork(

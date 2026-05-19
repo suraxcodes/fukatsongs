@@ -87,6 +87,7 @@ dependencies:
   flutter_rust_bridge: 2.12.0
   freezed_annotation: ^3.1.0
   async: ^2.12.0
+  flutter_overlay_window: ^0.5.0
 
   
 
@@ -187,13 +188,5 @@ flutter:
     - family: Fjalla
       fonts:
         - asset: assets/fonts/Fjalla/FjallaOne-Regular.ttf
-    - family: FontAwesome-Brands
-      fonts:
-        - asset: assets/fonts/fontawesome-free-6.4.0-desktop/otfs/Font Awesome 6 Brands-Regular-400.otf
-    - family: FontAwesome-Regular
-      fonts:
-        - asset: assets/fonts/fontawesome-free-6.4.0-desktop/otfs/Font Awesome 6 Free-Regular-400.otf
-    - family: FontAwesome-Solids
-      fonts:
-        - asset: assets/fonts/fontawesome-free-6.4.0-desktop/otfs/Font Awesome 6 Free-Solid-900.otf
+
 

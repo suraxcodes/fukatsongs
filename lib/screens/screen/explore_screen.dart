@@ -30,6 +30,7 @@ import 'chart/carousal_widget.dart';
 import '../widgets/horizontal_card_view.dart';
 import '../widgets/tab_list_widget.dart';
 import 'package:badges/badges.dart' as badges;
+import 'package:fukatsongs/services/dynamic_island_service.dart';
 
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
@@ -477,6 +478,7 @@ class CustomDiscoverBar extends StatelessWidget {
           const NotificationIcon(),
           const SiteIcon(),
           const TimerIcon(),
+          const IslandIcon(),
           const SettingsIcon(),
         ],
       ),
@@ -568,6 +570,26 @@ class TimerIcon extends StatelessWidget {
       },
       icon: const Icon(
         MingCute.stopwatch_line,
+        color: Default_Theme.primaryColor1,
+        size: 30.0,
+      ),
+    );
+  }
+}
+
+class IslandIcon extends StatelessWidget {
+  const IslandIcon({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      padding: const EdgeInsets.all(5),
+      constraints: const BoxConstraints(),
+      onPressed: () {
+        DynamicIslandService.showDynamicIsland();
+      },
+      icon: const Icon(
+        Icons.desktop_windows, // test icon
         color: Default_Theme.primaryColor1,
         size: 30.0,
       ),

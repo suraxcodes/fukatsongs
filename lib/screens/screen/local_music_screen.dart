@@ -276,7 +276,7 @@ class _LocalMusicScreenState extends State<LocalMusicScreen> {
           child: Row(
             children: [
               Text(
-                '${AppLocalizations.of(context)!.localMusicTrackCount(displayedTracks.length)}',
+                AppLocalizations.of(context)!.localMusicTrackCount(displayedTracks.length),
                 style: TextStyle(
                     color: Default_Theme.primaryColor2.withValues(alpha: 0.6),
                     fontSize: 13),

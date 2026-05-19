@@ -57,7 +57,7 @@ bool isUpdateAvailable(
 
 Future<Map<String, dynamic>> githubUpdate(
     {Duration timeout = const Duration(seconds: 6)}) async {
-  final url =
+  const url =
       'https://api.github.com/repos/suraxcodes/fukatsongs/releases/latest';
   PackageInfo packageInfo = await PackageInfo.fromPlatform();
   try {
