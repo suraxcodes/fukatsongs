@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
 enum IslandState { compact, expanded, dismissed }
@@ -26,9 +27,10 @@ class _DynamicIslandOverlayState extends State<DynamicIslandOverlay>
   
   final ValueNotifier<IslandState> _state = ValueNotifier(IslandState.compact);
   
-  String _title = "Unknown Track";
+  String _title = "No Music";
   String _artist = "Unknown Artist";
   String _coverUrl = "";
+  bool _isPlaying = false;
 
   @override
   void initState() {
@@ -39,7 +41,17 @@ class _DynamicIslandOverlayState extends State<DynamicIslandOverlay>
           _title = event['title'] ?? _title;
           _artist = event['artist'] ?? _artist;
           _coverUrl = event['cover'] ?? _coverUrl;
+          if (event.containsKey('isPlaying')) {
+            _isPlaying = event['isPlaying'];
+          }
         });
+      } else if (event == "show_island") {
+        if (_state.value == IslandState.dismissed) {
+          _state.value = IslandState.compact;
+          try {
+            FlutterOverlayWindow.updateFlag(OverlayFlag.defaultFlag);
+          } catch (_) {}
+        }
       }
     });
   }
@@ -73,8 +85,13 @@ class _DynamicIslandOverlayState extends State<DynamicIslandOverlay>
                 }
               },
               onLongPress: () async {
-                // Just close the native window, don't change state so it doesn't get stuck if reopened
-                await FlutterOverlayWindow.closeOverlay();
+                // To avoid the freeze bug on Android and the "goes to the side" OS behavior,
+                // we don't close or resize the window. We just hide the UI and tell Android 
+                // to let all touches pass through the transparent window.
+                _state.value = IslandState.dismissed;
+                try {
+                  await FlutterOverlayWindow.updateFlag(OverlayFlag.clickThrough);
+                } catch (_) {}
               },
               onTap: () {
                 if (_state.value == IslandState.expanded) {
@@ -217,7 +234,14 @@ class _DynamicIslandOverlayState extends State<DynamicIslandOverlay>
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 IconButton(icon: const Icon(Icons.skip_previous, color: Colors.white), onPressed: widget.onPrevious),
-                IconButton(icon: const Icon(Icons.pause_circle_filled, color: Colors.white, size: 40), onPressed: widget.onPlayPause),
+                IconButton(
+                  icon: Icon(
+                    _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled, 
+                    color: Colors.white, 
+                    size: 40
+                  ), 
+                  onPressed: widget.onPlayPause
+                ),
                 IconButton(icon: const Icon(Icons.skip_next, color: Colors.white), onPressed: widget.onNext),
               ],
             )

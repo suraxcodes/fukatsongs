@@ -15,6 +15,8 @@ class DynamicIslandService {
         player.skipToNext();
       } else if (event == "previous") {
         player.skipToPrevious();
+      } else if (event == "close_island") {
+        closeDynamicIsland();
       }
     });
 
@@ -25,6 +27,7 @@ class DynamicIslandService {
         "title": item.title,
         "artist": item.artist ?? "Unknown",
         "cover": item.artUri?.toString() ?? "",
+        "isPlaying": player.playbackState.value.playing,
       });
     }
 
@@ -35,8 +38,16 @@ class DynamicIslandService {
           "title": item.title,
           "artist": item.artist ?? "Unknown",
           "cover": item.artUri?.toString() ?? "",
+          "isPlaying": player.playbackState.value.playing,
         });
       }
+    });
+
+    // Listen to playback state changes to update the play/pause icon
+    player.playbackState.listen((state) {
+      FlutterOverlayWindow.shareData({
+        "isPlaying": state.playing,
+      });
     });
   }
 
@@ -48,6 +59,13 @@ class DynamicIslandService {
       
       if (isGranted) {
         print("Attempting to show overlay...");
+        final isActive = await FlutterOverlayWindow.isActive();
+        if (isActive) {
+          print("Overlay is already active. Broadcasting show_island...");
+          FlutterOverlayWindow.shareData("show_island");
+          return;
+        }
+
         await FlutterOverlayWindow.showOverlay(
           enableDrag: true,
           flag: OverlayFlag.defaultFlag,
@@ -68,6 +86,11 @@ class DynamicIslandService {
   }
 
   static Future<void> closeDynamicIsland() async {
-    await FlutterOverlayWindow.closeOverlay();
+    try {
+      final isActive = await FlutterOverlayWindow.isActive();
+      if (isActive) {
+        await FlutterOverlayWindow.closeOverlay();
+      }
+    } catch (_) {}
   }
 }

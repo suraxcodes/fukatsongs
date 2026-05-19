@@ -27,7 +27,7 @@ MediaItem trackToMediaItem(Track track) {
     album: track.album?.title ?? '',
     // audio_service_win C++ crashes on null album (std::get<std::string> on null variant).
     artist: artistStr,
-    artUri: _safeArtUri(track.thumbnail.url),
+    artUri: _safeArtUri(track.thumbnail.urlHigh ?? track.thumbnail.url),
     duration: track.durationMs != null
         ? Duration(milliseconds: track.durationMs!.toInt())
         : null,

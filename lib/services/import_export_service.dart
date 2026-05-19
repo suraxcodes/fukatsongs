@@ -231,15 +231,7 @@ class ImportExportService {
 
       final String baseName = playlistMap['playlistName'] ?? 'Imported';
 
-      // Deduplicate playlist name.
-      String playlistName = baseName;
-      int i = 1;
-      while (await isPlaylistExists(playlistName)) {
-        playlistName = '${baseName}_$i';
-        i++;
-      }
-
-      final playlistId = await _playlistDao.ensurePlaylist(playlistName);
+      final playlistId = await _playlistDao.ensurePlaylist(baseName);
       final items = (playlistMap[isV2 ? 'tracks' : 'mediaItems'] as List);
       final tracks = <Track>[];
 
@@ -250,9 +242,16 @@ class ImportExportService {
         }
       }
 
-      await _playlistDao.addTracksToPlaylist(playlistId, tracks);
+      final existingTracks = await _playlistDao.getPlaylistTracks(playlistId);
+      final existingTrackIds = existingTracks.map((t) => t.mediaId).toSet();
 
-      log("Playlist imported successfully");
+      final newTracks = tracks.where((t) => !existingTrackIds.contains(t.id)).toList();
+
+      if (newTracks.isNotEmpty) {
+        await _playlistDao.addTracksToPlaylist(playlistId, newTracks);
+      }
+
+      log("Playlist imported successfully. Added ${newTracks.length} new songs.");
       return true;
     } catch (e) {
       log("Invalid file format: $e");
