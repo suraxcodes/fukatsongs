@@ -100,6 +100,10 @@ class _DynamicIslandOverlayState extends State<DynamicIslandOverlay>
                   _state.value = IslandState.compact;
                 } else if (_state.value == IslandState.compact) {
                   _state.value = IslandState.expanded;
+                  // Ensure overlay accepts clicks when expanded so controls render and work
+                  try {
+                    FlutterOverlayWindow.updateFlag(OverlayFlag.defaultFlag);
+                  } catch (_) {}
                 }
               },
               child: AnimatedContainer(
