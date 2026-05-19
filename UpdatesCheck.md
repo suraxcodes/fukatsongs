@@ -24,7 +24,7 @@ git checkout -b sandbox-update-merge
 
 bash
 git add .
-git commit -m &quot;chore: successfully synced upstream core fixes while preserving custom layout&quot;
+git commit -m "chore: successfully synced upstream core fixes while preserving custom layout""
 git checkout main
 git merge sandbox-update-merge
 git push origin main

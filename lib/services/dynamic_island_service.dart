@@ -4,20 +4,31 @@ import 'dart:developer';
 
 class DynamicIslandService {
   static void initListener(BloomeeMusicPlayer player) {
+    try {
+      print('DynamicIslandService: initListener called');
+    } catch (_) {}
+
     FlutterOverlayWindow.overlayListener.listen((event) {
-      if (event == "play_pause") {
-        if (player.playbackState.value.playing) {
-          player.pause();
-        } else {
-          player.play();
-        }
-      } else if (event == "next") {
-        player.skipToNext();
-      } else if (event == "previous") {
-        player.skipToPrevious();
-      } else if (event == "close_island") {
-        closeDynamicIsland();
+      // Debug log to verify overlay events arrive in the main app process
+      try {
+        log('DynamicIslandService: overlay event received -> $event');
+      } catch (_) {}
+      // Also print so the `flutter run` terminal shows it directly
+      try {
+        print('DynamicIslandService: overlay event received -> $event');
+      } catch (_) {}
+
+      // Normalize event: overlay may send a String or a Map payload
+      dynamic evt = event;
+      if (event is Map && event.containsKey('action')) {
+        evt = event['action'];
       }
+
+      try {
+        print('DynamicIslandService: normalized evt -> $evt');
+      } catch (_) {}
+
+      _processEvt(evt, player);
     });
 
     // Send the currently playing song immediately (if any) so the Island doesn't start as 'Unknown'
@@ -56,7 +67,7 @@ class DynamicIslandService {
       print("Checking overlay permission...");
       bool isGranted = await FlutterOverlayWindow.isPermissionGranted();
       print("Permission granted: $isGranted");
-      
+
       if (isGranted) {
         print("Attempting to show overlay...");
         final isActive = await FlutterOverlayWindow.isActive();
@@ -69,12 +80,18 @@ class DynamicIslandService {
         await FlutterOverlayWindow.showOverlay(
           enableDrag: true,
           flag: OverlayFlag.defaultFlag,
-          alignment: OverlayAlignment.center, // Kept center to avoid MIUI Notch Crash
+          // Keep alignment centered so island appears in the center of the screen
+          alignment: OverlayAlignment.center,
           visibility: NotificationVisibility.visibilityPublic,
           positionGravity: PositionGravity.auto,
-          height: 250,
-          width: WindowSize.matchParent, 
+          // Use default height so we don't increase overlay size
+          height: 400,
+          width: WindowSize.matchParent,
         );
+        // Ensure native overlay window accepts clicks so taps reach the widget
+        try {
+          await FlutterOverlayWindow.updateFlag(OverlayFlag.defaultFlag);
+        } catch (_) {}
         print("Overlay showed successfully.");
       } else {
         print("Requesting permission...");
@@ -84,6 +101,30 @@ class DynamicIslandService {
       print("Error showing overlay: $e");
     }
   }
+
+  static void _processEvt(dynamic evt, BloomeeMusicPlayer player) {
+    try {
+      if (evt == "play_pause") {
+        if (player.playbackState.value.playing) {
+          player.pause();
+        } else {
+          player.play();
+        }
+      } else if (evt == "next") {
+        player.skipToNext();
+      } else if (evt == "previous") {
+        player.skipToPrevious();
+      } else if (evt == "close_island") {
+        closeDynamicIsland();
+      }
+    } catch (e) {
+      try {
+        print('DynamicIslandService: _processEvt error: $e');
+      } catch (_) {}
+    }
+  }
+
+  // No file-poller in production.
 
   static Future<void> closeDynamicIsland() async {
     try {
