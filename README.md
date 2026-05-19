@@ -9,8 +9,9 @@ fukatSongs is a feature-rich, entirely local, ad-free personal Android music str
 ## 🚀 Features
 
 ### 🎧 Core Playback & Audio Engine
-*   **Dual-Source Streaming Architecture:** Parallel querying and streaming from JioSaavn and YouTube Music APIs, maximizing song availability.
-*   **Multi-Tunnel Fallback System:** A resilient proxy rotation and fallback mechanism designed to seamlessly bypass aggressive rate-limiting or geographic blocks from YouTube.
+*   **System-Level Dynamic Island:** A globally persistent, interactive "Dynamic Island" overlay that stays on your screen even when you exit the app. Features include real-time metadata syncing, animated wavebars, tap-to-expand UI, swipe-to-skip gestures, and long-press to dismiss.
+*   **Extensible Plugin Architecture:** A robust `PluginService` and `CrossPluginResolver` system that allows effortless addition of new streaming sources. The app currently queries and streams from JioSaavn and YouTube Music APIs in parallel, seamlessly falling back to alternative sources if one fails.
+*   **Multi-Tunnel Proxy Rotation:** A resilient proxy rotation mechanism designed to seamlessly bypass aggressive rate-limiting or geographic blocks from remote servers.
 *   **"Infinite Music" (Smart Autoplay):** Radio-like infinite playback. When the queue ends, the application intelligently searches for and appends top tracks from the most recently played artist.
 *   **Reorderable Queue Management:** Full drag-and-drop support within the immersive player's "Up Next" section, allowing users to effortlessly curate their active listening session.
 *   **High-Fidelity Audio:** Configurable streaming and download quality modes, intelligently adapting to network conditions (e.g., automatically starting at 160kbps on mobile data to prevent stuttering).
@@ -32,7 +33,8 @@ fukatSongs is a feature-rich, entirely local, ad-free personal Android music str
 *   **Storage Management:** Built-in utility dashboard to monitor disk usage and manually clear specific caches or downloaded files.
 *   **Sleep Timer:** Set a customized countdown timer to automatically fade out and stop playback when falling asleep.
 *   **Intelligent Queue Shuffling:** Maintains absolute state synchronization between `originalQueue` and `shuffledQueue`, allowing users to toggle shuffle without destructively modifying their original playlist order.
-*   **Background Playback & Integrations:** Full Android background execution support via `audio_service`, featuring lock-screen controls, media session management, and responsive push notifications.
+*   **Background Playback & Lockscreen:** Full Android background execution support via `audio_service`, featuring lock-screen controls, media session management, and responsive push notifications.
+*   **Developer Sandbox:** Built-in isolated testing environments (like `ProviderTestScreen`) to rapidly prototype and test new raw stream URLs without risking the stability of the core app pipeline.
 
 ---
 
