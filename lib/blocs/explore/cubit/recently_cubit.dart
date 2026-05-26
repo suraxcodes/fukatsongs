@@ -6,7 +6,15 @@ import 'package:fukatsongs/services/db/dao/history_dao.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 part 'recently_state.dart';
-
+// Database changes
+//        ↓
+// watchHistory() detects change
+//        ↓
+// _fetchHistory()
+//        ↓
+// emit(new state)
+//        ↓
+// UI rebuilds
 /// Cubit for recently played items on the Explore screen.
 ///
 /// Uses [HistoryDAO.getHistory] to fetch the latest played tracks.

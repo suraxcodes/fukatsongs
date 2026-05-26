@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:fukatsongs/plugins/ui/dynamic_island_visualizer.dart';
+import 'package:fukatsongs/utils/load_image.dart';
 
 enum IslandState { compact, expanded, dismissed }
 
@@ -47,12 +49,25 @@ class _DynamicIslandOverlayState extends State<DynamicIslandOverlay>
           }
         });
       } else if (event == "show_island") {
+        // Show the island (bring back from dismissed). Keep compact by default.
         if (_state.value == IslandState.dismissed) {
           _state.value = IslandState.compact;
           try {
             FlutterOverlayWindow.updateFlag(OverlayFlag.defaultFlag);
           } catch (_) {}
         }
+      } else if (event == "expand_island" || event == "expand") {
+        // External request to expand the island (e.g. system maximize)
+        _state.value = IslandState.expanded;
+        try {
+          FlutterOverlayWindow.updateFlag(OverlayFlag.defaultFlag);
+        } catch (_) {}
+      } else if (event == "dismiss_island" || event == "hide_island") {
+        // External request to dismiss/hide the island
+        _state.value = IslandState.dismissed;
+        try {
+          FlutterOverlayWindow.updateFlag(OverlayFlag.clickThrough);
+        } catch (_) {}
       }
     });
   }
@@ -109,7 +124,7 @@ class _DynamicIslandOverlayState extends State<DynamicIslandOverlay>
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 600),
                 curve: Curves.fastOutSlowIn,
-                height: isExpanded ? 200.0 : 48.0,
+                height: isExpanded ? 300.0 : 48.0,
                 width: isExpanded
                     ? MediaQuery.of(context).size.width * 0.9
                     : 180.0,
@@ -127,7 +142,7 @@ class _DynamicIslandOverlayState extends State<DynamicIslandOverlay>
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(isExpanded ? 32.0 : 20.0),
                   child: SizedBox(
-                    height: isExpanded ? 200.0 : 48.0,
+                    height: isExpanded ? 300.0 : 48.0,
                     width: isExpanded
                         ? MediaQuery.of(context).size.width * 0.9
                         : 180.0,
@@ -159,10 +174,12 @@ class _DynamicIslandOverlayState extends State<DynamicIslandOverlay>
               height: 24,
               color: Colors.grey[800],
               child: _coverUrl.isNotEmpty
-                  ? Image.network(_coverUrl,
+                  ? LoadImageCached(
+                      imageUrl: _coverUrl,
+                      width: 24,
+                      height: 24,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(Icons.music_note,
-                          size: 12, color: Colors.white))
+                    )
                   : const Icon(Icons.music_note, size: 12, color: Colors.white),
             ),
           ),
@@ -193,7 +210,16 @@ class _DynamicIslandOverlayState extends State<DynamicIslandOverlay>
           const SizedBox(width: 8),
           Row(
             mainAxisSize: MainAxisSize.min,
-            children: List.generate(4, (index) => _buildWaveBar()),
+            children: [
+              DynamicIslandVisualizer(
+                barCount: 4,
+                barWidth: 3.0,
+                maxHeight: 16.0,
+                color: Colors.greenAccent,
+                isPlaying: _isPlaying,
+                spacing: 3.0,
+              ),
+            ],
           ),
           const SizedBox(width: 12),
         ],
@@ -230,11 +256,12 @@ class _DynamicIslandOverlayState extends State<DynamicIslandOverlay>
                     height: 60,
                     color: Colors.grey[800],
                     child: _coverUrl.isNotEmpty
-                        ? Image.network(_coverUrl,
+                        ? LoadImageCached(
+                            imageUrl: _coverUrl,
+                            width: 60,
+                            height: 60,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(
-                                Icons.music_note,
-                                color: Colors.white))
+                          )
                         : const Icon(Icons.music_note, color: Colors.white),
                   ),
                 ),

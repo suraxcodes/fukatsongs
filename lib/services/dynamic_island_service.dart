@@ -72,7 +72,7 @@ class DynamicIslandService {
               OverlayAlignment.center, // Kept center to avoid MIUI Notch Crash
           visibility: NotificationVisibility.visibilityPublic,
           positionGravity: PositionGravity.auto,
-          height: 250,
+          height: 450,
           width: WindowSize.matchParent,
         );
         print("Overlay showed successfully.");

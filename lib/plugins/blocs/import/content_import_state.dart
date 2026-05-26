@@ -91,6 +91,10 @@ class ContentImportState extends Equatable {
   final List<ImportTrackEntry> tracks;
   final int resolvedCount;
   final int failedCount;
+  final int savingTotal;
+  final int savingImported;
+  final int savingSkipped;
+  final int savingFailed;
   final String? error;
 
   const ContentImportState({
@@ -101,6 +105,10 @@ class ContentImportState extends Equatable {
     this.tracks = const [],
     this.resolvedCount = 0,
     this.failedCount = 0,
+    this.savingTotal = 0,
+    this.savingImported = 0,
+    this.savingSkipped = 0,
+    this.savingFailed = 0,
     this.error,
   });
 
@@ -112,6 +120,10 @@ class ContentImportState extends Equatable {
     List<ImportTrackEntry>? tracks,
     int? resolvedCount,
     int? failedCount,
+    int? savingTotal,
+    int? savingImported,
+    int? savingSkipped,
+    int? savingFailed,
     String? error,
     bool clearError = false,
   }) {
@@ -123,6 +135,10 @@ class ContentImportState extends Equatable {
       tracks: tracks ?? this.tracks,
       resolvedCount: resolvedCount ?? this.resolvedCount,
       failedCount: failedCount ?? this.failedCount,
+      savingTotal: savingTotal ?? this.savingTotal,
+      savingImported: savingImported ?? this.savingImported,
+      savingSkipped: savingSkipped ?? this.savingSkipped,
+      savingFailed: savingFailed ?? this.savingFailed,
       error: clearError ? null : (error ?? this.error),
     );
   }
@@ -138,6 +154,10 @@ class ContentImportState extends Equatable {
         tracks,
         resolvedCount,
         failedCount,
+        savingTotal,
+        savingImported,
+        savingSkipped,
+        savingFailed,
         error,
       ];
 }

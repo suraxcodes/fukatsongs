@@ -163,9 +163,23 @@ class _LoadImageCachedState extends State<LoadImageCached> {
   /// Compute memCacheWidth based on explicit width + device pixel ratio
   /// for efficient memory usage while maintaining sharpness.
   int? get _memCacheWidth {
-    if (widget.width == null) return 250; // reduced from 500
+    if (widget.width == null) {
+      // When no explicit width is provided, request a reasonably high
+      // decoded width so large artwork views remain sharp on high-DPR
+      // displays while avoiding excessive memory usage.
+      return 1000;
+    }
     final dpr = MediaQuery.of(context).devicePixelRatio;
-    return (widget.width! * dpr).ceil().clamp(50, 500); // reduced max from 1500 to 500
+    // Allow larger decoded sizes (up to 3000px) for very large artwork
+    // while still capping to avoid OOM on low-memory devices.
+    return (widget.width! * dpr).ceil().clamp(100, 3000);
+  }
+
+  /// Compute memCacheHeight from explicit height when available.
+  int? get _memCacheHeight {
+    if (widget.height == null) return null;
+    final dpr = MediaQuery.of(context).devicePixelRatio;
+    return (widget.height! * dpr).ceil().clamp(100, 3000);
   }
 
   @override
@@ -236,6 +250,7 @@ class _LoadImageCachedState extends State<LoadImageCached> {
       width: widget.width,
       height: widget.height,
       memCacheWidth: _memCacheWidth,
+      memCacheHeight: _memCacheHeight,
       placeholder: (context, url) => _lazyLoadingPlaceholder(widget.fit),
       errorWidget: (context, url, error) {
         _failedImageUrls.add(url);
@@ -261,6 +276,7 @@ class _LoadImageCachedState extends State<LoadImageCached> {
           width: widget.width,
           height: widget.height,
           memCacheWidth: _memCacheWidth,
+          memCacheHeight: _memCacheHeight,
           placeholder: (context, url) => _lazyLoadingPlaceholder(widget.fit),
           errorWidget: (context, url, error) {
             _failedImageUrls.add(url);

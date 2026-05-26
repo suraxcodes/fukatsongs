@@ -3,6 +3,12 @@ import 'dart:developer';
 import 'dart:convert';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:dio/dio.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+
+import 'package:fukatsongs/services/spotify_api_service.dart';
+import 'package:fukatsongs/services/playlist_pagination_fetcher.dart';
+import 'package:fukatsongs/services/playlist_save_service.dart';
 
 import 'package:fukatsongs/services/meta_resolver/cross_plugin_resolver.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -26,6 +32,9 @@ class ContentImportCubit extends Cubit<ContentImportState> {
   final PluginService _pluginService;
   final CrossPluginResolver _resolver;
   final PlaylistDAO _playlistDao;
+  final SpotifyApiService? _spotifyService;
+  final PlaylistPaginationFetcher _paginationFetcher;
+  final PlaylistSaveService _playlistSaveService;
 
   bool _cancelRequested = false;
 
@@ -33,12 +42,23 @@ class ContentImportCubit extends Cubit<ContentImportState> {
     PluginService? pluginService,
     CrossPluginResolver? resolver,
     PlaylistDAO? playlistDao,
+    SpotifyApiService? spotifyService,
+    PlaylistPaginationFetcher? paginationFetcher,
+    PlaylistSaveService? playlistSaveService,
   })  : _pluginService = pluginService ?? ServiceLocator.pluginService,
         _resolver = resolver ??
             CrossPluginResolver(
               pluginService: pluginService ?? ServiceLocator.pluginService,
             ),
         _playlistDao = playlistDao ?? _defaultPlaylistDao(),
+        _spotifyService = spotifyService,
+        _paginationFetcher = paginationFetcher ??
+            PlaylistPaginationFetcher(
+                spotify: spotifyService ??
+                    SpotifyApiService(clientId: '<YOUR_SPOTIFY_CLIENT_ID>')),
+        _playlistSaveService = playlistSaveService ??
+            PlaylistSaveService(
+                playlistDao: playlistDao ?? _defaultPlaylistDao()),
         super(const ContentImportState());
 
   static PlaylistDAO _defaultPlaylistDao() {
@@ -154,6 +174,12 @@ class ContentImportCubit extends Cubit<ContentImportState> {
         final entries = response.field0
             .map((t) => ImportTrackEntry(sourceTrack: t))
             .toList();
+        log('Fetched ${entries.length} tracks from provider for url=$url',
+            name: 'ContentImportCubit');
+        if (state.collectionInfo != null) {
+          log('Provider reports total ${state.collectionInfo!.trackCount} tracks',
+              name: 'ContentImportCubit');
+        }
         emit(state.copyWith(
           tracks: List.unmodifiable(entries),
           phase: ImportPhase.resolving,
@@ -348,21 +374,75 @@ class ContentImportCubit extends Cubit<ContentImportState> {
         await _playlistDao.updatePlaylistThumbnail(playlistId, thumbUrl);
       }
 
-      var savedCount = 0;
-      for (final entry in state.tracks) {
-        final track = entry.effectiveTrack;
-        if (track != null) {
-          await _playlistDao.addTrackToPlaylist(playlistId, track);
-          savedCount++;
+      final entries = state.tracks;
+      final totalToSave = entries.where((e) => e.effectiveTrack != null).length;
+      int importedSoFar = 0;
+      int userSkipped = entries.where((e) => e.isSkipped).length;
+      int duplicatesSkipped = 0;
+
+      // Progress resume file (temporary) to allow resuming interrupted imports.
+      final tempDir = await getTemporaryDirectory();
+      final safeName = playlistName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
+      final progressFile =
+          File('${tempDir.path}/import_progress_${safeName}.json');
+
+      int resumeIndex = 0;
+      if (await progressFile.exists()) {
+        try {
+          final content = await progressFile.readAsString();
+          final map = jsonDecode(content) as Map<String, dynamic>;
+          if (map['nextIndex'] is int) resumeIndex = map['nextIndex'] as int;
+          log('Resuming import from index $resumeIndex for "$playlistName"',
+              name: 'ContentImportCubit');
+        } catch (_) {
+          // ignore and start from 0
         }
       }
 
-      log('Saved $savedCount tracks to "$playlistName".',
+      // Build list of tracks to save (preserve order), then process in batches.
+      final tracksToSave = entries
+          .where((e) => e.effectiveTrack != null)
+          .map((e) => e.effectiveTrack!)
+          .toList(growable: false);
+
+      // Update initial progress state
+      emit(state.copyWith(
+        savingTotal: totalToSave,
+        savingImported: importedSoFar,
+        savingSkipped: userSkipped,
+        savingFailed: 0,
+      ));
+
+      // Delegate to PlaylistSaveService which handles batching and resume.
+      final result = await _playlistSaveService.saveDomainTracks(
+        playlistId,
+        playlistName,
+        tracksToSave,
+        onProgress: (imported, total, skipped) {
+          emit(state.copyWith(
+            savingImported: imported,
+            savingTotal: total,
+            savingSkipped: userSkipped + skipped,
+          ));
+        },
+      );
+
+      importedSoFar = result['imported'] ?? importedSoFar;
+      duplicatesSkipped = result['skipped'] ?? duplicatesSkipped;
+
+      // Completed — remove progress file
+      try {
+        if (await progressFile.exists()) await progressFile.delete();
+      } catch (_) {}
+
+      log('Saved $importedSoFar tracks to "$playlistName"; duplicatesSkipped=$duplicatesSkipped, userSkipped=$userSkipped',
           name: 'ContentImportCubit');
 
       emit(state.copyWith(
         phase: ImportPhase.done,
-        resolvedCount: savedCount,
+        resolvedCount: importedSoFar,
+        savingImported: importedSoFar,
+        savingSkipped: userSkipped + duplicatesSkipped,
       ));
     } catch (e) {
       log('saveToLibrary failed: $e', name: 'ContentImportCubit');
@@ -419,6 +499,9 @@ class ContentImportCubit extends Cubit<ContentImportState> {
         trackCount: videos.length,
       );
 
+      log('YouTube playlist ${playlist.title} reports ${videos.length} videos',
+          name: 'ContentImportCubit');
+
       final tracks = videos.map((video) {
         return ImportTrackItem(
           title: video.title,
@@ -456,69 +539,31 @@ class ContentImportCubit extends Cubit<ContentImportState> {
       final regExp = RegExp(r'playlist/([a-zA-Z0-9]{15,})');
       final match = regExp.firstMatch(url);
       if (match == null) throw Exception('Invalid Spotify Playlist URL');
-      final playlistId = match.group(1);
+      final playlistId = match.group(1)!;
 
-      final embedUrl = 'https://open.spotify.com/embed/playlist/$playlistId';
-      final dio = Dio();
-      final response = await dio.get(
-        embedUrl,
-        options: Options(headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-        }),
-      );
+      if (_paginationFetcher == null)
+        throw Exception('Pagination fetcher not configured for Spotify.');
 
-      final html = response.data.toString();
-      final dataRegExp = RegExp(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>');
-      final dataMatch = dataRegExp.firstMatch(html);
-      
-      Map<String, dynamic> entity;
-      if (dataMatch != null) {
-        final jsonData = jsonDecode(dataMatch.group(1)!);
-        entity = jsonData['props']?['pageProps']?['state']?['data']?['entity'] ??
-                 jsonData['props']?['pageProps']?['entity'] ??
-                 jsonData['props']?['entity'] ??
-                 {};
-      } else {
-        throw Exception('Could not parse Spotify data. Ensure the playlist is public.');
-      }
-
-      final playlistName = entity['title'] ?? entity['name'] ?? 'Spotify Import';
-      final List items = entity['trackList'] ?? entity['items'] ?? [];
-
-      if (items.isEmpty) {
+      final items =
+          await _paginationFetcher.fetchSpotifyPlaylistById(playlistId);
+      if (items.isEmpty)
         throw Exception('No tracks found in this Spotify playlist.');
-      }
 
       final summary = ImportCollectionSummary(
-        title: playlistName,
+        title: 'Spotify Playlist',
         kind: ImportCollectionType.playlist,
         trackCount: items.length,
       );
-
-      final tracks = items.map((track) {
-        final title = track['title'] ?? track['name'] as String? ?? 'Unknown Title';
-        String artist = 'Unknown Artist';
-        if (track['subtitle'] != null) {
-          artist = track['subtitle'].toString();
-        } else if (track['artists'] != null && track['artists'] is List && (track['artists'] as List).isNotEmpty) {
-          artist = track['artists'][0]['name'].toString();
-        }
-        
-        return ImportTrackItem(
-          title: title,
-          artists: [artist],
-          isExplicit: false,
-        );
-      }).toList();
 
       emit(state.copyWith(
         phase: ImportPhase.resolving,
         collectionInfo: summary,
         tracks: List.unmodifiable(
-          tracks.map((t) => ImportTrackEntry(sourceTrack: t)).toList(),
+          items.map((t) => ImportTrackEntry(sourceTrack: t)).toList(),
         ),
         clearError: true,
       ));
+
       await _resolveTracks();
     } catch (e) {
       log('_importFromSpotifyDirect failed: $e', name: 'ContentImportCubit');

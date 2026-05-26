@@ -242,16 +242,14 @@ class ImportExportService {
         }
       }
 
-      final existingTracks = await _playlistDao.getPlaylistTracks(playlistId);
-      final existingTrackIds = existingTracks.map((t) => t.mediaId).toSet();
+      // Delegate deduplication and upserts to PlaylistDAO/TrackDAO so the
+      // database's unique `mediaId` index is the single source of truth.
+      final beforeCount = await _playlistDao.getPlaylistTrackCount(playlistId);
+      await _playlistDao.addTracksToPlaylist(playlistId, tracks);
+      final afterCount = await _playlistDao.getPlaylistTrackCount(playlistId);
+      final added = (afterCount - beforeCount).clamp(0, tracks.length);
 
-      final newTracks = tracks.where((t) => !existingTrackIds.contains(t.id)).toList();
-
-      if (newTracks.isNotEmpty) {
-        await _playlistDao.addTracksToPlaylist(playlistId, newTracks);
-      }
-
-      log("Playlist imported successfully. Added ${newTracks.length} new songs.");
+      log("Playlist imported successfully. Added $added new songs.");
       return true;
     } catch (e) {
       log("Invalid file format: $e");
