@@ -102,8 +102,8 @@ class DynamicIslandVisualizerState extends State<DynamicIslandVisualizer>
     final eased = v * v * (3 - 2 * v);
 
     // Clamp to a subtle range so bars never get huge.
-    final min = 0.08; // idle low height fraction
-    final max = 0.92; // max relative
+    const min = 0.08; // idle low height fraction
+    const max = 0.92; // max relative
     final h = min + (max - min) * eased;
     return h * widget.maxHeight;
   }

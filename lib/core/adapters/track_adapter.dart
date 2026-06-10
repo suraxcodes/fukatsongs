@@ -5,6 +5,7 @@
 ///
 /// All conversions funnel through this file. No other code should construct
 /// MediaItem or MediaItemModel directly.
+//translator between your app's music data and Android's music notification system.
 library track_adapter;
 
 import 'dart:io';

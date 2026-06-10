@@ -1,9 +1,6 @@
 import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
-import 'package:fukatsongs/core/constants/setting_keys.dart';
-import 'package:fukatsongs/services/db/db_provider.dart';
-import 'package:fukatsongs/services/db/dao/settings_dao.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -105,12 +102,49 @@ Future<Map<String, dynamic>> githubUpdate(
 
 /// New public API: try GitHub first, then SourceForge; return a consistent map.
 Future<Map<String, dynamic>> getAppUpdates() async {
-  // Update check disabled as requested by the user.
-  // They will handle updates manually by publishing to their GitHub.
-  return {
-    'results': false,
-    'source': 'none',
-  };
+  try {
+    return await githubUpdate();
+  } catch (_) {
+    return {
+      'results': false,
+      'source': 'none',
+    };
+  }
+}
+
+/// Utility for the developer to check for official BloomeeTunes updates.
+Future<Map<String, dynamic>> getUpstreamUpdates() async {
+  const url =
+      'https://api.github.com/repos/HemantKArya/BloomeeTunes/releases/latest';
+  PackageInfo packageInfo = await PackageInfo.fromPlatform();
+  try {
+    final response =
+        await http.get(Uri.parse(url)).timeout(const Duration(seconds: 6));
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> data = json.decode(response.body);
+      final tag = (data['tag_name'] as String?) ?? '';
+      final tagParts = tag.split('+');
+      final versionPart =
+          tagParts.isNotEmpty ? tagParts[0].replaceFirst('v', '') : '';
+      final buildPart = tagParts.length > 1 ? tagParts[1] : '';
+
+      return {
+        'source': 'upstream',
+        'newVer': versionPart,
+        'newBuild': buildPart,
+        'results': isUpdateAvailable(
+          packageInfo.version,
+          packageInfo.buildNumber,
+          versionPart.isNotEmpty ? versionPart : '0.0.0',
+          buildPart.isNotEmpty ? buildPart : '0',
+          checkBuild: true,
+        ),
+      };
+    }
+    return {'results': false};
+  } catch (_) {
+    return {'results': false};
+  }
 }
 
 /// Fetch the project's CHANGELOG.md from the hosted GitHub Pages site.

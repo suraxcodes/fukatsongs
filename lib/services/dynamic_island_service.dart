@@ -1,6 +1,5 @@
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:fukatsongs/services/bloomee_player.dart';
-import 'dart:developer';
 import 'dart:async';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';

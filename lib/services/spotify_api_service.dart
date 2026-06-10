@@ -65,8 +65,9 @@ class SpotifyApiService {
     await req.response.close();
     await server.close(force: true);
 
-    if (code == null)
+    if (code == null) {
       throw Exception('Authorization code missing from redirect.');
+    }
 
     // Exchange code for tokens
     final tokenResp = await _dio.post(

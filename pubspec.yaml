@@ -22,6 +22,8 @@ dependencies:
   icons_plus: ^5.0.0
   cached_network_image: ^3.4.1 # library that used to cache network images, used for caching album arts and artist images
   flutter_bloc: ^9.1.1 # state management library, used for managing the state of the app and handling events like loading songs, playing songs, etc.
+  flutter_riverpod: ^2.5.1 # state management
+  hive_flutter: ^1.1.0 # local storage
   bloc: ^9.0.0
   dart_des: ^1.0.2
   http: ^1.5.0
@@ -99,9 +101,9 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^2.0.3
 
-  isar_community_generator: 
+  isar_community_generator:
     version: ^3.3.0-dev.3
-    
+
   build_runner: ^2.7.1
   flutter_launcher_icons: ^0.14.4
   integration_test:

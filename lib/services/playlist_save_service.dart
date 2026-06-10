@@ -82,11 +82,12 @@ class PlaylistSaveService {
 
   Track _toTrack(ImportTrackItem it) {
     // Use sourceId if present, otherwise stable hash of title+artists to form media id.
-    final id = (it.sourceId != null && it.sourceId!.trim().isNotEmpty)
+    final rawId = (it.sourceId != null && it.sourceId!.trim().isNotEmpty)
         ? it.sourceId!
         : md5
             .convert(utf8.encode('${it.title}|${it.artists.join(',')}'))
             .toString();
+    final id = rawId.contains('::') ? rawId : 'unresolved::$rawId';
 
     final artists = it.artists.map((a) {
       final aid = md5.convert(utf8.encode(a)).toString();

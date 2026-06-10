@@ -115,7 +115,8 @@ class AppTheme {
       cardTheme: const CardThemeData(
         color: themeColor,
         surfaceTintColor: Colors.transparent,
-      ), dialogTheme: DialogThemeData(backgroundColor: themeColor),
+      ),
+      dialogTheme: const DialogThemeData(backgroundColor: themeColor),
     );
   }
 }

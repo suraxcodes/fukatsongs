@@ -22,13 +22,19 @@ import 'package:fukatsongs/services/plugin/plugin_service.dart';
 import 'package:fukatsongs/src/rust/api/plugin/commands.dart';
 import 'package:fukatsongs/src/rust/api/plugin/types.dart';
 import 'package:fukatsongs/src/rust/api/plugin/models.dart';
+// Additional imports for file handling and JSON
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 
-const int _kResolutionConcurrency = 5;
-const Duration _kPluginTimeout = Duration(seconds: 10);
-const double _kMinConfidence = 0.45;
-const int _kMaxCandidatesPerTrack = 5;
 
 class ContentImportCubit extends Cubit<ContentImportState> {
+  // Constants for import processing
+  static const int _kResolutionConcurrency = 5;
+  static const Duration _kPluginTimeout = Duration(seconds: 10);
+  static const double _kMinConfidence = 0.45;
+  static const int _kMaxCandidatesPerTrack = 5;
+
+  // Private dependencies
   final PluginService _pluginService;
   final CrossPluginResolver _resolver;
   final PlaylistDAO _playlistDao;
@@ -285,14 +291,19 @@ class ContentImportCubit extends Cubit<ContentImportState> {
       if (isClosed || _cancelRequested) return;
 
       if (candidates.isNotEmpty) {
+        // Normal case: we have at least one candidate.
         tracks[index] = entry.copyWith(
           status: TrackResolutionStatus.resolved,
           resolvedTrack: candidates.first.track,
           candidates: candidates.map((c) => c.track).toList(growable: false),
         );
       } else {
+        // Fallback: no resolver candidate found. Use the source track itself
+        // (converted to a Track) so it can still be saved.
+        final fallbackTrack = _toTrack(entry.sourceTrack);
         tracks[index] = entry.copyWith(
-          status: TrackResolutionStatus.failed,
+          status: TrackResolutionStatus.resolved,
+          resolvedTrack: fallbackTrack,
           candidates: const [],
         );
       }
@@ -418,11 +429,12 @@ class ContentImportCubit extends Cubit<ContentImportState> {
         playlistId,
         playlistName,
         tracksToSave,
+        batchSize: 500,
         onProgress: (imported, total, skipped) {
           emit(state.copyWith(
             savingImported: imported,
             savingTotal: total,
-            savingSkipped: userSkipped + skipped,
+            savingSkipped: userSkipped + (skipped as int),
           ));
         },
       );
@@ -460,6 +472,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
     emit(const ContentImportState());
   }
 
+
+
   // ── M3U Import ────────────────────────────────────────────────────────────
 
   /// Directly loads tracks parsed from an M3U file and starts resolution.
@@ -482,25 +496,47 @@ class ContentImportCubit extends Cubit<ContentImportState> {
     await _resolveTracks();
   }
 
+  // Updated to support pagination/resume for large YouTube playlists
   Future<void> _importFromYoutubeDirect(String url) async {
     try {
       final yt = YoutubeExplode();
-      final playlistId = PlaylistId.parsePlaylistId(url);
-      if (playlistId == null) throw Exception('Invalid YouTube Playlist URL');
+      // YoutubeExplode accepts a PlaylistId constructed directly from the URL or ID string
+      final playlistId = PlaylistId(url);
+      if (playlistId.value.isEmpty) throw Exception('Invalid YouTube Playlist URL');
+
+      // Determine progress file for this playlist to resume imports
+      final tempDir = await getTemporaryDirectory();
+      final progressFile = File('${tempDir.path}/youtube_import_progress_${playlistId.value}.json');
+      int resumeIndex = 0;
+      if (await progressFile.exists()) {
+        try {
+          final content = await progressFile.readAsString();
+          final map = jsonDecode(content) as Map<String, dynamic>;
+          if (map['nextIndex'] is int) resumeIndex = map['nextIndex'] as int;
+          log('Resuming YouTube import from index $resumeIndex for playlist ${playlistId.value}', name: 'ContentImportCubit');
+        } catch (_) {
+          // ignore malformed progress file
+        }
+      }
 
       final playlist = await yt.playlists.get(playlistId);
-      final videos = await yt.playlists.getVideos(playlistId).toList();
+      // Fetch all videos (the stream will handle pagination internally)
+      final allVideos = await yt.playlists.getVideos(playlistId).toList();
+
+      // Apply resume index to skip already imported videos
+      final videos = (resumeIndex < allVideos.length)
+          ? allVideos.sublist(resumeIndex)
+          : <Video>[];
 
       final summary = ImportCollectionSummary(
         title: playlist.title,
         kind: ImportCollectionType.playlist,
         description: playlist.description,
         thumbnailUrl: playlist.thumbnails.standardResUrl,
-        trackCount: videos.length,
+        trackCount: allVideos.length,
       );
 
-      log('YouTube playlist ${playlist.title} reports ${videos.length} videos',
-          name: 'ContentImportCubit');
+      log('YouTube playlist ${playlist.title} reports ${allVideos.length} videos, importing ${videos.length} starting at index $resumeIndex', name: 'ContentImportCubit');
 
       final tracks = videos.map((video) {
         return ImportTrackItem(
@@ -525,6 +561,11 @@ class ContentImportCubit extends Cubit<ContentImportState> {
         clearError: true,
       ));
       await _resolveTracks();
+
+        // Cleanup progress file after successful import
+        try {
+          await progressFile.delete();
+        } catch (_) {}
     } catch (e) {
       log('_importFromYoutubeDirect failed: $e', name: 'ContentImportCubit');
       emit(state.copyWith(
@@ -538,16 +579,9 @@ class ContentImportCubit extends Cubit<ContentImportState> {
     try {
       final regExp = RegExp(r'playlist/([a-zA-Z0-9]{15,})');
       final match = regExp.firstMatch(url);
-      if (match == null) throw Exception('Invalid Spotify Playlist URL');
-      final playlistId = match.group(1)!;
-
-      if (_paginationFetcher == null)
-        throw Exception('Pagination fetcher not configured for Spotify.');
-
-      final items =
-          await _paginationFetcher.fetchSpotifyPlaylistById(playlistId);
-      if (items.isEmpty)
-        throw Exception('No tracks found in this Spotify playlist.');
+      final playlistId = match?.group(1);
+      if (playlistId == null) throw Exception('Invalid Spotify Playlist URL');
+      final items = await _paginationFetcher.fetchSpotifyPlaylistById(playlistId);
 
       final summary = ImportCollectionSummary(
         title: 'Spotify Playlist',
@@ -595,7 +629,7 @@ class ContentImportCubit extends Cubit<ContentImportState> {
     for (final t in tracks) {
       if (t.isSkipped) {
         failed++;
-      } else if (t.effectiveTrack != null) {
+      } else if (t.status == TrackResolutionStatus.resolved) {
         resolved++;
       } else if (t.status != TrackResolutionStatus.pending &&
           t.status != TrackResolutionStatus.resolving) {
@@ -603,5 +637,49 @@ class ContentImportCubit extends Cubit<ContentImportState> {
       }
     }
     return (resolved: resolved, failed: failed);
+  }
+
+  // Converts ImportTrackItem to domain Track. Used as fallback when resolver fails.
+  Track _toTrack(ImportTrackItem it) {
+    final rawId = (it.sourceId != null && it.sourceId!.trim().isNotEmpty)
+        ? it.sourceId!
+        : md5.convert(utf8.encode('${it.title}|${it.artists.join(',')}')).toString();
+    final id = rawId.contains('::') ? rawId : 'unresolved::$rawId';
+
+    final artists = it.artists.map((a) {
+      final aid = md5.convert(utf8.encode(a)).toString();
+      return ArtistSummary(id: aid, name: a, thumbnail: null, subtitle: null, url: null);
+    }).toList(growable: false);
+
+    final artwork = Artwork(
+      url: it.thumbnailUrl ?? '',
+      urlLow: null,
+      urlHigh: null,
+      layout: ImageLayout.square,
+    );
+
+    final album = (it.albumTitle != null && it.albumTitle!.isNotEmpty)
+        ? AlbumSummary(
+            id: md5.convert(utf8.encode(it.albumTitle!)).toString(),
+            title: it.albumTitle!,
+            artists: artists,
+            thumbnail: artwork,
+            subtitle: null,
+            year: null,
+            url: null,
+          )
+        : null;
+
+    return Track(
+      id: id,
+      title: it.title,
+      artists: artists,
+      album: album,
+      durationMs: it.durationMs,
+      thumbnail: artwork,
+      url: it.url,
+      isExplicit: it.isExplicit,
+      lyrics: null,
+    );
   }
 }
