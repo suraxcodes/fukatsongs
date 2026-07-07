@@ -1,3 +1,5 @@
+// this files main purpose is to manage the state of the downloader, which includes tracking active downloads, downloaded songs, and handling download events from the Rust service. It also interacts with the database to persist completed downloads and provides methods to initiate, pause, resume, and cancel downloads. The cubit listens to changes in the library to refresh the downloaded songs list accordingly.ENGINE
+
 import 'dart:async';
 import 'dart:developer';
 import 'dart:io';

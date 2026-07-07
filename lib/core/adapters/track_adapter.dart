@@ -5,6 +5,7 @@
 ///
 /// All conversions funnel through this file. No other code should construct
 /// MediaItem or MediaItemModel directly.
+//translator between your app's music data and Android's music notification system.
 library track_adapter;
 
 import 'dart:io';
@@ -27,7 +28,7 @@ MediaItem trackToMediaItem(Track track) {
     album: track.album?.title ?? '',
     // audio_service_win C++ crashes on null album (std::get<std::string> on null variant).
     artist: artistStr,
-    artUri: _safeArtUri(track.thumbnail.url),
+    artUri: _safeArtUri(track.thumbnail.urlHigh ?? track.thumbnail.url),
     duration: track.durationMs != null
         ? Duration(milliseconds: track.durationMs!.toInt())
         : null,

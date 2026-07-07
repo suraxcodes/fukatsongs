@@ -1,3 +1,5 @@
+//this file propose is toowhat happend in UI ,loading state, error state and loaded state of downloader
+
 // lib/blocs/downloader/downloader_state.dart
 
 part of 'downloader_cubit.dart';

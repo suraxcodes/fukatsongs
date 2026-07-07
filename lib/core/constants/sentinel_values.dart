@@ -2,6 +2,8 @@
 ///
 /// These replace the legacy [mediaItemModelNull] sentinel that depended
 /// on [MediaItemModel]. All player code should use [trackNull] instead.
+// This file replaces the old, complicated null-handling system.
+// Now you just use `trackNull` everywhere instead of `MediaItemModel()` or `Track(id: 'Null', ...)`.
 library sentinel_values;
 
 import 'package:fukatsongs/core/models/exported.dart';
@@ -11,8 +13,8 @@ import 'package:fukatsongs/core/models/exported.dart';
 const Track trackNull = Track(
   id: 'Null',
   title: 'Null',
-  artists: const [],
-  thumbnail: const Artwork(url: '', layout: ImageLayout.square),
+  artists: [],
+  thumbnail: Artwork(url: '', layout: ImageLayout.square),
   isExplicit: false,
 );
 

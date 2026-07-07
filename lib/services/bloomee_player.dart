@@ -22,6 +22,7 @@ import 'package:fukatsongs/services/player/recently_played_tracker.dart';
 import 'package:fukatsongs/services/plugin/plugin_service.dart';
 import 'package:fukatsongs/services/meta_resolver/smart_track_replacement_service.dart';
 import 'package:fukatsongs/services/discord_service.dart';
+import 'package:fukatsongs/services/dynamic_island_service.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:async/async.dart';
@@ -558,6 +559,9 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     await engine.stop();
     await _deactivateAudioSession();
     DiscordService.clearPresence();
+    try {
+      await DynamicIslandService.closeDynamicIsland();
+    } catch (_) {}
     await super.stop();
   }
 
@@ -1122,17 +1126,16 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   Future<void> onTaskRemoved() async {
     // Always persist queue before the OS kills us — this is our last chance.
     await _queueManager.persistQueueState();
-    // Keep playing in background — only stop if nothing is active.
-    if (!engine.playing) {
-      await stop();
-      await _cleanup();
-    }
+    // Immediate stop and cleanup when swiped from recents
+    await stop();
+    await _cleanup();
     return super.onTaskRemoved();
   }
 
   @override
   Future<void> onNotificationDeleted() async {
     await stop();
+    await _cleanup();
     return super.onNotificationDeleted();
   }
 

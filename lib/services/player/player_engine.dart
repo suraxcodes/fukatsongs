@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:developer';
 
 import 'package:media_kit/media_kit.dart';
@@ -309,6 +309,17 @@ class PlayerEngine {
     _stateSubject.add(EngineState.loading);
   }
 
+  void syncState() {
+    if (_disposed) return;
+    final p = _active;
+    _playingSubject.add(p.state.playing);
+    _positionSubject.add(p.state.position);
+    _durationSubject.add(p.state.duration);
+    _bufferedSubject.add(p.state.buffer);
+    if (!_isTransitioning) _volumeSubject.add((p.state.volume / 100.0).clamp(0.0, 1.0));
+    _deriveState();
+  }
+
   Future<EngineResult> openDirect(Uri uri,
       {Map<String, String>? httpHeaders, bool autoPlay = true}) async {
     if (_disposed) return EngineFailure('Engine disposed');
@@ -561,11 +572,13 @@ class PlayerEngine {
 
   Future<void> play() async {
     if (_disposed) return;
+    _playingSubject.add(true);
     await _active.play();
   }
 
   Future<void> pause() async {
     if (_disposed) return;
+    _playingSubject.add(false);
     await _active.pause();
   }
 
