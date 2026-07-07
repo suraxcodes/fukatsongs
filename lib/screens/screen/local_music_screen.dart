@@ -283,17 +283,17 @@ class _LocalMusicScreenState extends State<LocalMusicScreen> {
               ),
               const Spacer(),
               if (displayedTracks.isNotEmpty) ...[
-                _ActionChipButton(
-                  icon: MingCute.shuffle_line,
-                  label: AppLocalizations.of(context)!.localMusicShuffle,
-                  onTap: () => context
-                      .read<BloomeePlayerCubit>()
-                      .bloomeePlayer
-                      .loadPlaylist(
-                        Playlist(tracks: displayedTracks, title: 'Local Music'),
-                        doPlay: true,
-                        shuffling: true,
-                      ),
+                StreamBuilder<bool>(
+                  stream: context.read<BloomeePlayerCubit>().bloomeePlayer.shuffleMode,
+                  builder: (context, snapshot) {
+                    final isShuffle = snapshot.data ?? false;
+                    return _ActionChipButton(
+                      icon: isShuffle ? MingCute.shuffle_fill : MingCute.shuffle_line,
+                      label: isShuffle ? 'Disable Shuffle' : AppLocalizations.of(context)!.localMusicShuffle,
+                      iconColor: isShuffle ? Default_Theme.accentColor1 : Default_Theme.primaryColor1,
+                      onTap: () => context.read<BloomeePlayerCubit>().bloomeePlayer.shuffle(!isShuffle),
+                    );
+                  },
                 ),
                 const SizedBox(width: 8),
                 _ActionChipButton(
@@ -584,14 +584,16 @@ class _ActionChipButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final Color? iconColor;
 
   const _ActionChipButton(
-      {required this.icon, required this.label, required this.onTap});
+      {required this.icon, required this.label, required this.onTap, this.iconColor});
 
   @override
   Widget build(BuildContext context) {
+    final displayColor = iconColor ?? Default_Theme.accentColor2;
     return Material(
-      color: Default_Theme.accentColor2.withValues(alpha: 0.12),
+      color: displayColor.withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
@@ -601,11 +603,11 @@ class _ActionChipButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 16, color: Default_Theme.accentColor2),
+              Icon(icon, size: 16, color: displayColor),
               const SizedBox(width: 6),
               Text(label,
-                  style: const TextStyle(
-                      color: Default_Theme.accentColor2,
+                  style: TextStyle(
+                      color: displayColor,
                       fontSize: 13,
                       fontWeight: FontWeight.w600)),
             ],

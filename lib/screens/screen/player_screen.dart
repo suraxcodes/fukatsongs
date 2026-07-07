@@ -71,7 +71,7 @@ class _AudioPlayerViewState extends State<AudioPlayerView>
     final isMobile = ResponsiveBreakpoints.of(context).smallerOrEqualTo(TABLET);
 
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 12, 4, 9),
+      backgroundColor: Default_Theme.themeColor,
       resizeToAvoidBottomInset: false,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -680,7 +680,7 @@ class _ShuffleControl extends StatelessWidget {
         final isShuffle = snapshot.data ?? false;
         return IconButton(
           icon: Icon(
-            MingCute.shuffle_2_fill,
+            isShuffle ? MingCute.shuffle_fill : MingCute.shuffle_line,
             color: isShuffle
                 ? Default_Theme.accentColor1
                 : Default_Theme.primaryColor1,

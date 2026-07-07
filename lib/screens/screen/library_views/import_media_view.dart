@@ -86,6 +86,17 @@ class _ImportMediaFromPlatformsViewState
                     btnIcon: MingCute.playlist_2_line,
                     onClickFunc: () => _importM3UFile(context),
                   ),
+                  const SizedBox(height: 10),
+                  _ImportFromBtn(
+                    btnName: "Import from Spotify/YouTube URL",
+                    btnIcon: MingCute.link_fill,
+                    onClickFunc: () {
+                      context.goNamed(
+                        RoutePaths.importProcess,
+                        queryParameters: {'pluginId': ''},
+                      );
+                    },
+                  ),
                 ],
               );
             },
@@ -256,21 +267,22 @@ class _ImportMediaFromPlatformsViewState
     // Build ImportTrackItem list from parsed M3U entries.
     final rawItems = parsed['mediaItems'] as List<dynamic>? ?? [];
     final tracks = rawItems
-        .whereType<Map<String, dynamic>>()
+        .whereType<Map>()
         .map((item) {
-          final artistStr = item['artist']?.toString() ?? '';
+          final casted = Map<String, dynamic>.from(item);
+          final artistStr = casted['artist']?.toString() ?? '';
           final artists = artistStr.isNotEmpty ? [artistStr] : <String>[];
-          final durationSec = item['duration'] as num?;
+          final durationSec = casted['duration'] as num?;
           return ImportTrackItem(
-            title: item['title']?.toString() ?? '',
+            title: casted['title']?.toString() ?? '',
             artists: artists,
-            albumTitle: item['album']?.toString(),
-            thumbnailUrl: item['artURL']?.toString(),
+            albumTitle: casted['album']?.toString(),
+            thumbnailUrl: casted['artURL']?.toString(),
             durationMs: durationSec != null
                 ? BigInt.from((durationSec * 1000).toInt())
                 : null,
             isExplicit: false,
-            url: item['streamingURL']?.toString(),
+            url: casted['streamingURL']?.toString(),
           );
         })
         .where((t) => t.title.isNotEmpty)

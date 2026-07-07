@@ -22,6 +22,7 @@ import 'package:fukatsongs/services/player/recently_played_tracker.dart';
 import 'package:fukatsongs/services/plugin/plugin_service.dart';
 import 'package:fukatsongs/services/meta_resolver/smart_track_replacement_service.dart';
 import 'package:fukatsongs/services/discord_service.dart';
+import 'package:fukatsongs/services/dynamic_island_service.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:async/async.dart';
@@ -61,6 +62,28 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   late MediaResolverService _resolver;
   late SmartTrackReplacementService _smartTrackReplacementService;
 
+  static final MediaControl _shuffleControlOn = MediaControl.custom(
+    androidIcon: 'drawable/ic_shuffle_on',
+    label: 'Disable Shuffle',
+    name: 'Disable Shuffle',
+  );
+
+  static final MediaControl _shuffleControlOff = MediaControl.custom(
+    androidIcon: 'drawable/ic_shuffle',
+    label: 'Enable Shuffle',
+    name: 'Enable Shuffle',
+  );
+
+  @override
+  Future<void> customAction(String name, [Map<String, dynamic>? extras]) async {
+    if (name == 'Disable Shuffle') {
+      await shuffle(false);
+    } else if (name == 'Enable Shuffle') {
+      await shuffle(true);
+    }
+    return super.customAction(name, extras);
+  }
+
   // Long-lived stream subjects — kept open to prevent downstream StreamBuilder
   // widgets from entering error state when the player is revived.
   BehaviorSubject<bool> fromPlaylist = BehaviorSubject<bool>.seeded(false);
@@ -89,6 +112,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   StreamSubscription? _positionSuccessSub;
   StreamSubscription<AudioInterruptionEvent>? _audioInterruptionSub;
   StreamSubscription<void>? _audioNoisySub;
+  StreamSubscription<Duration>? _durationSub;
   Timer? _relatedSongTimer;
 
   // ── Audio session state ────────────────────────────────────────────────────
@@ -357,8 +381,6 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       _broadcastPlaybackState(s, pl, engine.position, buf, spd);
     });
 
-    // Mark a track as successfully playing only once we see real position
-    // advancement — guards circuit breaker against false positives.
     _positionSuccessSub = engine.positionStream.listen((pos) {
       if (pos > Duration.zero &&
           engine.state == EngineState.ready &&
@@ -366,9 +388,31 @@ class BloomeeMusicPlayer extends BaseAudioHandler
         final track = _queueManager.currentTrack;
         if (track != null) _errorHandler.markTrackSuccess(track.id);
       }
+
+      EasyThrottle.throttle('sync_position_notification', const Duration(seconds: 1), () {
+        if (!engine.playing) return;
+        _broadcastPlaybackState(
+          engine.state,
+          engine.playing,
+          engine.position,
+          engine.buffered,
+          engine.speed,
+        );
+      });
     });
 
     _completionSub = engine.completionStream.listen((_) => _onTrackCompleted());
+
+    _durationSub = engine.durationStream.listen((dur) {
+      if (dur > Duration.zero) {
+        final currentItem = mediaItem.value;
+        if (currentItem != null && currentItem.duration != dur) {
+          mediaItem.add(currentItem.copyWith(duration: dur));
+        }
+      }
+    });
+
+    _queueManager.shuffleMode.listen((_) => syncPublicState());
 
     _errorSub = engine.errorStream.listen((error) {
       log('Engine error: $error', name: 'BloomeeMusicPlayer');
@@ -418,6 +462,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
         MediaControl.skipToPrevious,
         playing ? MediaControl.pause : MediaControl.play,
         MediaControl.skipToNext,
+        shuffleMode.value ? _shuffleControlOn : _shuffleControlOff,
       ],
       processingState: processingState,
       systemActions: const {
@@ -425,13 +470,15 @@ class BloomeeMusicPlayer extends BaseAudioHandler
         MediaAction.playPause,
         MediaAction.skipToNext,
         MediaAction.seek,
+        MediaAction.setShuffleMode,
       },
-      androidCompactActionIndices: const [0, 1, 2],
+      androidCompactActionIndices: const [1, 2, 3],
       updatePosition: position,
       updateTime: DateTime.now(),
       playing: playing,
       bufferedPosition: buffered,
       speed: speed,
+      shuffleMode: shuffleMode.value ? AudioServiceShuffleMode.all : AudioServiceShuffleMode.none,
     ));
 
     EasyThrottle.throttle('discord_rpc', const Duration(seconds: 1), () {
@@ -512,6 +559,9 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     await engine.stop();
     await _deactivateAudioSession();
     DiscordService.clearPresence();
+    try {
+      await DynamicIslandService.closeDynamicIsland();
+    } catch (_) {}
     await super.stop();
   }
 
@@ -536,6 +586,12 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
   void setCrossfadeDuration(Duration duration) {
     engine.crossfadeDuration = duration;
+  }
+
+  @override
+  Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) async {
+    final enabled = shuffleMode == AudioServiceShuffleMode.all;
+    await shuffle(enabled);
   }
 
   Future<void> shuffle(bool enabled) async {
@@ -1070,17 +1126,16 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   Future<void> onTaskRemoved() async {
     // Always persist queue before the OS kills us — this is our last chance.
     await _queueManager.persistQueueState();
-    // Keep playing in background — only stop if nothing is active.
-    if (!engine.playing) {
-      await stop();
-      await _cleanup();
-    }
+    // Immediate stop and cleanup when swiped from recents
+    await stop();
+    await _cleanup();
     return super.onTaskRemoved();
   }
 
   @override
   Future<void> onNotificationDeleted() async {
     await stop();
+    await _cleanup();
     return super.onNotificationDeleted();
   }
 

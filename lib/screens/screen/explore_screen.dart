@@ -26,6 +26,7 @@ import 'package:fukatsongs/core/theme/app_theme.dart';
 import 'package:fukatsongs/l10n/app_localizations.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:icons_plus/icons_plus.dart';
+import 'package:fukatsongs/utils/load_image.dart';
 import 'chart/carousal_widget.dart';
 import '../widgets/horizontal_card_view.dart';
 import '../widgets/tab_list_widget.dart';
@@ -199,44 +200,76 @@ class _ExploreScreenState extends State<ExploreScreen> {
                                 );
                               }
                               if (state.tracks.isNotEmpty) {
-                                return InkWell(
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            const HistoryView(),
-                                      ),
-                                    );
-                                  },
-                                  child: TabSongListWidget(
-                                    list: state.tracks.map((e) {
-                                      return SongCardWidget(
-                                        song: e,
-                                        onTap: () {
-                                          context
-                                              .read<BloomeePlayerCubit>()
-                                              .bloomeePlayer
-                                              .loadPlaylist(
-                                                Playlist(
-                                                  tracks: state.tracks,
-                                                  title: 'Recently',
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            AppLocalizations.of(context)!.exploreRecently,
+                                            style: const TextStyle(
+                                              color: Default_Theme.primaryColor1,
+                                              fontSize: 22,
+                                              fontWeight: FontWeight.bold,
+                                              letterSpacing: -0.5,
+                                            ),
+                                          ),
+                                          TextButton(
+                                            onPressed: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) => const HistoryView(),
                                                 ),
-                                                idx: state.tracks.indexOf(e),
-                                                doPlay: true,
                                               );
+                                            },
+                                            child: Text(
+                                              'See All',
+                                              style: TextStyle(
+                                                color: Default_Theme.primaryColor2.withValues(alpha: 0.8),
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    SizedBox(
+                                      height: 195,
+                                      child: ListView.builder(
+                                        scrollDirection: Axis.horizontal,
+                                        padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                                        itemCount: state.tracks.length,
+                                        itemBuilder: (context, index) {
+                                          final track = state.tracks[index];
+                                          return Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                            child: RecentlyPlayedHorizontalCard(
+                                              track: track,
+                                              onTap: () {
+                                                context
+                                                    .read<BloomeePlayerCubit>()
+                                                    .bloomeePlayer
+                                                    .loadPlaylist(
+                                                      Playlist(
+                                                        tracks: state.tracks,
+                                                        title: 'Recently Played',
+                                                      ),
+                                                      idx: index,
+                                                      doPlay: true,
+                                                    );
+                                              },
+                                            ),
+                                          );
                                         },
-                                        onOptionsTap: () => showMoreBottomSheet(
-                                          context,
-                                          e,
-                                          showSinglePlay: true,
-                                        ),
-                                      );
-                                    }).toList(),
-                                    category: AppLocalizations.of(context)!
-                                        .exploreRecently,
-                                    columnSize: 3,
-                                  ),
+                                      ),
+                                    ),
+                                  ],
                                 );
                               }
                               return const SizedBox();
@@ -638,6 +671,89 @@ class SiteIcon extends StatelessWidget {
         MingCute.flower_4_fill,
         color: Default_Theme.primaryColor1,
         size: 28.0,
+      ),
+    );
+  }
+}
+
+class RecentlyPlayedHorizontalCard extends StatelessWidget {
+  final Track track;
+  final VoidCallback onTap;
+
+  const RecentlyPlayedHorizontalCard({
+    super.key,
+    required this.track,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final artwork = track.thumbnail;
+    final thumbnailUrl = artwork.urlHigh ?? artwork.url ?? artwork.urlLow;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 140,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 140,
+              height: 140,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: (thumbnailUrl != null && thumbnailUrl.isNotEmpty)
+                    ? LoadImageCached(
+                        imageUrl: thumbnailUrl,
+                        fallbackUrl: artwork?.url ?? thumbnailUrl,
+                        fit: BoxFit.cover,
+                      )
+                    : Container(
+                        color: Default_Theme.primaryColor2.withValues(alpha: 0.1),
+                        child: Icon(
+                          MingCute.music_2_fill,
+                          color: Default_Theme.primaryColor1.withValues(alpha: 0.2),
+                          size: 40,
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              track.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Default_Theme.primaryColor1,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              track.artists.isNotEmpty ? track.artists.first.name : 'Unknown Artist',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Default_Theme.primaryColor2.withValues(alpha: 0.6),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

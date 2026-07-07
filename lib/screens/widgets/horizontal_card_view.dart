@@ -221,15 +221,15 @@ class _HorizontalCardViewState extends State<HorizontalCardView> {
   Widget _buildCard(MediaItem item, {VoidCallback? onTap}) {
     return item.when(
       track: (track) => SquareImgCard(
-        imgPath: track.thumbnail.url,
-        fallbackImgPath: track.thumbnail.urlLow ?? track.thumbnail.url,
+        imgPath: track.thumbnail.urlHigh ?? track.thumbnail.url,
+        fallbackImgPath: track.thumbnail.url,
         title: track.title,
         subtitle: track.artists.map((a) => a.name).join(', '),
         isList: false,
         onTap: onTap,
       ),
       album: (album) => SquareImgCard(
-        imgPath: album.thumbnail?.url ?? '',
+        imgPath: album.thumbnail?.urlHigh ?? album.thumbnail?.url ?? '',
         fallbackImgPath: album.thumbnail?.url,
         title: album.title,
         subtitle: album.artists.map((a) => a.name).join(', '),
@@ -237,7 +237,7 @@ class _HorizontalCardViewState extends State<HorizontalCardView> {
         onTap: onTap,
       ),
       artist: (artist) => SquareImgCard(
-        imgPath: artist.thumbnail?.url ?? '',
+        imgPath: artist.thumbnail?.urlHigh ?? artist.thumbnail?.url ?? '',
         fallbackImgPath: artist.thumbnail?.url,
         title: artist.name,
         subtitle: artist.subtitle ?? '',
@@ -245,7 +245,7 @@ class _HorizontalCardViewState extends State<HorizontalCardView> {
         onTap: onTap,
       ),
       playlist: (playlist) => SquareImgCard(
-        imgPath: playlist.thumbnail.url,
+        imgPath: playlist.thumbnail.urlHigh ?? playlist.thumbnail.url,
         fallbackImgPath: playlist.thumbnail.url,
         title: playlist.title,
         subtitle: playlist.owner ?? '',

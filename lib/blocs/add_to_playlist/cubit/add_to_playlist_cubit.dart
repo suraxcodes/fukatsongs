@@ -3,6 +3,7 @@ import 'package:bloc/bloc.dart';
 import 'package:fukatsongs/core/models/exported.dart';
 import 'package:fukatsongs/core/constants/sentinel_values.dart';
 
+// inharite from AddToPlaylistState to create a new state class
 part 'add_to_playlist_state.dart';
 
 class AddToPlaylistCubit extends Cubit<AddToPlaylistState> {

@@ -549,12 +549,22 @@ class _PlaylistViewState extends State<PlaylistView> {
         crossAxisAlignment: CrossAxisAlignment.center,
         mainAxisSize: MainAxisSize.min, // Hug contents tightly
         children: [
-          _buildActionIcon(
-              MingCute.shuffle_line,
-              l10n.playlistShuffle,
-              isEmpty
-                  ? null
-                  : () => _playFromPlaylist(context, state, shuffle: true)),
+          StreamBuilder<bool>(
+            stream: context.read<BloomeePlayerCubit>().bloomeePlayer.shuffleMode,
+            builder: (context, snapshot) {
+              final isShuffle = snapshot.data ?? false;
+              return _buildActionIcon(
+                isShuffle ? MingCute.shuffle_fill : MingCute.shuffle_line,
+                isShuffle ? 'Disable Shuffle' : l10n.playlistShuffle,
+                isEmpty
+                    ? null
+                    : () {
+                        context.read<BloomeePlayerCubit>().bloomeePlayer.shuffle(!isShuffle);
+                      },
+                iconColor: isShuffle ? Default_Theme.accentColor1 : Colors.white.withValues(alpha: 0.85),
+              );
+            },
+          ),
           const SizedBox(width: 12),
 
           Builder(builder: (ctx) {
@@ -648,7 +658,7 @@ class _PlaylistViewState extends State<PlaylistView> {
     );
   }
 
-  Widget _buildActionIcon(IconData icon, String tooltip, VoidCallback? onTap) {
+  Widget _buildActionIcon(IconData icon, String tooltip, VoidCallback? onTap, {Color? iconColor}) {
     return Tooltip(
       message: tooltip,
       child: Material(
@@ -667,7 +677,7 @@ class _PlaylistViewState extends State<PlaylistView> {
               border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
             child: Icon(icon,
-                color: Colors.white.withValues(alpha: 0.85), size: 20),
+                color: iconColor ?? Colors.white.withValues(alpha: 0.85), size: 20),
           ),
         ),
       ),

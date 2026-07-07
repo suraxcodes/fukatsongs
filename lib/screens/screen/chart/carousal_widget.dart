@@ -13,6 +13,7 @@ import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:responsive_framework/responsive_framework.dart';
+import 'package:fukatsongs/core/theme/app_theme.dart';
 
 /// Chart carousel widget that displays charts from loaded chart provider plugins.
 class CaraouselWidget extends StatefulWidget {
@@ -61,6 +62,8 @@ class _CaraouselWidgetState extends State<CaraouselWidget> {
     super.dispose();
   }
 
+  int _currentIndex = 0;
+
   @override
   Widget build(BuildContext context) {
     return BlocListener<ChartBloc, ChartState>(
@@ -107,50 +110,76 @@ class _CaraouselWidgetState extends State<CaraouselWidget> {
                 child: ValueListenableBuilder<bool>(
                   valueListenable: autoSlideCharts,
                   builder: (context, autoPlay, child) {
-                    return CarouselSlider.builder(
-                      itemCount: visibleCharts.length,
-                      itemBuilder: (context, index, realIndex) {
-                        final chart = visibleCharts[index];
-                        return GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ChartScreen(
-                                  pluginId:
-                                      _chartBloc.state.activePluginId ?? '',
-                                  chartId: chart.id,
-                                  chartTitle: chart.title,
-                                ),
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CarouselSlider.builder(
+                          itemCount: visibleCharts.length,
+                          itemBuilder: (context, index, realIndex) {
+                            final chart = visibleCharts[index];
+                            return GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ChartScreen(
+                                      pluginId:
+                                          _chartBloc.state.activePluginId ?? '',
+                                      chartId: chart.id,
+                                      chartTitle: chart.title,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: ChartWidget(
+                                chart: chart,
+                                pluginId: _chartBloc.state.activePluginId ?? '',
                               ),
                             );
                           },
-                          child: ChartWidget(
-                            chart: chart,
-                            pluginId: _chartBloc.state.activePluginId ?? '',
+                          options: CarouselOptions(
+                            height: ResponsiveBreakpoints.of(context).isMobile ||
+                                    ResponsiveBreakpoints.of(context).isTablet
+                                ? MediaQuery.of(context).size.height * 0.36
+                                : 250,
+                            viewportFraction:
+                                ResponsiveBreakpoints.of(context).isMobile
+                                    ? 0.55
+                                    : ResponsiveBreakpoints.of(context).isTablet
+                                        ? 0.40
+                                        : 0.30,
+                            autoPlay: autoPlay,
+                            autoPlayInterval: const Duration(milliseconds: 3000),
+                            enlargeFactor: 0.15,
+                            initialPage: 0,
+                            pauseAutoPlayOnTouch: true,
+                            padEnds: true,
+                            enlargeCenterPage: true,
+                            onPageChanged: (index, reason) {
+                              setState(() {
+                                _currentIndex = index;
+                              });
+                            },
                           ),
-                        );
-                      },
-                      options: CarouselOptions(
-                        height: ResponsiveBreakpoints.of(context).isMobile ||
-                                ResponsiveBreakpoints.of(context).isTablet
-                            ? MediaQuery.of(context).size.height * 0.36
-                            : 250,
-                        viewportFraction:
-                            ResponsiveBreakpoints.of(context).isMobile
-                                ? 0.65
-                                : ResponsiveBreakpoints.of(context).isTablet
-                                    ? 0.40
-                                    : 0.30,
-                        autoPlay: autoPlay,
-                        autoPlayInterval: const Duration(milliseconds: 2500),
-                        enlargeFactor: 0.2,
-                        initialPage: 0,
-                        pauseAutoPlayOnTouch: true,
-                        padEnds: true,
-                        enlargeCenterPage:
-                            ResponsiveBreakpoints.of(context).isMobile,
-                      ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: visibleCharts.asMap().entries.map((entry) {
+                            return Container(
+                              width: _currentIndex == entry.key ? 24.0 : 8.0,
+                              height: 8.0,
+                              margin: const EdgeInsets.symmetric(horizontal: 4.0),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(4.0),
+                                color: _currentIndex == entry.key
+                                    ? Default_Theme.primaryColor1
+                                    : Default_Theme.primaryColor2.withValues(alpha: 0.3),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
                     );
                   },
                 ),
