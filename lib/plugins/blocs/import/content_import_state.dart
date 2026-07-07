@@ -1,3 +1,5 @@
+import 'dart:convert' show utf8;
+import 'package:crypto/crypto.dart' show md5;
 import 'package:equatable/equatable.dart';
 
 import 'package:fukatsongs/src/rust/api/plugin/models.dart';
@@ -57,7 +59,54 @@ class ImportTrackEntry extends Equatable {
     if (idx != null && idx >= 0 && idx < candidates.length) {
       return candidates[idx];
     }
-    return resolvedTrack;
+    if (resolvedTrack != null) return resolvedTrack;
+    return _toFallbackTrack();
+  }
+
+  Track _toFallbackTrack() {
+    final it = sourceTrack;
+    final rawId = (it.sourceId != null && it.sourceId!.trim().isNotEmpty)
+        ? it.sourceId!
+        : md5
+            .convert(utf8.encode('${it.title}|${it.artists.join(',')}'))
+            .toString();
+    final id = rawId.contains('::') ? rawId : 'unresolved::$rawId';
+
+    final artists = it.artists.map((a) {
+      final aid = md5.convert(utf8.encode(a)).toString();
+      return ArtistSummary(
+          id: aid, name: a, thumbnail: null, subtitle: null, url: null);
+    }).toList(growable: false);
+
+    final artwork = Artwork(
+      url: it.thumbnailUrl ?? '',
+      urlLow: null,
+      urlHigh: null,
+      layout: ImageLayout.square,
+    );
+
+    final album = (it.albumTitle != null && it.albumTitle!.isNotEmpty)
+        ? AlbumSummary(
+            id: md5.convert(utf8.encode(it.albumTitle!)).toString(),
+            title: it.albumTitle!,
+            artists: artists,
+            thumbnail: artwork,
+            subtitle: null,
+            year: null,
+            url: null)
+        : null;
+
+    return Track(
+      id: id,
+      title: it.title,
+      artists: artists,
+      album: album,
+      durationMs: it.durationMs,
+      thumbnail: artwork,
+      url: it.url,
+      isExplicit: it.isExplicit,
+      lyrics: null,
+    );
   }
 
   ImportTrackEntry copyWith({
@@ -91,6 +140,10 @@ class ContentImportState extends Equatable {
   final List<ImportTrackEntry> tracks;
   final int resolvedCount;
   final int failedCount;
+  final int savingTotal;
+  final int savingImported;
+  final int savingSkipped;
+  final int savingFailed;
   final String? error;
 
   const ContentImportState({
@@ -101,6 +154,10 @@ class ContentImportState extends Equatable {
     this.tracks = const [],
     this.resolvedCount = 0,
     this.failedCount = 0,
+    this.savingTotal = 0,
+    this.savingImported = 0,
+    this.savingSkipped = 0,
+    this.savingFailed = 0,
     this.error,
   });
 
@@ -112,6 +169,10 @@ class ContentImportState extends Equatable {
     List<ImportTrackEntry>? tracks,
     int? resolvedCount,
     int? failedCount,
+    int? savingTotal,
+    int? savingImported,
+    int? savingSkipped,
+    int? savingFailed,
     String? error,
     bool clearError = false,
   }) {
@@ -123,6 +184,10 @@ class ContentImportState extends Equatable {
       tracks: tracks ?? this.tracks,
       resolvedCount: resolvedCount ?? this.resolvedCount,
       failedCount: failedCount ?? this.failedCount,
+      savingTotal: savingTotal ?? this.savingTotal,
+      savingImported: savingImported ?? this.savingImported,
+      savingSkipped: savingSkipped ?? this.savingSkipped,
+      savingFailed: savingFailed ?? this.savingFailed,
       error: clearError ? null : (error ?? this.error),
     );
   }
@@ -138,6 +203,10 @@ class ContentImportState extends Equatable {
         tracks,
         resolvedCount,
         failedCount,
+        savingTotal,
+        savingImported,
+        savingSkipped,
+        savingFailed,
         error,
       ];
 }

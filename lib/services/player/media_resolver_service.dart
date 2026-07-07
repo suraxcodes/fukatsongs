@@ -13,6 +13,7 @@ import 'package:fukatsongs/services/db/db_provider.dart';
 import 'package:fukatsongs/services/plugin/plugin_service.dart';
 import 'package:fukatsongs/services/player/stream_quality_selector.dart';
 import 'package:fukatsongs/src/rust/api/plugin/commands.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 class ResolvedMediaSource {
   final Uri uri;
@@ -95,6 +96,26 @@ class MediaResolverService {
         'Resolving streams for "${track.title}" '
         '(plugin: ${parts.pluginId}, id: ${parts.localId})',
         name: 'MediaResolverService');
+
+    // Bypass crashing WASM plugins for YouTube/YouTube Music
+    if (parts.pluginId == 'youtube' || parts.pluginId == 'youtube_music' || parts.localId.length == 11) {
+      log('Bypassing WASM plugin to use youtube_explode_dart directly for ${parts.localId}', name: 'MediaResolverService');
+      try {
+        final yt = YoutubeExplode();
+        final manifest = await yt.videos.streamsClient.getManifest(parts.localId);
+        final streamInfo = manifest.audioOnly.withHighestBitrate();
+        yt.close();
+        
+        log('Resolved stream via dart fallback: ${streamInfo.url}', name: 'MediaResolverService');
+        return ResolvedMediaSource(
+          uri: streamInfo.url,
+          isOffline: false,
+        );
+      } catch (e) {
+        log('Dart youtube_explode_dart fallback failed: $e', name: 'MediaResolverService');
+        throw Exception('Dart fallback failed to resolve stream: $e');
+      }
+    }
 
     PluginResponse response;
     try {
