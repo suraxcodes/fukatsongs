@@ -191,7 +191,7 @@ class _ShortcutIndicatorState extends State<_ShortcutIndicator>
         break;
 
       case ShortcutIndicatorType.shuffle:
-        icon = MingCute.shuffle_2_line;
+        icon = MingCute.shuffle_line;
         color = (widget.state.isShuffleOn ?? false)
             ? Default_Theme.accentColor2
             : Colors.white.withValues(alpha: 0.5);

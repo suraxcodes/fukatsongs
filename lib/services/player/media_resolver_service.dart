@@ -97,25 +97,6 @@ class MediaResolverService {
         '(plugin: ${parts.pluginId}, id: ${parts.localId})',
         name: 'MediaResolverService');
 
-    // Bypass crashing WASM plugins for YouTube/YouTube Music
-    if (parts.pluginId == 'youtube' || parts.pluginId == 'youtube_music' || parts.localId.length == 11) {
-      log('Bypassing WASM plugin to use youtube_explode_dart directly for ${parts.localId}', name: 'MediaResolverService');
-      try {
-        final yt = YoutubeExplode();
-        final manifest = await yt.videos.streamsClient.getManifest(parts.localId);
-        final streamInfo = manifest.audioOnly.withHighestBitrate();
-        yt.close();
-        
-        log('Resolved stream via dart fallback: ${streamInfo.url}', name: 'MediaResolverService');
-        return ResolvedMediaSource(
-          uri: streamInfo.url,
-          isOffline: false,
-        );
-      } catch (e) {
-        log('Dart youtube_explode_dart fallback failed: $e', name: 'MediaResolverService');
-        throw Exception('Dart fallback failed to resolve stream: $e');
-      }
-    }
 
     PluginResponse response;
     try {

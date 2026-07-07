@@ -690,7 +690,7 @@ class ContentImportCubit extends Cubit<ContentImportState> {
             isExplicit: false,
             durationMs: BigInt.zero, // Duration hard to extract reliably without full metadata
             url: 'https://youtube.com/watch?v=${video['videoId']}',
-            sourceId: video['videoId'],
+            sourceId: 'content-resolver.bloomfactory.ytmusic::${video['videoId']}',
           );
         }).toList();
 

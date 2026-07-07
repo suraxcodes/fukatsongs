@@ -24,65 +24,91 @@ class ChartWidget extends StatelessWidget {
     final artwork = chart.thumbnail;
     final thumbnailUrl = artwork?.urlHigh ?? artwork?.url ?? artwork?.urlLow;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: SizedBox(
-        height: isMobile || isTablet
-            ? MediaQuery.of(context).size.height * 0.35
-            : MediaQuery.of(context).size.height * 0.25,
-        width: isMobile
-            ? MediaQuery.of(context).size.height * 0.3
-            : isTablet
-                ? MediaQuery.of(context).size.width * 0.3
-                : MediaQuery.of(context).size.width * 0.25,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (thumbnailUrl != null && thumbnailUrl.isNotEmpty)
-              LoadImageCached(
-                imageUrl: thumbnailUrl,
-                fallbackUrl: artwork?.url ?? thumbnailUrl,
-                fit: BoxFit.cover,
-              )
-            else
-              const _ChartPlaceholder(),
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: 0.25),
-                      Colors.black.withValues(alpha: 0.8),
-                    ],
-                    stops: const [0.3, 0.6, 1.0],
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 14,
-              right: 14,
-              bottom: 14,
-              child: Text(
-                chart.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Default_Theme.secondoryTextStyleMedium.merge(
-                  const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                    height: 1.2,
-                  ),
-                ),
-              ),
-            ),
-          ],
+    return Container(
+      width: isMobile
+          ? MediaQuery.of(context).size.height * 0.3
+          : isTablet
+              ? MediaQuery.of(context).size.width * 0.3
+              : MediaQuery.of(context).size.width * 0.25,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color.fromARGB(255, 234, 220, 234).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: Default_Theme.primaryColor2.withValues(alpha: 0.05),
+          width: 1,
         ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: (thumbnailUrl != null && thumbnailUrl.isNotEmpty)
+                    ? LoadImageCached(
+                        imageUrl: thumbnailUrl,
+                        fallbackUrl: artwork?.url ?? thumbnailUrl,
+                        fit: BoxFit.cover,
+                      )
+                    : const _ChartPlaceholder(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Top Chart:',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Default_Theme.secondoryTextStyle.merge(
+              TextStyle(
+                color: Default_Theme.primaryColor2.withValues(alpha: 0.6),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            chart.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Default_Theme.primaryTextStyle.merge(
+              const TextStyle(
+                color: Default_Theme.primaryColor1,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Global Charts',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Default_Theme.secondoryTextStyle.merge(
+              TextStyle(
+                color: Default_Theme.primaryColor2.withValues(alpha: 0.4),
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -99,7 +125,7 @@ class _ChartPlaceholder extends StatelessWidget {
         child: Icon(
           MingCute.music_2_fill,
           size: 48,
-          color: Colors.white.withValues(alpha: 0.15),
+          color: Default_Theme.primaryColor1.withValues(alpha: 0.15),
         ),
       ),
     );
