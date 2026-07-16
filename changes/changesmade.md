@@ -228,3 +228,59 @@ None
 ## Status
 Completed
 ---
+## Date
+2026-07-16 18:20
+
+## Task
+Fix YouTube Direct imported songs stuck on loading
+
+## Reason
+Wrong plugin ID used.
+
+## what problem/error we fixed
+Imported YouTube playlists got stuck in loading state when playing because they were assigned the ytmusic plugin ID instead of ytvideo, causing stream resolution failure.
+
+## Files Changed
+- lib/plugins/blocs/import/content_import_cubit.dart
+
+## Main Changes
+- Switched sourceId for YouTube Direct imports from content-resolver.bloomfactory.ytmusic to content-resolver.bloomfactory.ytvideo.
+
+## Technical Notes
+- ytvideo is the correct plugin for generic YouTube video IDs, while ytmusic is specifically for YouTube Music IDs.
+
+## Breaking Changes
+None
+
+## Status
+Completed
+
+---
+## Date
+2026-07-16 18:34
+
+## Task
+Fix scrollable_positioned_list compile error
+
+## Reason
+Dart 3 switch exhaustiveness error.
+
+## what problem/error we fixed
+Fixed The type 'dynamic' is not exhaustively matched by the switch cases error by pointing scrollable_positioned_list to the master branch of its GitHub repo which contains the fix.
+
+## Files Changed
+- pubspec.yaml
+
+## Main Changes
+- Updated scrollable_positioned_list dependency to point to its official GitHub repository instead of pub.dev version 0.3.8.
+
+## Technical Notes
+- pub.dev version 0.3.8 is broken on newer Dart SDKs. Using the unreleased master branch ( .3.8+1) circumvents this.
+
+## Breaking Changes
+None
+
+## Status
+Completed
+
+---

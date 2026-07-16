@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 
 void main() async {
-  final url = 'https://www.youtube.com/playlist?list=PLaOVMhTScd6KnBQPRabkHui4iWzzXZQYC';
+  const url = 'https://www.youtube.com/playlist?list=PLaOVMhTScd6KnBQPRabkHui4iWzzXZQYC';
   final dio = Dio();
   
   final response = await dio.get(
@@ -24,8 +24,9 @@ void main() async {
     int openBraces = 0;
     int jsonEnd = -1;
     for (int i = jsonStart; i < html.length; i++) {
-      if (html[i] == '{') openBraces++;
-      else if (html[i] == '}') {
+      if (html[i] == '{') {
+        openBraces++;
+      } else if (html[i] == '}') {
         openBraces--;
         if (openBraces == 0) {
           jsonEnd = i + 1;

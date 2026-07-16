@@ -716,7 +716,7 @@ class RecentlyPlayedHorizontalCard extends StatelessWidget {
                 child: (thumbnailUrl != null && thumbnailUrl.isNotEmpty)
                     ? LoadImageCached(
                         imageUrl: thumbnailUrl,
-                        fallbackUrl: artwork?.url ?? thumbnailUrl,
+                        fallbackUrl: artwork.url ?? thumbnailUrl,
                         fit: BoxFit.cover,
                       )
                     : Container(

@@ -56,7 +56,7 @@ class _ProviderTestScreenState extends State<ProviderTestScreen> {
     final dummyTrack = Track(
       id: 'test_url_${DateTime.now().millisecondsSinceEpoch}',
       title: 'Raw URL Test',
-      artists: [ArtistSummary(id: 'dev', name: 'Developer Test')],
+      artists: [const ArtistSummary(id: 'dev', name: 'Developer Test')],
       thumbnail: const Artwork(url: '', layout: ImageLayout.square),
       isExplicit: false,
     );

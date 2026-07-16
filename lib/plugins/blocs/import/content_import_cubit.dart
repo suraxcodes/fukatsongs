@@ -407,7 +407,7 @@ class ContentImportCubit extends Cubit<ContentImportState> {
       final tempDir = await getTemporaryDirectory();
       final safeName = playlistName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
       final progressFile =
-          File('${tempDir.path}/import_progress_${safeName}.json');
+          File('${tempDir.path}/import_progress_$safeName.json');
 
       int resumeIndex = 0;
       if (await progressFile.exists()) {
@@ -446,7 +446,7 @@ class ContentImportCubit extends Cubit<ContentImportState> {
           emit(state.copyWith(
             savingImported: imported,
             savingTotal: total,
-            savingSkipped: userSkipped + (skipped as int),
+            savingSkipped: userSkipped + (skipped),
           ));
         },
       );
@@ -571,8 +571,9 @@ class ContentImportCubit extends Cubit<ContentImportState> {
         int openBraces = 0;
         int jsonEnd = -1;
         for (int i = jsonStart; i < html.length; i++) {
-          if (html[i] == '{') openBraces++;
-          else if (html[i] == '}') {
+          if (html[i] == '{') {
+            openBraces++;
+          } else if (html[i] == '}') {
             openBraces--;
             if (openBraces == 0) {
               jsonEnd = i + 1;
@@ -690,7 +691,7 @@ class ContentImportCubit extends Cubit<ContentImportState> {
             isExplicit: false,
             durationMs: BigInt.zero, // Duration hard to extract reliably without full metadata
             url: 'https://youtube.com/watch?v=${video['videoId']}',
-            sourceId: 'content-resolver.bloomfactory.ytmusic::${video['videoId']}',
+            sourceId: 'content-resolver.bloomfactory.ytvideo::${video['videoId']}',
           );
         }).toList();
 
@@ -702,8 +703,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
           onProgress: null, // We handle state updates manually below
         );
 
-        importedSoFar += (result['imported'] as int? ?? 0);
-        duplicatesSkipped += (result['skipped'] as int? ?? 0);
+        importedSoFar += (result['imported'] ?? 0);
+        duplicatesSkipped += (result['skipped'] ?? 0);
 
         emit(state.copyWith(
           savingImported: importedSoFar,
@@ -790,7 +791,7 @@ class ContentImportCubit extends Cubit<ContentImportState> {
 
       // Only attempt official API if clientId is not default/placeholder
       if (_spotifyService != null &&
-          _spotifyService!.clientId != '<YOUR_SPOTIFY_CLIENT_ID>') {
+          _spotifyService.clientId != '<YOUR_SPOTIFY_CLIENT_ID>') {
         try {
           if (kind == 'playlist') {
             items = await _paginationFetcher.fetchSpotifyPlaylistById(id);
