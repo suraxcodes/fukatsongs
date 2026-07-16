@@ -30,7 +30,7 @@ class PlaylistSaveService {
     final tempDir = await getTemporaryDirectory();
     final safeName = playlistName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
     final progressFile =
-        File('${tempDir.path}/import_progress_${safeName}.json');
+        File('${tempDir.path}/import_progress_$safeName.json');
 
     int resumeIndex = 0;
     if (await progressFile.exists()) {
@@ -142,7 +142,7 @@ class PlaylistSaveService {
     final tempDir = await getTemporaryDirectory();
     final safeName = playlistName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
     final progressFile =
-        File('${tempDir.path}/import_progress_${safeName}.json');
+        File('${tempDir.path}/import_progress_$safeName.json');
 
     int resumeIndex = 0;
     if (await progressFile.exists()) {

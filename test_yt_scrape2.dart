@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 void main() async {
-  final url = 'https://www.youtube.com/playlist?list=PLaOVMhTScd6KnBQPRabkHui4iWzzXZQYC';
+  const url = 'https://www.youtube.com/playlist?list=PLaOVMhTScd6KnBQPRabkHui4iWzzXZQYC';
   final response = await http.get(
     Uri.parse(url),
     headers: {

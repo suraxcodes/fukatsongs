@@ -1,4 +1,3 @@
-import 'dart:collection';
 
 /// Cache key namespace — used to pick the right LRU pool.
 enum CacheType { chart, sections, chartList }

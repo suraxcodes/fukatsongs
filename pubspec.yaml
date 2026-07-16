@@ -69,7 +69,10 @@ dependencies:
   share_handler: ^0.0.25
   sliding_up_panel: ^2.0.0+1
   responsive_framework: ^1.5.1
-  scrollable_positioned_list: ^0.3.8
+  scrollable_positioned_list:
+    git:
+      url: https://github.com/google/flutter.widgets.git
+      path: packages/scrollable_positioned_list
   crypto: ^3.0.5 # used for hashing the song file paths to generate unique IDs for the songs
 #  dart_discord_rpc: ^0.0.2
   mime: ^2.0.0

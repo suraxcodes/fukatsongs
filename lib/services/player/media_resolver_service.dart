@@ -13,7 +13,6 @@ import 'package:fukatsongs/services/db/db_provider.dart';
 import 'package:fukatsongs/services/plugin/plugin_service.dart';
 import 'package:fukatsongs/services/player/stream_quality_selector.dart';
 import 'package:fukatsongs/src/rust/api/plugin/commands.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 class ResolvedMediaSource {
   final Uri uri;
