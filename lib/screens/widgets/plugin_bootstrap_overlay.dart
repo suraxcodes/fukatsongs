@@ -3,6 +3,7 @@ library;
 import 'dart:io' show Platform, exit;
 import 'dart:ui';
 
+import 'package:fukatsongs/core/constants/setting_keys.dart';
 import 'package:fukatsongs/core/di/service_locator.dart';
 import 'package:fukatsongs/core/theme/app_theme.dart';
 import 'package:fukatsongs/l10n/app_localizations.dart';
@@ -107,7 +108,9 @@ class _PluginBootstrapOverlayState extends State<PluginBootstrapOverlay>
       if (mounted) widget.onComplete();
     } else if (result.failureReason ==
         PluginBootstrapFailureReason.noInternet) {
-      _phase.value = _Phase.noInternet;
+      // Auto-skip plugin setup and launch directly into offline mode
+      await settingsDao.putSettingBool(SettingKeys.repositoriesBootstrapped, true);
+      if (mounted) widget.onComplete();
     } else {
       _phase.value = _Phase.failed;
     }
@@ -147,6 +150,11 @@ class _PluginBootstrapOverlayState extends State<PluginBootstrapOverlay>
                         : phase == _Phase.failed
                             ? _ErrorBody(
                                 onRetry: _run,
+                                onSkip: () async {
+                                  final settingsDao = SettingsDAO(DBProvider.db);
+                                  await settingsDao.putSettingBool(SettingKeys.repositoriesBootstrapped, true);
+                                  if (mounted) widget.onComplete();
+                                },
                               )
                             : _SpinnerBody(
                                 pulse: _pulse,
@@ -267,9 +275,11 @@ class _SpinnerBody extends StatelessWidget {
 class _ErrorBody extends StatelessWidget {
   const _ErrorBody({
     required this.onRetry,
+    required this.onSkip,
   });
 
   final VoidCallback onRetry;
+  final VoidCallback onSkip;
 
   @override
   Widget build(BuildContext context) {
@@ -334,6 +344,24 @@ class _ErrorBody extends StatelessWidget {
                     fontSize: 15,
                   ),
                 ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: onSkip,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.12),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('Skip & enter offline mode'),
               ),
             ),
           ],

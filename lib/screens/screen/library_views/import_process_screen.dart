@@ -1501,7 +1501,62 @@ class _DownloadingView extends StatelessWidget {
                   },
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
+              if (left > 0)
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          final downloader = context.read<DownloaderCubit>();
+                          final ids = relevantDownloads
+                              .where((d) =>
+                                  d.status.state == DownloadState.downloading ||
+                                  d.status.state == DownloadState.queued ||
+                                  d.status.state == DownloadState.resolving ||
+                                  d.status.state == DownloadState.retrying)
+                              .map((d) => d.task.taskId)
+                              .toList();
+                          downloader.pauseAll(ids);
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('Pause All'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          final downloader = context.read<DownloaderCubit>();
+                          final ids = relevantDownloads
+                              .where((d) =>
+                                  d.status.state != DownloadState.completed &&
+                                  d.status.state != DownloadState.cancelled)
+                              .map((d) => d.task.taskId)
+                              .toList();
+                          downloader.cancelAll(ids);
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.redAccent,
+                          side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.4)),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('Cancel All'),
+                      ),
+                    ),
+                  ],
+                ),
+              const SizedBox(height: 12),
               FilledButton(
                 onPressed: onDone,
                 style: FilledButton.styleFrom(

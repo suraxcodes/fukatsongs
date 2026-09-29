@@ -228,3 +228,44 @@ None
 ## Status
 Completed
 ---
+
+## Date
+2026-09-29 22:48
+
+## Task
+Fix Offline Routing, YouTube Import Downloads, and Android Custom Paths
+
+## Reason
+Startup froze offline, imported YouTube playlists didn't trigger downloader, and custom folders were ignored on Android.
+
+## what problem/error we fixed 
+- Plugin bootstrap forced black screens when internet was absent on startup.
+- `content_import_cubit.dart` didn't correctly pass track structures to `DownloaderCubit` for YouTube fast-paths.
+- Long playlists lacked bulk cancel/pause options.
+- The Settings screen blocked Android users from clicking "Download Folder".
+- Downloader Engine completely ignored the custom folder path setting on Android OS.
+
+## Files Changed 
+- lib/routes/app_router.dart
+- lib/screens/widgets/plugin_bootstrap_overlay.dart
+- lib/plugins/blocs/import/content_import_cubit.dart
+- lib/blocs/downloader/cubit/downloader_cubit.dart
+- lib/screens/screen/library_views/import_process_screen.dart
+- lib/screens/screen/home_views/setting_views/download_setting.dart
+
+## Main Changes
+- Rewired `app_router.dart` to drop directly into `/Offline` view if launched without connectivity.
+- Fixed `ImportTrackEntry` dynamic type errors in `content_import_cubit.dart`.
+- Added `pauseAll` and `cancelAll` Rust integrations and dynamic buttons to `import_process_screen.dart`.
+- Ripped out `Platform.isAndroid` lock in `download_setting.dart` so Android folder picker launches.
+- Reversed path resolution logic in `_getDownloadDirectory` to obey user preferences first.
+
+## Technical Notes
+- Android 11+ scoped storage requires routing downloads to public folders (via file_picker) to avoid "Access is Denied" errors.
+
+## Breaking Changes
+None
+
+## Status
+Completed
+---

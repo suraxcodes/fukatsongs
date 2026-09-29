@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' as io;
+import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:fukatsongs/blocs/downloader/cubit/downloader_cubit.dart';
 import 'package:fukatsongs/blocs/global_events/global_events_cubit.dart';
@@ -184,8 +185,13 @@ Future<void> setupPlayerCubit() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize Firebase for Kill Switch
-  await Firebase.initializeApp();
+  // Request notification permission for Android 13+ media controls
+  try {
+    unawaited(Permission.notification.request());
+  } catch (_) {}
+  
+  // Initialize Firebase for Kill Switch in background
+  unawaited(Firebase.initializeApp());
   
   GestureBinding.instance.resamplingEnabled = true;
   MediaKit.ensureInitialized();

@@ -513,9 +513,66 @@ class ContentImportCubit extends Cubit<ContentImportState> {
       if (uri == null) throw Exception('Invalid YouTube URL');
 
       final playlistId = uri.queryParameters['list'];
+      
+      // If it's a single video
       if (playlistId == null || playlistId.isEmpty) {
-        throw Exception('Invalid YouTube Playlist URL (missing list= parameter)');
+        final yt = YoutubeExplode();
+        try {
+          final video = await yt.videos.get(url);
+          final summary = ImportCollectionSummary(
+            title: video.title,
+            kind: ImportCollectionType.playlist, // Treat single import as playlist of 1
+            description: video.description,
+            thumbnailUrl: video.thumbnails.highResUrl,
+            trackCount: 1,
+          );
+          
+          final playlistName = video.title.isNotEmpty ? video.title : 'YouTube Import';
+          final dbPlaylistId = await _playlistDao.ensurePlaylist(playlistName);
+          
+          final track = ImportTrackItem(
+            title: video.title,
+            artists: [video.author],
+            thumbnailUrl: video.thumbnails.highResUrl,
+            isExplicit: false,
+            durationMs: BigInt.from(video.duration?.inMilliseconds ?? 0),
+            url: url,
+            sourceId: 'content-resolver.bloomfactory.ytmusic::${video.id}',
+          );
+          
+          emit(state.copyWith(
+            phase: ImportPhase.saving,
+            collectionInfo: summary,
+            savingTotal: 1,
+            savingImported: 0,
+            savingSkipped: 0,
+            clearError: true,
+          ));
+          
+          final result = await _playlistSaveService.saveTracks(
+            dbPlaylistId,
+            playlistName,
+            [track],
+            batchSize: 500,
+            onProgress: null,
+          );
+          
+          final imported = result['imported'] as int? ?? 0;
+          emit(state.copyWith(
+            phase: ImportPhase.done,
+            savingImported: imported,
+            resolvedCount: imported,
+          ));
+          
+          yt.close();
+          return;
+        } catch (e) {
+          yt.close();
+          throw Exception('Failed to import single YouTube video: $e');
+        }
       }
+
+      // Existing playlist logic continues below
 
       // Determine progress file for this playlist to resume imports
       final tempDir = await getTemporaryDirectory();
@@ -705,7 +762,17 @@ class ContentImportCubit extends Cubit<ContentImportState> {
         importedSoFar += (result['imported'] as int? ?? 0);
         duplicatesSkipped += (result['skipped'] as int? ?? 0);
 
+        final newEntries = tracks.map<ImportTrackEntry>((t) {
+          return ImportTrackEntry(
+            sourceTrack: t,
+            status: TrackResolutionStatus.resolved,
+            resolvedTrack: _toTrack(t),
+          );
+        }).toList();
+        final updatedTracks = List<ImportTrackEntry>.from(state.tracks)..addAll(newEntries);
+
         emit(state.copyWith(
+          tracks: updatedTracks,
           savingImported: importedSoFar,
           savingSkipped: duplicatesSkipped,
           savingTotal: uniqueVideos.length, // update total

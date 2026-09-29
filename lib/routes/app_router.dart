@@ -15,6 +15,9 @@ import 'package:fukatsongs/screens/screen/gatekeeper_screen.dart';
 import 'package:fukatsongs/services/db/dao/settings_dao.dart';
 import 'package:fukatsongs/services/db/db_provider.dart';
 
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fukatsongs/blocs/internet_connectivity/cubit/connectivity_cubit.dart';
+
 /// Canonical app router configuration.
 ///
 /// Use [AppRouter] in new code. The [GlobalRoutes] typedef at the bottom
@@ -27,8 +30,11 @@ class AppRouter {
     navigatorKey: globalRouterKey,
     redirect: (context, state) async {
       final settingsDao = SettingsDAO(DBProvider.db);
-      final isUnlocked = await settingsDao.getSettingBool('is_unlocked', defaultValue: false) ?? false;
-      final isBanned = await settingsDao.getSettingBool('is_banned', defaultValue: false) ?? false;
+      // final isUnlocked = await settingsDao.getSettingBool('is_unlocked', defaultValue: false) ?? false;
+      // final isBanned = await settingsDao.getSettingBool('is_banned', defaultValue: false) ?? false;
+      
+      const isUnlocked = true; // Hardcoded unlock for development
+      const isBanned = false;
       
       if (isBanned) {
         return '/Gatekeeper';
@@ -39,6 +45,10 @@ class AppRouter {
       }
       
       if (isUnlocked && state.uri.path == '/Gatekeeper') {
+        final hasInternet = context.read<ConnectivityCubit>().state == ConnectivityState.connected;
+        if (!hasInternet) {
+          return '/Offline';
+        }
         return '/Explore';
       }
       

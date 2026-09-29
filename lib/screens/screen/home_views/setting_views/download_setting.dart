@@ -109,32 +109,28 @@ class _DownloadSettingsState extends State<DownloadSettings> {
                     icon: MingCute.folder_fill,
                     title: l10n.downloadSettingFolder,
                     subtitle: state.downPath,
-                    roundBottom: Platform.isAndroid,
-                    onTap: Platform.isAndroid
-                        ? () {}
-                        : () async {
-                            FilePicker.platform
-                                .getDirectoryPath()
-                                .then((value) {
-                              if (value != null) {
-                                context
-                                    .read<SettingsCubit>()
-                                    .setDownPath(value);
-                              }
-                            });
-                          },
+                    roundBottom: false,
+                    onTap: () async {
+                      FilePicker.platform
+                          .getDirectoryPath()
+                          .then((value) {
+                        if (value != null) {
+                          context
+                              .read<SettingsCubit>()
+                              .setDownPath(value);
+                        }
+                      });
+                    },
                   ),
-                  if (!Platform.isAndroid) ...[
-                    const SettingDivider(),
-                    SettingNavTile(
-                      icon: MingCute.refresh_1_line,
-                      title: l10n.downloadSettingResetFolder,
-                      subtitle: l10n.downloadSettingResetFolderSubtitle,
-                      roundBottom: true,
-                      onTap: () =>
-                          context.read<SettingsCubit>().resetDownPath(),
-                    ),
-                  ],
+                  const SettingDivider(),
+                  SettingNavTile(
+                    icon: MingCute.refresh_1_line,
+                    title: l10n.downloadSettingResetFolder,
+                    subtitle: l10n.downloadSettingResetFolderSubtitle,
+                    roundBottom: true,
+                    onTap: () =>
+                        context.read<SettingsCubit>().resetDownPath(),
+                  ),
                 ],
               ),
               const SizedBox(height: 40),

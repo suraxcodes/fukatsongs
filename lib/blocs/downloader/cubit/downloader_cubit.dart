@@ -102,15 +102,20 @@ class DownloaderCubit extends Cubit<DownloaderState> {
   }
 
   Future<Directory> _getDownloadDirectory() async {
+    final p = await _settingsDao.getSettingStr(SettingKeys.downPathSetting);
+    if (p != null && p.isNotEmpty) {
+      final customDir = Directory(p);
+      if (await customDir.exists()) {
+        return customDir;
+      }
+    }
+    
     if (Platform.isAndroid || Platform.isIOS) {
       final directory = (await getDownloadsDirectory()) ??
           await getApplicationDocumentsDirectory();
       return directory;
     }
-    final p = await _settingsDao.getSettingStr(SettingKeys.downPathSetting);
-    if (p != null) {
-      return Directory(p);
-    }
+    
     return await getApplicationDocumentsDirectory();
   }
 
@@ -452,6 +457,20 @@ class DownloaderCubit extends Cubit<DownloaderState> {
   Future<void> cancelDownload(String taskId) async {
     await _ensureDownloadServiceReady();
     await _downloadService.cancel(taskId);
+  }
+
+  Future<void> pauseAll(List<String> taskIds) async {
+    await _ensureDownloadServiceReady();
+    for (final id in taskIds) {
+      await _downloadService.pause(id);
+    }
+  }
+
+  Future<void> cancelAll(List<String> taskIds) async {
+    await _ensureDownloadServiceReady();
+    for (final id in taskIds) {
+      await _downloadService.cancel(id);
+    }
   }
 
   @override

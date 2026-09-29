@@ -20,7 +20,11 @@ import 'package:path_provider/path_provider.dart';
 /// - Wire the [ServiceLocator] and initialize the plugin system.
 Future<void> bootstrapApp() async {
   // Initialize flutter_rust_bridge before any Rust API call.
-  await RustLib.init();
+  try {
+    await RustLib.init();
+  } catch (e, stack) {
+    log('Failed to initialize RustLib (Rust backend missing)', error: e, stackTrace: stack, name: 'Bootstrap');
+  }
 
   final String appDocPath = (await getApplicationDocumentsDirectory()).path;
   final String appSuppPath = (await getApplicationSupportDirectory()).path;
@@ -35,26 +39,29 @@ Future<void> bootstrapApp() async {
 
   // Ensure hosted repositories are persisted in settings (idempotent).
   // Missing URLs are added, existing ones are left untouched.
-  try {
-    await PluginBootstrapService.ensureHostedRepositoriesPresent(
+  unawaited(
+    PluginBootstrapService.ensureHostedRepositoriesPresent(
       repositoryService: ServiceLocator.pluginRepositoryService,
-    );
-  } catch (e) {
-    log('Hosted repository reconciliation skipped',
-        error: e, name: 'Bootstrap');
-  }
+    ).catchError((e) {
+      log('Hosted repository reconciliation skipped',
+          error: e, name: 'Bootstrap');
+    })
+  );
 
   // Initialize plugin system:
   //   Creates Rust PluginManager → connects event bus →
   //   preloads storage from Isar → starts storage event handler.
   try {
-    await ServiceLocator.initializePluginSystem();
-    log('Plugin system initialized successfully', name: 'Bootstrap');
+    unawaited(
+      ServiceLocator.initializePluginSystem().then((_) {
+        log('Plugin system initialized successfully', name: 'Bootstrap');
+      }).catchError((e, stack) {
+        log('Plugin system initialization failed (non-fatal)',
+            error: e, stackTrace: stack, name: 'Bootstrap');
+      })
+    );
   } catch (e, stack) {
-    // Plugin system failure is non-fatal — the app can still run
-    // with degraded functionality (no plugin content).
-    log('Plugin system initialization failed (non-fatal)',
-        error: e, stackTrace: stack, name: 'Bootstrap');
+    log('Failed to schedule plugin initialization', error: e, name: 'Bootstrap');
   }
 
   // Auto-scan local music folders if enabled (fire-and-forget).
