@@ -166,8 +166,82 @@ class VoskVoiceService {
     BuildContext? context,
   }) async {
     if (on) {
+      // ──────────────────────────────────────────────────────────────
+      // 1) Start the Android microphone FGS FIRST.
+      //    This triggers the RECORD_AUDIO permission dialog (if not yet
+      //    granted) while the app is still foreground. Starting the model
+      //    load first, as before, caused the app to lose foreground
+      //    eligibility by the time startForeground() ran → SecurityException.
+      // ──────────────────────────────────────────────────────────────
+      if (Platform.isAndroid) {
+        try {
+          final ok = await _voiceServiceChannel
+              .invokeMethod<bool>('startVoiceService');
+          if (ok != true) {
+            log('Native FGS refused to start (returned false)',
+                name: 'VoskVoiceService');
+            if (context != null && context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                      'Cannot start hands-free: microphone service refused to start'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+            return;
+          }
+        } on PlatformException catch (e) {
+          log('PlatformException starting FGS: ${e.code} ${e.message}',
+              name: 'VoskVoiceService');
+          if (context != null && context.mounted) {
+            if (e.code == 'RECORD_AUDIO_DENIED') {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                      'Microphone permission is required for hands-free voice commands. Enable it in Settings → Apps → FukatMusic → Permissions.'),
+                  duration: Duration(seconds: 6),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Failed to start hands-free service: ${e.code}'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          }
+          return;
+        } catch (e) {
+          log('Unexpected error starting FGS: $e',
+              name: 'VoskVoiceService');
+          if (context != null && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Failed to start hands-free service'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      // ──────────────────────────────────────────────────────────────
+      // 2) Now that the FGS is running (and RECORD_AUDIO is granted),
+      //    load the Vosk model. Its first run downloads ~40 MB.
+      // ──────────────────────────────────────────────────────────────
       final ready = await _initModel(context: context);
       if (!ready) {
+        // Model load failed — tear down the FGS we just started so the
+        // notification doesn't stick around with nothing listening.
+        if (Platform.isAndroid) {
+          try {
+            await _voiceServiceChannel.invokeMethod('stopVoiceService');
+          } catch (_) {}
+        }
         if (context != null && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -180,17 +254,30 @@ class VoskVoiceService {
         return;
       }
 
-      // Start Android 14+ dedicated Microphone Foreground Service
-      if (Platform.isAndroid) {
-        try {
-          await _voiceServiceChannel.invokeMethod('startVoiceService');
-        } catch (e) {
-          log('Error starting native VoiceCommandForegroundService: $e',
-              name: 'VoskVoiceService');
-        }
-      }
-
+      // ──────────────────────────────────────────────────────────────
+      // 3) Start Vosk recognition. If this throws, also stop FGS.
+      // ──────────────────────────────────────────────────────────────
       await startListening(cubit);
+
+      if (!isListening.value) {
+        // startListening() swallows its own errors and sets isListening=false
+        // on failure — reflect that state to the user and clean up FGS.
+        if (Platform.isAndroid) {
+          try {
+            await _voiceServiceChannel.invokeMethod('stopVoiceService');
+          } catch (_) {}
+        }
+        if (context != null && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content:
+                  Text('Failed to start voice recognition. Hands-free is OFF.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
 
       if (context != null && context.mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
@@ -204,9 +291,9 @@ class VoskVoiceService {
         );
       }
     } else {
+      // Turning OFF — unchanged logic, just consolidated cleanup.
       await stopListening();
 
-      // Stop Android native Foreground Service
       if (Platform.isAndroid) {
         try {
           await _voiceServiceChannel.invokeMethod('stopVoiceService');

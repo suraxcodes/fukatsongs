@@ -22,16 +22,20 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
-    defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.fukatsongs.app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+defaultConfig {
+    applicationId = "com.fukatsongs.app"
+    minSdk = flutter.minSdkVersion
+    targetSdk = flutter.targetSdkVersion
+    versionCode = flutter.versionCode
+    versionName = flutter.versionName
+
+    ndk {
+        // Poco M6 Pro (Helio G99) is arm64-v8a.
+        // Only build Rust + native libs for real ARM phones.
+        // Removes: armeabi-v7a (old 32-bit), x86 (emulator), x86_64 (emulator).
+        abiFilters += listOf("arm64-v8a")
     }
+}
 
     buildTypes {
         release {
