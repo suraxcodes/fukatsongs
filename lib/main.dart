@@ -170,7 +170,9 @@ Future<void> importItems(String path) async {
 
 Future<void> setHighRefreshRate() async {
   if (io.Platform.isAndroid) {
-    await FlutterDisplayMode.setHighRefreshRate();
+    try {
+      await FlutterDisplayMode.setHighRefreshRate();
+    } catch (_) {}
   }
 }
 
@@ -194,7 +196,9 @@ Future<void> main() async {
   unawaited(Firebase.initializeApp());
   
   GestureBinding.instance.resamplingEnabled = true;
-  MediaKit.ensureInitialized();
+  try {
+    MediaKit.ensureInitialized();
+  } catch (_) {}
   await bootstrapApp();
   setHighRefreshRate();
   await setupPlayerCubit();

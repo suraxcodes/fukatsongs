@@ -54,8 +54,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get playerNoLyricsFound => 'No Lyrics Found';
 
   @override
-  String get playerLyricsNoPlugin =>
-      'No lyrics provider configured. Go to Settings → Plugins to install one.';
+  String get playerLyricsNoPlugin => 'No lyrics provider configured. Go to Settings → Plugins to install one.';
 
   @override
   String get playerFullscreenLyrics => 'Fullscreen Lyrics';
@@ -70,8 +69,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get localMusicStorageAccessRequired => 'Storage Access Required';
 
   @override
-  String get localMusicStorageAccessDesc =>
-      'Please grant permission to scan and play audio files stored on your device.';
+  String get localMusicStorageAccessDesc => 'Please grant permission to scan and play audio files stored on your device.';
 
   @override
   String get localMusicAddFolder => 'Add Music Folder';
@@ -158,8 +156,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get dialogDeleteTrackLinkedPlaylists =>
-      'This track will also be removed from:';
+  String get dialogDeleteTrackLinkedPlaylists => 'This track will also be removed from:';
 
   @override
   String get dialogDontAskAgain => 'Don\'t ask me again';
@@ -229,8 +226,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get playlistCreateNew => 'Create New Playlist 😍';
 
   @override
-  String get playlistCreateFirstOne =>
-      'No playlists yet. Create one to get started!';
+  String get playlistCreateFirstOne => 'No playlists yet. Create one to get started!';
 
   @override
   String get addToPlaylistNoSongSelected => 'No song selected';
@@ -282,15 +278,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsDownloads => 'Downloads';
 
   @override
-  String get settingsDownloadsSubtitle =>
-      'Download Path, Download Quality and more...';
+  String get settingsDownloadsSubtitle => 'Download Path, Download Quality and more...';
 
   @override
   String get settingsLocalTracks => 'Local Tracks';
 
   @override
-  String get settingsLocalTracksSubtitle =>
-      'Scan, manage folders and auto-scan settings.';
+  String get settingsLocalTracksSubtitle => 'Scan, manage folders and auto-scan settings.';
 
   @override
   String get settingsPlayer => 'Player Settings';
@@ -302,8 +296,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsPluginDefaults => 'Plugin Defaults';
 
   @override
-  String get settingsPluginDefaultsSubtitle =>
-      'Discover source, resolver priority.';
+  String get settingsPluginDefaultsSubtitle => 'Discover source, resolver priority.';
 
   @override
   String get settingsUIElements => 'UI Elements & Services';
@@ -315,22 +308,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsLastFM => 'Last.FM Settings';
 
   @override
-  String get settingsLastFMSubtitle =>
-      'API Key, Secret, and Scrobbling settings.';
+  String get settingsLastFMSubtitle => 'API Key, Secret, and Scrobbling settings.';
+
+  @override
+  String get settingsVoiceCommands => 'Voice Commands';
+
+  @override
+  String get settingsVoiceCommandsSubtitle => 'Enable or disable voice command control.';
 
   @override
   String get settingsStorage => 'Storage';
 
   @override
-  String get settingsStorageSubtitle =>
-      'Backup, Cache, History, Restore and more...';
+  String get settingsStorageSubtitle => 'Backup, Cache, History, Restore and more...';
 
   @override
   String get settingsLanguageCountry => 'Language & Country';
 
   @override
-  String get settingsLanguageCountrySubtitle =>
-      'Select your language and country.';
+  String get settingsLanguageCountrySubtitle => 'Select your language and country.';
 
   @override
   String get settingsAbout => 'About';
@@ -378,8 +374,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pluginRepositoryTitle => 'Plugin Repositories';
 
   @override
-  String get pluginRepositorySubtitle =>
-      'Add a JSON source to browse remote plugins.';
+  String get pluginRepositorySubtitle => 'Add a JSON source to browse remote plugins.';
 
   @override
   String get pluginRepositoryAddAction => 'Add Repository';
@@ -388,8 +383,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pluginRepositoryAddTitle => 'Add Repository';
 
   @override
-  String get pluginRepositoryAddSubtitle =>
-      'Enter the URL of a valid plugin repository JSON file.';
+  String get pluginRepositoryAddSubtitle => 'Enter the URL of a valid plugin repository JSON file.';
 
   @override
   String get pluginRepositoryEmpty => 'No repositories added yet.';
@@ -418,8 +412,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pluginRepositoryErrorLoad => 'Failed to load repositories.';
 
   @override
-  String get pluginRepositoryErrorInvalid =>
-      'Invalid repository URL or repository file.';
+  String get pluginRepositoryErrorInvalid => 'Invalid repository URL or repository file.';
 
   @override
   String get pluginRepositoryErrorRemove => 'Failed to remove repository.';
@@ -436,12 +429,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get emptyNoInternet => 'No Internet Connection!';
 
   @override
-  String get emptyNoContentPlugin =>
-      'No content plugin loaded. Load a Content Resolver in Plugin Manager.';
+  String get emptyNoContentPlugin => 'No content plugin loaded. Load a Content Resolver in Plugin Manager.';
 
   @override
-  String get emptyRefreshingSource =>
-      'Refreshing Discover source... The previous source is no longer available.';
+  String get emptyRefreshingSource => 'Refreshing Discover source... The previous source is no longer available.';
 
   @override
   String get emptyNoTracks => 'No tracks available';
@@ -536,8 +527,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get snackbarDownloadServiceUnavailable =>
-      'Error: Download service is unavailable.';
+  String get snackbarDownloadServiceUnavailable => 'Error: Download service is unavailable.';
 
   @override
   String snackbarSongsAddedToQueue(int count) {
@@ -545,8 +535,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get snackbarDeleteTrackFailDevice =>
-      'Failed to delete track from device storage.';
+  String get snackbarDeleteTrackFailDevice => 'Failed to delete track from device storage.';
 
   @override
   String get searchHintExplore => 'What do you want to listen to?';
@@ -567,8 +556,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchNoSuggestions => 'No Suggestions found!';
 
   @override
-  String get searchNoResults =>
-      'No results found!\nTry another keyword or source.';
+  String get searchNoResults => 'No results found!\nTry another keyword or source.';
 
   @override
   String get searchFailed => 'Search failed!';
@@ -610,8 +598,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get libraryTitle => 'Library';
 
   @override
-  String get libraryEmptyState =>
-      'Your library is feeling lonely. Add some tunes to brighten it up!';
+  String get libraryEmptyState => 'Your library is feeling lonely. Add some tunes to brighten it up!';
 
   @override
   String libraryIn(String playlistName) {
@@ -691,16 +678,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appuiAutoSlideCharts => 'Auto Slide Charts';
 
   @override
-  String get appuiAutoSlideChartsSubtitle =>
-      'Slide charts automatically in home screen.';
+  String get appuiAutoSlideChartsSubtitle => 'Slide charts automatically in home screen.';
 
   @override
-  String get appuiLastFmPicksSubtitle =>
-      'Show suggestions from Last.FM. Login & restart required.';
+  String get appuiLastFmPicksSubtitle => 'Show suggestions from Last.FM. Login & restart required.';
 
   @override
-  String get appuiNoChartsAvailable =>
-      'No charts available. Load a chart provider plugin.';
+  String get appuiNoChartsAvailable => 'No charts available. Load a chart provider plugin.';
 
   @override
   String get appuiLoginToLastFm => 'Please login to Last.FM first.';
@@ -715,8 +699,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get countrySettingAutoDetect => 'Auto Detect Country';
 
   @override
-  String get countrySettingAutoDetectSubtitle =>
-      'Automatically detect your country when the app opens.';
+  String get countrySettingAutoDetectSubtitle => 'Automatically detect your country when the app opens.';
 
   @override
   String get countrySettingCountryLabel => 'Country';
@@ -734,8 +717,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloadSettingQuality => 'Download Quality';
 
   @override
-  String get downloadSettingQualitySubtitle =>
-      'Universal audio quality preference for downloaded tracks.';
+  String get downloadSettingQualitySubtitle => 'Universal audio quality preference for downloaded tracks.';
 
   @override
   String get downloadSettingFolder => 'Download Folder';
@@ -744,8 +726,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloadSettingResetFolder => 'Reset Download Folder';
 
   @override
-  String get downloadSettingResetFolderSubtitle =>
-      'Restore the default download path.';
+  String get downloadSettingResetFolderSubtitle => 'Restore the default download path.';
 
   @override
   String get lastfmTitle => 'Last.FM';
@@ -754,8 +735,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get lastfmScrobbleTracks => 'Scrobble Tracks';
 
   @override
-  String get lastfmScrobbleTracksSubtitle =>
-      'Send played tracks to your Last.FM profile.';
+  String get lastfmScrobbleTracksSubtitle => 'Send played tracks to your Last.FM profile.';
 
   @override
   String get lastfmAuthFirst => 'First Authenticate Last.FM API.';
@@ -770,8 +750,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get lastfmNotAuthenticated => 'Not authenticated';
 
   @override
-  String get lastfmSteps =>
-      'Steps to authenticate:\n1. Create / open a Last.FM account at last.fm\n2. Generate an API Key at last.fm/api/account/create\n3. Enter your API Key & Secret below\n4. Tap \"Start Auth\" and approve in the browser\n5. Tap \"Get & Save Session Key\" to finish';
+  String get lastfmSteps => 'Steps to authenticate:\n1. Create / open a Last.FM account at last.fm\n2. Generate an API Key at last.fm/api/account/create\n3. Enter your API Key & Secret below\n4. Tap \"Start Auth\" and approve in the browser\n5. Tap \"Get & Save Session Key\" to finish';
 
   @override
   String get lastfmApiKey => 'API Key';
@@ -789,8 +768,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get lastfmRemoveKeys => 'Remove Keys';
 
   @override
-  String get lastfmStartAuthFirst =>
-      'Start Auth first, then approve in browser.';
+  String get lastfmStartAuthFirst => 'Start Auth first, then approve in browser.';
 
   @override
   String get localSettingTitle => 'Local Tracks';
@@ -799,8 +777,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get localSettingAutoScan => 'Auto Scan on Startup';
 
   @override
-  String get localSettingAutoScanSubtitle =>
-      'Automatically scan for new local tracks when the app starts.';
+  String get localSettingAutoScanSubtitle => 'Automatically scan for new local tracks when the app starts.';
 
   @override
   String get localSettingLastScan => 'Last Scan';
@@ -812,12 +789,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get localSettingScanInProgress => 'Scanning in progress…';
 
   @override
-  String get localSettingScanNowSubtitle =>
-      'Manually trigger a full library scan.';
+  String get localSettingScanNowSubtitle => 'Manually trigger a full library scan.';
 
   @override
-  String get localSettingNoFolders =>
-      'No folders added. Add a folder to start scanning.';
+  String get localSettingNoFolders => 'No folders added. Add a folder to start scanning.';
 
   @override
   String get localSettingAddFolder => 'Add Folder';
@@ -832,8 +807,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get playerSettingStreamQuality => 'Streaming Quality';
 
   @override
-  String get playerSettingStreamQualitySubtitle =>
-      'Global audio bitrate for online playback.';
+  String get playerSettingStreamQualitySubtitle => 'Global audio bitrate for online playback.';
 
   @override
   String get playerSettingQualityLow => 'Low';
@@ -851,15 +825,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get playerSettingAutoPlay => 'Auto Play';
 
   @override
-  String get playerSettingAutoPlaySubtitle =>
-      'Enqueue similar songs when the queue ends.';
+  String get playerSettingAutoPlaySubtitle => 'Enqueue similar songs when the queue ends.';
 
   @override
   String get playerSettingAutoFallback => 'Auto Fallback Playback';
 
   @override
-  String get playerSettingAutoFallbackSubtitle =>
-      'If a plugin is missing or returns no streams, try a compatible resolver for playback only.';
+  String get playerSettingAutoFallbackSubtitle => 'If a plugin is missing or returns no streams, try a compatible resolver for playback only.';
 
   @override
   String get playerSettingCrossfade => 'Crossfade';
@@ -887,8 +859,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get playerSettingEqualizerSubtitle =>
-      '10-band parametric EQ via FFmpeg.';
+  String get playerSettingEqualizerSubtitle => '10-band parametric EQ via FFmpeg.';
 
   @override
   String get pluginDefaultsTitle => 'Plugin Defaults';
@@ -897,23 +868,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pluginDefaultsDiscoverHeader => 'Discover Source';
 
   @override
-  String get pluginDefaultsNoResolver =>
-      'No content resolver loaded. Load a plugin to choose a Discover source.';
+  String get pluginDefaultsNoResolver => 'No content resolver loaded. Load a plugin to choose a Discover source.';
 
   @override
-  String get pluginDefaultsAutomaticSubtitle =>
-      'Use the first available content resolver.';
+  String get pluginDefaultsAutomaticSubtitle => 'Use the first available content resolver.';
 
   @override
   String get pluginDefaultsPriorityHeader => 'Resolver Priority';
 
   @override
-  String get pluginDefaultsNoPriority =>
-      'No content resolvers loaded. Priority ordering will appear here once plugins are loaded.';
+  String get pluginDefaultsNoPriority => 'No content resolvers loaded. Priority ordering will appear here once plugins are loaded.';
 
   @override
-  String get pluginDefaultsPriorityDesc =>
-      'Drag to reorder. Higher priority resolvers are tried first when resolving chart items or imported tracks to playable tracks.';
+  String get pluginDefaultsPriorityDesc => 'Drag to reorder. Higher priority resolvers are tried first when resolving chart items or imported tracks to playable tracks.';
 
   @override
   String get pluginDefaultsLyricsHeader => 'Lyrics Priority';
@@ -922,8 +889,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pluginDefaultsLyricsNone => 'No lyrics providers loaded.';
 
   @override
-  String get pluginDefaultsLyricsDesc =>
-      'Drag to reorder lyrics providers. The first provider is tried first.';
+  String get pluginDefaultsLyricsDesc => 'Drag to reorder lyrics providers. The first provider is tried first.';
 
   @override
   String get pluginDefaultsSuggestionsHeader => 'Search Suggestions';
@@ -935,8 +901,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pluginDefaultsSuggestionsHistoryOnlyTitle => 'None';
 
   @override
-  String get pluginDefaultsSuggestionsHistoryOnlySubtitle =>
-      'Use search history only.';
+  String get pluginDefaultsSuggestionsHistoryOnlySubtitle => 'Use search history only.';
 
   @override
   String get storageSettingTitle => 'Storage';
@@ -945,8 +910,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storageClearHistoryEvery => 'Clear History In Every';
 
   @override
-  String get storageClearHistorySubtitle =>
-      'Clear listening history after the chosen period.';
+  String get storageClearHistorySubtitle => 'Clear listening history after the chosen period.';
 
   @override
   String storageDays(int count) {
@@ -972,8 +936,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storageCreateBackup => 'Create Backup';
 
   @override
-  String get storageCreateBackupSubtitle =>
-      'Save your settings and data to a backup file.';
+  String get storageCreateBackupSubtitle => 'Save your settings and data to a backup file.';
 
   @override
   String storageBackupCreatedAt(String path) {
@@ -992,36 +955,31 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storageRestoreBackup => 'Restore Backup';
 
   @override
-  String get storageRestoreBackupSubtitle =>
-      'Restore your settings and data from a backup file.';
+  String get storageRestoreBackupSubtitle => 'Restore your settings and data from a backup file.';
 
   @override
   String get storageAutoBackup => 'Auto Backup';
 
   @override
-  String get storageAutoBackupSubtitle =>
-      'Periodically create a backup of your data automatically.';
+  String get storageAutoBackupSubtitle => 'Periodically create a backup of your data automatically.';
 
   @override
   String get storageAutoLyrics => 'Auto Save Lyrics';
 
   @override
-  String get storageAutoLyricsSubtitle =>
-      'Save lyrics automatically when a song plays.';
+  String get storageAutoLyricsSubtitle => 'Save lyrics automatically when a song plays.';
 
   @override
   String get storageResetApp => 'Reset FukatMusic App';
 
   @override
-  String get storageResetAppSubtitle =>
-      'Delete all data and restore the app to its default state.';
+  String get storageResetAppSubtitle => 'Delete all data and restore the app to its default state.';
 
   @override
   String get storageResetConfirmTitle => 'Confirm Reset';
 
   @override
-  String get storageResetConfirmMessage =>
-      'Are you sure you want to reset FukatMusic? This will delete all your data and cannot be undone.';
+  String get storageResetConfirmMessage => 'Are you sure you want to reset FukatMusic? This will delete all your data and cannot be undone.';
 
   @override
   String get storageResetButton => 'Reset';
@@ -1033,26 +991,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storageLocationDialogTitle => 'Backup Location';
 
   @override
-  String get storageLocationAndroid =>
-      'Backups are stored in:\n\n1. Downloads directory\n2. Android/data/FukatMusic.player/data\n\nCopy the file from either location.';
+  String get storageLocationAndroid => 'Backups are stored in:\n\n1. Downloads directory\n2. Android/data/FukatMusic.player/data\n\nCopy the file from either location.';
 
   @override
-  String get storageLocationOther =>
-      'Backups are stored in the Downloads directory. Copy the file from there.';
+  String get storageLocationOther => 'Backups are stored in the Downloads directory. Copy the file from there.';
 
   @override
   String get storageRestoreOptionsTitle => 'Restore Options';
 
   @override
-  String get storageRestoreOptionsDesc =>
-      'Choose which data you want to restore from the selected backup file. Unselect any items you do NOT want to be imported. By default all are selected.';
+  String get storageRestoreOptionsDesc => 'Choose which data you want to restore from the selected backup file. Unselect any items you do NOT want to be imported. By default all are selected.';
 
   @override
   String get storageRestoreSelectAll => 'Select All';
 
   @override
-  String get storageRestoreMediaItems =>
-      'Media items (songs, tracks, library entries)';
+  String get storageRestoreMediaItems => 'Media items (songs, tracks, library entries)';
 
   @override
   String get storageRestoreSearchHistory => 'Search history';
@@ -1070,12 +1024,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storageRestoreConfirmTitle => 'Confirm Restore';
 
   @override
-  String get storageRestoreConfirmPrefix =>
-      'This will overwrite and merge the parts you selected in the app with data from the backup file:';
+  String get storageRestoreConfirmPrefix => 'This will overwrite and merge the parts you selected in the app with data from the backup file:';
 
   @override
-  String get storageRestoreConfirmSuffix =>
-      'Your current data will be modified/merged. Are you sure you want to proceed?';
+  String get storageRestoreConfirmSuffix => 'Your current data will be modified/merged. Are you sure you want to proceed?';
 
   @override
   String get storageRestoreYes => 'Yes, restore';
@@ -1084,8 +1036,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storageRestoreNo => 'No';
 
   @override
-  String get storageRestoring =>
-      'Restoring selected data…\nPlease wait until the operation completes.';
+  String get storageRestoring => 'Restoring selected data…\nPlease wait until the operation completes.';
 
   @override
   String get storageRestoreMediaBullet => '• Media items';
@@ -1094,8 +1045,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storageRestoreHistoryBullet => '• Search history';
 
   @override
-  String get storageUnexpectedError =>
-      'An unexpected error occurred while restoring.';
+  String get storageUnexpectedError => 'An unexpected error occurred while restoring.';
 
   @override
   String get storageRestoreCompleted => 'Restore Completed';
@@ -1104,20 +1054,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storageRestoreFailedTitle => 'Restore Failed';
 
   @override
-  String get storageRestoreSuccessMessage =>
-      'The selected data was restored successfully. For best results, please restart the app now.';
+  String get storageRestoreSuccessMessage => 'The selected data was restored successfully. For best results, please restart the app now.';
 
   @override
-  String get storageRestoreFailedMessage =>
-      'The restore process failed with the following errors:';
+  String get storageRestoreFailedMessage => 'The restore process failed with the following errors:';
 
   @override
-  String get storageRestoreUnknownError =>
-      'Unknown error occurred during restore.';
+  String get storageRestoreUnknownError => 'Unknown error occurred during restore.';
 
   @override
-  String get storageRestoreRestartHint =>
-      'Please restart the app for better consistency.';
+  String get storageRestoreRestartHint => 'Please restart the app for better consistency.';
 
   @override
   String get updateSettingTitle => 'Updates';
@@ -1129,15 +1075,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updateCheckForUpdates => 'Check for Updates';
 
   @override
-  String get updateCheckSubtitle =>
-      'See if a newer version of FukatMusic is available.';
+  String get updateCheckSubtitle => 'See if a newer version of FukatMusic is available.';
 
   @override
   String get updateAutoNotify => 'Auto Update Notify';
 
   @override
-  String get updateAutoNotifySubtitle =>
-      'Get notified when new updates are available on app start.';
+  String get updateAutoNotifySubtitle => 'Get notified when new updates are available on app start.';
 
   @override
   String get updateCheckTitle => 'Check for Updates';
@@ -1154,8 +1098,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get updateNewVersionAvailable =>
-      'New Version of FukatMusic🎵 is now available!!';
+  String get updateNewVersionAvailable => 'New Version of FukatMusic🎵 is now available!!';
 
   @override
   String updateVersion(String ver, String build) {
@@ -1166,8 +1109,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updateDownloadNow => 'Download Now';
 
   @override
-  String get updateChecking =>
-      'Checking if newer version are available or not!';
+  String get updateChecking => 'Checking if newer version are available or not!';
 
   @override
   String get timerTitle => 'Sleep Timer';
@@ -1226,8 +1168,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pluginManagerTitle => 'Plugins';
 
   @override
-  String get pluginManagerEmpty =>
-      'No plugins installed.\nTap + to add a .bex file.';
+  String get pluginManagerEmpty => 'No plugins installed.\nTap + to add a .bex file.';
 
   @override
   String get pluginManagerFilterAll => 'All';
@@ -1378,8 +1319,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get smartReplaceNoMatch => 'No replacement found';
 
   @override
-  String get smartReplaceNoMatchSubtitle =>
-      'None of the loaded resolver plugins returned a strong enough match.';
+  String get smartReplaceNoMatchSubtitle => 'None of the loaded resolver plugins returned a strong enough match.';
 
   @override
   String get smartReplaceBestMatch => 'Best match';
@@ -1437,12 +1377,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get offlineSearchTooltip => 'Search';
 
   @override
-  String get offlineOpenFailed =>
-      'Unable to open this offline track. Try refreshing downloads.';
+  String get offlineOpenFailed => 'Unable to open this offline track. Try refreshing downloads.';
 
   @override
-  String get offlinePlayFailed =>
-      'Could not play this offline song. Please try again.';
+  String get offlinePlayFailed => 'Could not play this offline song. Please try again.';
 
   @override
   String albumViewTrackCount(int count) {
@@ -1471,8 +1409,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aboutCreativeHighlights => 'Updates and creative highlights';
 
   @override
-  String get aboutTipQuote =>
-      'Enjoying FukatMusic? A small tip keeps it blooming. 🎵';
+  String get aboutTipQuote => 'Enjoying FukatMusic? A small tip keeps it blooming. 🎵';
 
   @override
   String get aboutTipButton => 'I\'ll help';
@@ -1535,8 +1472,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get songInfoMetadataUpdateFailed => 'Could not update metadata';
 
   @override
-  String get songInfoMetadataUnavailable =>
-      'Metadata refresh is unavailable for this source';
+  String get songInfoMetadataUnavailable => 'Metadata refresh is unavailable for this source';
 
   @override
   String get songInfoSearchTitle => 'Search for this song in FukatMusic';
@@ -1572,8 +1508,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chartAddToPlaylist => 'Add to Playlist';
 
   @override
-  String get chartNoResolver =>
-      'No content resolver loaded. Install a plugin to play.';
+  String get chartNoResolver => 'No content resolver loaded. Install a plugin to play.';
 
   @override
   String get chartResolveFailed => 'Could not resolve. Searching instead...';
@@ -1614,18 +1549,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get localMusicNoMusicFound => 'No local music found';
 
   @override
-  String get localMusicNoSearchResults =>
-      'No tracks found matching your search.';
+  String get localMusicNoSearchResults => 'No tracks found matching your search.';
 
   @override
   String get importSongsTitle => 'Import Songs';
 
   @override
-  String get importNoPluginsLoaded =>
-      'No content-importer plugins loaded.\nInstall an importer plugin to import playlists from external services.';
+  String get importNoPluginsLoaded => 'No content-importer plugins loaded.\nInstall an importer plugin to import playlists from external services.';
 
   @override
-  String get importBloomeeFiles => 'Import FukatMusic Files';
+  String get importFukatMusicFiles => 'Import FukatMusic Files';
 
   @override
   String get importM3UFiles => 'Import M3U Playlist';
@@ -1643,8 +1576,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get importNoteTitle => 'Note';
 
   @override
-  String get importNoteMessage =>
-      'You can only import files created by FukatMusic.\nIf your file is from another source, it will not work. Continue anyway?';
+  String get importNoteMessage => 'You can only import files created by FukatMusic.\nIf your file is from another source, it will not work. Continue anyway?';
 
   @override
   String get importTitle => 'Import';
@@ -1729,12 +1661,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get importReorderTip => 'Long press a playlist to start reordering';
 
   @override
-  String get importErrorCannotHandleUrl =>
-      'This plugin cannot handle the provided URL.';
+  String get importErrorCannotHandleUrl => 'This plugin cannot handle the provided URL.';
 
   @override
-  String get importErrorUnexpectedResponse =>
-      'Unexpected response from plugin.';
+  String get importErrorUnexpectedResponse => 'Unexpected response from plugin.';
 
   @override
   String importErrorFailedToCheck(String error) {
@@ -1778,8 +1708,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get snackbarPlaylistImported => 'Playlist Imported';
 
   @override
-  String get snackbarOpenImportForUrl =>
-      'Open the Import screen in Library to import from this URL.';
+  String get snackbarOpenImportForUrl => 'Open the Import screen in Library to import from this URL.';
 
   @override
   String get snackbarProcessingFile => 'Processing File...';
@@ -1804,8 +1733,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pluginManagerSelectPackage => 'Select Plugin Package (.bex)';
 
   @override
-  String get pluginManagerOutdatedManifest =>
-      'Plugin uses an outdated manifest version. Some features might break. Consider updating.';
+  String get pluginManagerOutdatedManifest => 'Plugin uses an outdated manifest version. Some features might break. Consider updating.';
 
   @override
   String get pluginManagerStatusActive => 'Active';
@@ -1830,8 +1758,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get pluginRepositoryOutdatedManifest =>
-      'Outdated manifest. Features may break.';
+  String get pluginRepositoryOutdatedManifest => 'Outdated manifest. Features may break.';
 
   @override
   String get pluginRepositoryUnknownPublisher => 'Unknown publisher';
@@ -1912,8 +1839,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get lyricsSettingsSyncTitle => 'Adjust Sync (Delay/Offset)';
 
   @override
-  String get lyricsSettingsSyncSubtitle =>
-      'Fix lyrics that are too fast or slow';
+  String get lyricsSettingsSyncSubtitle => 'Fix lyrics that are too fast or slow';
 
   @override
   String get lyricsSettingsSaveTitle => 'Save Offline';
@@ -1957,8 +1883,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tooltipSongInfo => 'Song Info';
 
   @override
-  String get snackbarCannotDeletePlayingSong =>
-      'Cannot delete currently playing song';
+  String get snackbarCannotDeletePlayingSong => 'Cannot delete currently playing song';
 
   @override
   String get playerLoopOff => 'Off';
@@ -1974,7 +1899,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String updateAvailableBody(String ver, String build) {
-    return 'New Version of FukatMusic is now available!\n\nVersion: $ver+$build';
+    return 'New Version of FukatMusicsic🎵 is now available!\n\nVersion: $ver+$build';
   }
 
   @override
@@ -2007,8 +1932,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get pluginBootstrapErrorTitle => 'Connection too slow';
 
   @override
-  String get pluginBootstrapErrorBody =>
-      'Some plugins could not be installed. You can still use FukatMusic — plugins will be retried on next launch.';
+  String get pluginBootstrapErrorBody => 'Some plugins could not be installed. You can still use FukatMusic — plugins will be retried on next launch.';
 
   @override
   String get pluginBootstrapContinue => 'Continue Anyway';

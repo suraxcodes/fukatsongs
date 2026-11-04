@@ -108,8 +108,9 @@ class _PluginBootstrapOverlayState extends State<PluginBootstrapOverlay>
       if (mounted) widget.onComplete();
     } else if (result.failureReason ==
         PluginBootstrapFailureReason.noInternet) {
-      // Auto-skip plugin setup and launch directly into offline mode
-      await settingsDao.putSettingBool(SettingKeys.repositoriesBootstrapped, true);
+      // Auto-skip plugin setup and launch directly into offline mode.
+      // We DO NOT set repositoriesBootstrapped to true, so it will attempt 
+      // to properly download the plugins on the next launch when online!
       if (mounted) widget.onComplete();
     } else {
       _phase.value = _Phase.failed;

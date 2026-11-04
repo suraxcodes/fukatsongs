@@ -18,6 +18,7 @@ import 'package:fukatsongs/services/plugin/plugin_service.dart';
 import 'package:fukatsongs/services/plugin/plugin_storage_service.dart';
 import 'package:fukatsongs/plugins/services/plugin_repository_service.dart';
 import 'package:fukatsongs/services/db/dao/settings_dao.dart';
+import 'package:fukatsongs/services/voice_command_service.dart';
 
 /// Service locator — static singleton registry.
 ///
@@ -40,44 +41,48 @@ class ServiceLocator {
   static late final CacheDAO cacheDAO;
   static late final PluginCacheRepository pluginCache;
   static late final PluginRepositoryService pluginRepositoryService;
+  static late final VoiceCommandService voiceCommandService;
 
   /// Wire up all application dependencies.
   ///
   /// Safe to call multiple times; subsequent calls are no-ops.
   static Future<void> setup() async {
-    if (_initialized) return;
-    _initialized = true;
+  if (_initialized) return;
+  _initialized = true;
 
-    // ── Plugin system ──────────────────────────────────────────────────────
+  // ── Plugin system ──────────────────────────────────────────────────────
 
-    // 1. DAO for plugin storage persistence.
-    pluginStorageDao = PluginStorageDao(DBProvider.db);
+  // 1. DAO for plugin storage persistence.
+  pluginStorageDao = PluginStorageDao(DBProvider.db);
 
-    // 1b. Cache DAO for API response / pre-fetch caching.
-    cacheDAO = CacheDAO(DBProvider.db);
+  // 1b. Cache DAO for API response / pre-fetch caching.
+  cacheDAO = CacheDAO(DBProvider.db);
 
-    // 1c. Plugin response cache (L1 LRU + L2 Isar, lifecycle-aware).
-    pluginCache = PluginCacheRepository(
-      store: PluginCacheStore(),
-      cacheDao: cacheDAO,
-      writer: PluginCacheWriter(cacheDAO),
-    );
+  // 1c. Plugin response cache (L1 LRU + L2 Isar, lifecycle-aware).
+  pluginCache = PluginCacheRepository(
+    store: PluginCacheStore(),
+    cacheDao: cacheDAO,
+    writer: PluginCacheWriter(cacheDAO),
+  );
 
-    pluginRepositoryService =
-        PluginRepositoryService(settingsDao: SettingsDAO(DBProvider.db));
+  pluginRepositoryService =
+      PluginRepositoryService(settingsDao: SettingsDAO(DBProvider.db));
 
-    // 2. Event bus (singleton — connect later during plugin init).
-    pluginEventBus = PluginEventBus.instance;
+  // 2. Event bus (singleton — connect later during plugin init).
+  pluginEventBus = PluginEventBus.instance;
 
-    // 3. Storage service (needs DAO + event bus).
-    pluginStorageService = PluginStorageService(
-      dao: pluginStorageDao,
-      eventBus: pluginEventBus,
-    );
+  // 3. Storage service (needs DAO + event bus).
+  pluginStorageService = PluginStorageService(
+    dao: pluginStorageDao,
+    eventBus: pluginEventBus,
+  );
 
-    // 4. Plugin service (main interface — initialize later with pluginsDir).
-    pluginService = PluginService();
-  }
+  // 4. Plugin service (main interface — initialize later with pluginsDir).
+  pluginService = PluginService();
+
+  // 5. Voice command service – lightweight singleton.
+  voiceCommandService = VoiceCommandService.instance;
+}
 
   /// Initialize the plugin system.
   ///

@@ -69,7 +69,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       if (!isAlreadyLoaded) {
         final isInstalled = pluginState.availablePlugins
             .any((p) => p.manifest.id == preferredId);
-        if (isInstalled) return; // Preferred plugin is loading — wait for it
+        if (isInstalled) return; // Preferred plugin is loading â€” wait for it
       }
     }
 
@@ -153,13 +153,13 @@ class _ExploreScreenState extends State<ExploreScreen> {
               final activePluginId = _homeContentBloc.state.activePluginId;
               if (activePluginId != null &&
                   !state.loadedPluginIds.contains(activePluginId)) {
-                // Active plugin was unloaded — reload from preferred.
+                // Active plugin was unloaded â€” reload from preferred.
                 _homeContentBloc.add(const ClearHomeSections());
                 _tryLoadHomeSections();
                 return;
               }
 
-              // Plugin list changed — check if preferred plugin is different.
+              // Plugin list changed â€” check if preferred plugin is different.
               _tryLoadHomeSections();
             },
           ),
@@ -498,16 +498,19 @@ class CustomDiscoverBar extends StatelessWidget {
       title: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            AppLocalizations.of(context)!.exploreDiscover,
-            style: Default_Theme.primaryTextStyle.merge(
-              const TextStyle(
-                fontSize: 34,
-                color: Default_Theme.primaryColor1,
+          Expanded(
+            child: Text(
+              AppLocalizations.of(context)!.exploreDiscover,
+              style: Default_Theme.primaryTextStyle.merge(
+                const TextStyle(
+                  fontSize: 34,
+                  color: Default_Theme.primaryColor1,
+                ),
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          const Spacer(),
+          const VoiceCommandIcon(),
           const NotificationIcon(),
           const SiteIcon(),
           const TimerIcon(),
@@ -672,6 +675,40 @@ class SiteIcon extends StatelessWidget {
         color: Default_Theme.primaryColor1,
         size: 28.0,
       ),
+    );
+  }
+}
+
+
+class VoiceCommandIcon extends StatelessWidget {
+  const VoiceCommandIcon({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: ServiceLocator.voiceCommandService.isEnabled,
+      builder: (context, isEnabled, child) {
+        return IconButton(
+          padding: const EdgeInsets.all(5),
+          constraints: const BoxConstraints(),
+          tooltip: isEnabled ? 'Hands-Free Voice: ON' : 'Hands-Free Voice: OFF',
+          onPressed: () async {
+            final cubit = context.read<BloomeePlayerCubit>();
+            await ServiceLocator.voiceCommandService.toggle(
+              on: !isEnabled,
+              cubit: cubit,
+              context: context,
+            );
+          },
+          icon: Icon(
+            isEnabled ? MingCute.mic_fill : MingCute.mic_line,
+            color: isEnabled
+                ? const Color(0xFF1DB954)
+                : Default_Theme.primaryColor1,
+            size: 28.0,
+          ),
+        );
+      },
     );
   }
 }

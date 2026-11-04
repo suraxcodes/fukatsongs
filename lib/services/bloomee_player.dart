@@ -226,6 +226,9 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     if (_isDisposed) return;
 
     if (event.begin) {
+      if (ServiceLocator.voiceCommandService.isListening.value) {
+        return;
+      }
       switch (event.type) {
         case AudioInterruptionType.duck:
           // Lower volume to 35% for notifications/navigation. Restore on end.

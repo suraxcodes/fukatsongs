@@ -269,3 +269,36 @@ None
 ## Status
 Completed
 ---
+
+
+## Date
+2026-11-04 12:35
+
+## Task
+Fix Gradle build error resolving androidx.test:runner and configure compatible JDK
+
+## Reason
+Gradle build failed resolving maven-metadata due to DNS/network and incompatible JDK 26.
+
+## what problem/error we fixed 
+- Transient DNS lookup error (`No such host is known (dl.google.com)`) when Gradle tried to fetch `androidx.test:runner:1.2+`.
+- Gradle Kotlin DSL incompatibility with the system Java 26 (`26.0.2`), which threw `java.lang.IllegalArgumentException: 26.0.2`.
+- Pointed Flutter config (`jdk-dir`) and user environment `JAVA_HOME` to Android Studio's bundled JBR JDK 21 (`C:\Program Files\Android\Android Studio\jbr`).
+
+## Files Changed 
+- (Environment & Flutter Configuration: `JAVA_HOME`, `flutter config --jdk-dir`)
+
+## Main Changes
+- Configured Flutter's JDK directory to Android Studio JBR (OpenJDK 21).
+- Set `JAVA_HOME` environment variable to `C:\Program Files\Android\Android Studio\jbr`.
+- Verified network connectivity to `dl.google.com` repository.
+- Successfully verified build with `flutter build apk --debug`.
+
+## Technical Notes
+- Flutter build toolchain and Gradle Kotlin scripts require JDK 17 or JDK 21; system Java 26 causes Gradle internal version parsing errors.
+
+## Breaking Changes
+None
+
+## Status
+Completed

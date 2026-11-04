@@ -6,6 +6,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   isar_community_flutter_libs
   media_kit_libs_linux
   url_launcher_linux
+  vosk_flutter_service
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST

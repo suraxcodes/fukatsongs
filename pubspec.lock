@@ -1416,6 +1416,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.10.2"
+  speech_to_text:
+    dependency: "direct main"
+    description:
+      name: speech_to_text
+      sha256: f2fabd017b5cb07f4e06d496b2d4b957e39534bc848f92b1e6acac80a10f4967
+      url: "https://pub.dev"
+    source: hosted
+    version: "7.5.0"
+  speech_to_text_platform_interface:
+    dependency: transitive
+    description:
+      name: speech_to_text_platform_interface
+      sha256: "7e447356be3074c471223c9d179ef3f822475350b67ca923ec71ab3bf2ede214"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.5.0"
+  speech_to_text_windows:
+    dependency: transitive
+    description:
+      name: speech_to_text_windows
+      sha256: "2d1d10565b23262386b453b33656299608dc7a66784453735d6c1318f13f44d7"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.1"
   sqflite:
     dependency: transitive
     description:
@@ -1688,6 +1712,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "15.2.0"
+  vosk_flutter_service:
+    dependency: "direct main"
+    description:
+      name: vosk_flutter_service
+      sha256: a361995dd06583f975fcb78d002cbd31897b81a02842029a38acbbef611d5d23
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.2"
   watcher:
     dependency: transitive
     description:
@@ -1785,5 +1817,5 @@ packages:
     source: hosted
     version: "3.1.0"
 sdks:
-  dart: ">=3.11.0 <4.0.0"
-  flutter: ">=3.38.4"
+  dart: ">=3.12.0 <4.0.0"
+  flutter: ">=3.44.0"

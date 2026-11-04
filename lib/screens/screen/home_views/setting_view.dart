@@ -9,6 +9,10 @@ import 'package:fukatsongs/screens/screen/home_views/setting_views/download_sett
 import 'package:fukatsongs/screens/screen/home_views/setting_views/lastfm_setting.dart';
 import 'package:fukatsongs/screens/screen/home_views/setting_views/player_setting.dart';
 import 'package:fukatsongs/screens/screen/home_views/setting_views/updates_setting.dart';
+
+import 'package:fukatsongs/core/di/service_locator.dart';
+import 'package:fukatsongs/blocs/media_player/bloomee_player_cubit.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fukatsongs/screens/screen/plugin_manager_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:fukatsongs/core/theme/app_theme.dart';
@@ -40,8 +44,7 @@ class SettingsView extends StatelessWidget {
       ),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(
-              maxWidth: 640), // Desktop & tablet responsive
+          constraints: const BoxConstraints(maxWidth: 640), // Desktop & tablet responsive
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             children: [
@@ -50,28 +53,21 @@ class SettingsView extends StatelessWidget {
                 children: [
                   _SettingsTile(
                     title: AppLocalizations.of(context)!.settingsPlugins,
-                    subtitle:
-                        AppLocalizations.of(context)!.settingsPluginsSubtitle,
+                    subtitle: AppLocalizations.of(context)!.settingsPluginsSubtitle,
                     icon: MingCute.plugin_2_fill,
                     iconColor: Default_Theme.accentColor2,
-                    isHighlightIcon:
-                        true, // Gives the accent color a bit more pop
-                    onTap: () =>
-                        _navigate(context, const PluginManagerScreen()),
+                    onTap: () => _navigate(context, const PluginManagerScreen()),
                   ),
                   _SettingsTile(
                     title: AppLocalizations.of(context)!.settingsPluginDefaults,
-                    subtitle: AppLocalizations.of(context)!
-                        .settingsPluginDefaultsSubtitle,
+                    subtitle: AppLocalizations.of(context)!.settingsPluginDefaultsSubtitle,
                     icon: MingCute.settings_6_fill,
                     iconColor: Default_Theme.accentColor2,
-                    onTap: () =>
-                        _navigate(context, const PluginDefaultsSettings()),
+                    onTap: () => _navigate(context, const PluginDefaultsSettings()),
                   ),
                   _SettingsTile(
                     title: AppLocalizations.of(context)!.settingsUpdates,
-                    subtitle:
-                        AppLocalizations.of(context)!.settingsUpdatesSubtitle,
+                    subtitle: AppLocalizations.of(context)!.settingsUpdatesSubtitle,
                     icon: MingCute.download_3_fill,
                     iconColor: Default_Theme.accentColor2,
                     onTap: () => _navigate(context, const UpdatesSettings()),
@@ -84,24 +80,21 @@ class SettingsView extends StatelessWidget {
                 children: [
                   _SettingsTile(
                     title: AppLocalizations.of(context)!.settingsPlayer,
-                    subtitle:
-                        AppLocalizations.of(context)!.settingsPlayerSubtitle,
+                    subtitle: AppLocalizations.of(context)!.settingsPlayerSubtitle,
                     icon: MingCute.airpods_fill,
                     iconColor: Default_Theme.accentColor2,
                     onTap: () => _navigate(context, const PlayerSettings()),
                   ),
                   _SettingsTile(
                     title: AppLocalizations.of(context)!.settingsDownloads,
-                    subtitle:
-                        AppLocalizations.of(context)!.settingsDownloadsSubtitle,
+                    subtitle: AppLocalizations.of(context)!.settingsDownloadsSubtitle,
                     icon: MingCute.folder_download_fill,
                     iconColor: Default_Theme.accentColor2,
                     onTap: () => _navigate(context, const DownloadSettings()),
                   ),
                   _SettingsTile(
                     title: AppLocalizations.of(context)!.settingsLocalTracks,
-                    subtitle: AppLocalizations.of(context)!
-                        .settingsLocalTracksSubtitle,
+                    subtitle: AppLocalizations.of(context)!.settingsLocalTracksSubtitle,
                     icon: MingCute.music_2_fill,
                     iconColor: Default_Theme.accentColor2,
                     onTap: () => _navigate(context, const LocalMusicSettings()),
@@ -114,36 +107,70 @@ class SettingsView extends StatelessWidget {
                 children: [
                   _SettingsTile(
                     title: AppLocalizations.of(context)!.settingsUIElements,
-                    subtitle: AppLocalizations.of(context)!
-                        .settingsUIElementsSubtitle,
+                    subtitle: AppLocalizations.of(context)!.settingsUIElementsSubtitle,
                     icon: MingCute.display_fill,
                     iconColor: Default_Theme.accentColor2,
                     onTap: () => _navigate(context, const AppUISettings()),
                   ),
                   _SettingsTile(
-                    title:
-                        AppLocalizations.of(context)!.settingsLanguageCountry,
-                    subtitle: AppLocalizations.of(context)!
-                        .settingsLanguageCountrySubtitle,
+                    title: AppLocalizations.of(context)!.settingsLanguageCountry,
+                    subtitle: AppLocalizations.of(context)!.settingsLanguageCountrySubtitle,
                     icon: MingCute.globe_fill,
                     iconColor: Default_Theme.accentColor2,
                     onTap: () => _navigate(context, const CountrySettings()),
                   ),
                   _SettingsTile(
                     title: AppLocalizations.of(context)!.settingsStorage,
-                    subtitle:
-                        AppLocalizations.of(context)!.settingsStorageSubtitle,
+                    subtitle: AppLocalizations.of(context)!.settingsStorageSubtitle,
                     icon: MingCute.coin_2_fill,
                     iconColor: Default_Theme.accentColor2,
                     onTap: () => _navigate(context, const BackupSettings()),
                   ),
                   _SettingsTile(
                     title: AppLocalizations.of(context)!.settingsLastFM,
-                    subtitle:
-                        AppLocalizations.of(context)!.settingsLastFMSubtitle,
+                    subtitle: AppLocalizations.of(context)!.settingsLastFMSubtitle,
                     icon: FontAwesome.lastfm_brand,
                     iconColor: Default_Theme.accentColor2,
                     onTap: () => _navigate(context, const LastDotFM()),
+                  ),
+                  // Voice Commands toggle
+                  _SettingsTile(
+                    title: AppLocalizations.of(context)!.settingsVoiceCommands,
+                    subtitle: AppLocalizations.of(context)!.settingsVoiceCommandsSubtitle,
+                    icon: MingCute.mic_fill,
+                    iconColor: Default_Theme.accentColor2,
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) {
+                          bool isOn = ServiceLocator.voiceCommandService.enabled;
+                          return AlertDialog(
+                            title: const Text('Voice Commands'),
+                            content: StatefulBuilder(
+                              builder: (context, setState) {
+                                return SwitchListTile(
+                                  title: const Text('Enable voice commands'),
+                                  value: isOn,
+                                  onChanged: (value) async {
+                                    setState(() => isOn = value);
+                                    await ServiceLocator.voiceCommandService.toggle(
+                                      on: value,
+                                      cubit: context.read<BloomeePlayerCubit>(),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: const Text('Close'),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
                   ),
                 ],
               ),
@@ -153,8 +180,7 @@ class SettingsView extends StatelessWidget {
                 children: [
                   _SettingsTile(
                     title: AppLocalizations.of(context)!.settingsAbout,
-                    subtitle:
-                        AppLocalizations.of(context)!.settingsAboutSubtitle,
+                    subtitle: AppLocalizations.of(context)!.settingsAboutSubtitle,
                     icon: MingCute.github_fill,
                     iconColor: Default_Theme.accentColor2,
                     onTap: () => _navigate(context, const About()),
@@ -197,8 +223,7 @@ class _SettingsSection extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
         child: Material(
-          color: Colors
-              .transparent, // Required to let the InkWell splash render correctly inside
+          color: Colors.transparent, // Required to let the InkWell splash render correctly inside
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: _buildChildrenWithDividers(),
@@ -217,8 +242,7 @@ class _SettingsSection extends StatelessWidget {
         result.add(
           Divider(
             height: 1,
-            color: Default_Theme.primaryColor1
-                .withValues(alpha: 0.04), // Very faint line
+            color: Default_Theme.primaryColor1.withValues(alpha: 0.04), // Very faint line
             indent: 66, // Aligns perfectly with the text start
             endIndent: 16,
           ),
@@ -265,17 +289,13 @@ class _SettingsTile extends StatelessWidget {
               decoration: BoxDecoration(
                 color: isHighlightIcon
                     ? iconColor.withValues(alpha: 0.12)
-                    : Default_Theme.primaryColor1.withValues(
-                        alpha:
-                            0.06), // Muted background for non-highlight icons
+                    : Default_Theme.primaryColor1.withValues(alpha: 0.06), // Muted background for non-highlight icons
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
                 icon,
                 size: 20,
-                color: isHighlightIcon
-                    ? iconColor
-                    : iconColor.withValues(alpha: 0.85),
+                color: isHighlightIcon ? iconColor : iconColor.withValues(alpha: 0.85),
               ),
             ),
             const SizedBox(width: 14),
@@ -301,8 +321,7 @@ class _SettingsTile extends StatelessWidget {
                   Text(
                     subtitle,
                     style: TextStyle(
-                      color: Default_Theme.primaryColor2.withValues(
-                          alpha: 0.65), // Softer, highly readable description
+                      color: Default_Theme.primaryColor2.withValues(alpha: 0.65), // Softer, highly readable description
                       fontSize: 12,
                       fontWeight: FontWeight.w400,
                     ),

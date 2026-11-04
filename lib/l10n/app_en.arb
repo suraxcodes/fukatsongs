@@ -106,6 +106,8 @@
   "settingsUIElementsSubtitle": "Auto slide, UI tweaks etc.",
   "settingsLastFM": "Last.FM Settings",
   "settingsLastFMSubtitle": "API Key, Secret, and Scrobbling settings.",
+  "settingsVoiceCommands": "Voice Commands",
+  "settingsVoiceCommandsSubtitle": "Enable or disable voice command control.",
   "settingsStorage": "Storage",
   "settingsStorageSubtitle": "Backup, Cache, History, Restore and more...",
   "settingsLanguageCountry": "Language & Country",

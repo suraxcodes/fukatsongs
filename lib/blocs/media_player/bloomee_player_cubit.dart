@@ -1,6 +1,8 @@
+// lib/blocs/media_player/bloomee_player_cubit.dart
 import 'package:fukatsongs/services/bloomee_player.dart';
 import 'package:bloc/bloc.dart';
 import 'package:rxdart/rxdart.dart';
+
 part 'bloomee_player_state.dart';
 
 class BloomeePlayerCubit extends Cubit<BloomeePlayerState> {
@@ -17,6 +19,10 @@ class BloomeePlayerCubit extends Cubit<BloomeePlayerState> {
     emit(BloomeePlayerState(
         isReady: true, showLyrics: value ?? !state.showLyrics));
   }
+
+  /// Stream that indicates whether the player is currently playing.
+  Stream<bool> get playing =>
+      progressStreams.map((s) => s.isPlaying).distinct();
 
   void _setupProgressStreams() {
     progressStreams = Rx.combineLatest4(

@@ -9,7 +9,7 @@ class AppLocalizationsKo extends AppLocalizations {
   AppLocalizationsKo([String locale = 'ko']) : super(locale);
 
   @override
-  String get onboardingTitle => 'Bloomee에 오신 것을 환영합니다';
+  String get onboardingTitle => 'FukatMusic에 오신 것을 환영합니다';
 
   @override
   String get onboardingSubtitle => '언어와 지역 설정을 시작합니다.';
@@ -69,8 +69,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get localMusicStorageAccessRequired => '저장공간 액세스 권한 필요';
 
   @override
-  String get localMusicStorageAccessDesc =>
-      '기기에 저장된 오디오 파일을 스캔하고 재생하려면 권한 허용이 필요합니다.';
+  String get localMusicStorageAccessDesc => '기기에 저장된 오디오 파일을 스캔하고 재생하려면 권한 허용이 필요합니다.';
 
   @override
   String get localMusicAddFolder => '음악 폴더 추가';
@@ -298,6 +297,12 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get settingsLastFMSubtitle => '계정 연동 및 스크로블링 설정';
+
+  @override
+  String get settingsVoiceCommands => 'Voice Commands';
+
+  @override
+  String get settingsVoiceCommandsSubtitle => 'Enable or disable voice command control.';
 
   @override
   String get settingsStorage => '저장공간';
@@ -727,8 +732,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get lastfmNotAuthenticated => '인증되지 않음';
 
   @override
-  String get lastfmSteps =>
-      '인증 단계:\n1. last.fm 계정 생성/로그인\n2. last.fm/api/account/create에서 API Key 생성\n3. API Key와 Secret 입력\n4. \'인증 시작\' 클릭 후 브라우저에서 승인\n5. \'세션 키 저장\' 클릭하여 완료';
+  String get lastfmSteps => '인증 단계:\n1. last.fm 계정 생성/로그인\n2. last.fm/api/account/create에서 API Key 생성\n3. API Key와 Secret 입력\n4. \'인증 시작\' 클릭 후 브라우저에서 승인\n5. \'세션 키 저장\' 클릭하여 완료';
 
   @override
   String get lastfmApiKey => 'API Key';
@@ -809,8 +813,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get playerSettingAutoFallback => '자동 폴백 재생';
 
   @override
-  String get playerSettingAutoFallbackSubtitle =>
-      '사용 중인 플러그인에 오류가 있을 시 다른 호환 소스를 찾습니다.';
+  String get playerSettingAutoFallbackSubtitle => '사용 중인 플러그인에 오류가 있을 시 다른 호환 소스를 찾습니다.';
 
   @override
   String get playerSettingCrossfade => '크로스페이드';
@@ -847,8 +850,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get pluginDefaultsDiscoverHeader => '검색 소스';
 
   @override
-  String get pluginDefaultsNoResolver =>
-      '콘텐츠 플러그인이 없습니다. 소스를 선택하려면 플러그인을 설치하세요.';
+  String get pluginDefaultsNoResolver => '콘텐츠 플러그인이 없습니다. 소스를 선택하려면 플러그인을 설치하세요.';
 
   @override
   String get pluginDefaultsAutomaticSubtitle => '사용 가능한 첫 번째 소스를 사용합니다.';
@@ -860,8 +862,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get pluginDefaultsNoPriority => '플러그인을 로드하면 드래그하여 우선순위를 정할 수 있습니다.';
 
   @override
-  String get pluginDefaultsPriorityDesc =>
-      '드래그하여 순서를 변경하세요. 상단에 있을수록 재생 시 먼저 사용됩니다.';
+  String get pluginDefaultsPriorityDesc => '드래그하여 순서를 변경하세요. 상단에 있을수록 재생 시 먼저 사용됩니다.';
 
   @override
   String get pluginDefaultsLyricsHeader => '가사 우선순위';
@@ -954,8 +955,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get storageResetConfirmTitle => '초기화 확인';
 
   @override
-  String get storageResetConfirmMessage =>
-      '정말로 초기화하시겠습니까? 모든 데이터가 삭제되며 복구할 수 없습니다.';
+  String get storageResetConfirmMessage => '정말로 초기화하시겠습니까? 모든 데이터가 삭제되며 복구할 수 없습니다.';
 
   @override
   String get storageResetButton => '초기화';
@@ -967,8 +967,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get storageLocationDialogTitle => '백업 위치';
 
   @override
-  String get storageLocationAndroid =>
-      '백업 파일은 다음 위치에 저장됩니다:\n\n1. 다운로드 폴더\n2. Android/data/FukatMusic.player/data\n\n해당 위치에서 파일을 확인하세요.';
+  String get storageLocationAndroid => '백업 파일은 다음 위치에 저장됩니다:\n\n1. 다운로드 폴더\n2. Android/data/FukatMusic.player/data\n\n해당 위치에서 파일을 확인하세요.';
 
   @override
   String get storageLocationOther => '백업은 다운로드 폴더에 저장됩니다.';
@@ -977,8 +976,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get storageRestoreOptionsTitle => '복구 옵션';
 
   @override
-  String get storageRestoreOptionsDesc =>
-      '백업 파일에서 복원할 항목을 선택하세요. 제외할 항목은 선택을 해제해 주세요.';
+  String get storageRestoreOptionsDesc => '백업 파일에서 복원할 항목을 선택하세요. 제외할 항목은 선택을 해제해 주세요.';
 
   @override
   String get storageRestoreSelectAll => '모두 선택';
@@ -1032,8 +1030,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get storageRestoreFailedTitle => '복구 실패';
 
   @override
-  String get storageRestoreSuccessMessage =>
-      '데이터가 성공적으로 복구되었습니다. 변경 사항을 적용하려면 앱을 재시작해 주세요.';
+  String get storageRestoreSuccessMessage => '데이터가 성공적으로 복구되었습니다. 변경 사항을 적용하려면 앱을 재시작해 주세요.';
 
   @override
   String get storageRestoreFailedMessage => '복구 과정에서 다음 오류가 발생했습니다:';
@@ -1077,7 +1074,7 @@ class AppLocalizationsKo extends AppLocalizations {
   }
 
   @override
-  String get updateNewVersionAvailable => '새로운 버전의 Bloomee🎵가 출시되었습니다!';
+  String get updateNewVersionAvailable => '새로운 버전의 FukatMusic🎵가 출시되었습니다!';
 
   @override
   String updateVersion(String ver, String build) {
@@ -1382,7 +1379,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get aboutCreativeHighlights => '업데이트 및 주요 소식';
 
   @override
-  String get aboutTipQuote => 'Bloomee가 마음에 드시나요? 소중한 후원이 더 멋진 발전을 만듭니다. 🎵';
+  String get aboutTipQuote => 'FukatMusic가 마음에 드시나요? 소중한 후원이 더 멋진 발전을 만듭니다. 🎵';
 
   @override
   String get aboutTipButton => '후원하기';
@@ -1528,11 +1525,10 @@ class AppLocalizationsKo extends AppLocalizations {
   String get importSongsTitle => '곡 가져오기';
 
   @override
-  String get importNoPluginsLoaded =>
-      '가져오기 플러그인이 없습니다. 외부 플레이리스트를 가져오려면 플러그인을 설치하세요.';
+  String get importNoPluginsLoaded => '가져오기 플러그인이 없습니다. 외부 플레이리스트를 가져오려면 플러그인을 설치하세요.';
 
   @override
-  String get importBloomeeFiles => 'Bloomee 파일 가져오기';
+  String get importFukatMusicFiles => 'FukatMusic 파일 가져오기';
 
   @override
   String get importM3UFiles => 'M3U 플레이리스트 가져오기';
@@ -1550,8 +1546,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get importNoteTitle => '주의';
 
   @override
-  String get importNoteMessage =>
-      'Bloomee에서 생성한 파일만 정상적으로 가져올 수 있습니다. 계속하시겠습니까?';
+  String get importNoteMessage => 'FukatMusic에서 생성한 파일만 정상적으로 가져올 수 있습니다. 계속하시겠습니까?';
 
   @override
   String get importTitle => '가져오기';
@@ -1856,7 +1851,7 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String updateAvailableBody(String ver, String build) {
-    return '새로운 버전의 Bloomee🎵가 출시되었습니다!\n\n버전: $ver+$build';
+    return '새로운 버전의 FukatMusic🎵가 출시되었습니다!\n\n버전: $ver+$build';
   }
 
   @override
@@ -1875,7 +1870,7 @@ class AppLocalizationsKo extends AppLocalizations {
   }
 
   @override
-  String get pluginBootstrapTitle => 'Bloomee 설정 중';
+  String get pluginBootstrapTitle => 'FukatMusic 설정 중';
 
   @override
   String pluginBootstrapProgress(int percent) {
@@ -1889,8 +1884,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get pluginBootstrapErrorTitle => '연결 지연';
 
   @override
-  String get pluginBootstrapErrorBody =>
-      '일부 플러그인 설치에 실패했습니다. 다음 실행 시 다시 시도합니다.';
+  String get pluginBootstrapErrorBody => '일부 플러그인 설치에 실패했습니다. 다음 실행 시 다시 시도합니다.';
 
   @override
   String get pluginBootstrapContinue => '무시하고 계속';

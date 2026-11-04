@@ -299,6 +299,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsLastFMSubtitle => 'API 密钥、Secret 和播放记录(Scrobble)设置。';
 
   @override
+  String get settingsVoiceCommands => 'Voice Commands';
+
+  @override
+  String get settingsVoiceCommandsSubtitle => 'Enable or disable voice command control.';
+
+  @override
   String get settingsStorage => '存储与备份';
 
   @override
@@ -726,8 +732,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get lastfmNotAuthenticated => '未认证';
 
   @override
-  String get lastfmSteps =>
-      '认证步骤：\n1. 在 last.fm 创建或登录账号\n2. 在 last.fm/api/account/create 生成 API 密钥\n3. 在下方输入您的 API Key 和 Secret\n4. 点击“开始认证”并在浏览器中批准\n5. 点击“获取并保存会话密钥”以完成';
+  String get lastfmSteps => '认证步骤：\n1. 在 last.fm 创建或登录账号\n2. 在 last.fm/api/account/create 生成 API 密钥\n3. 在下方输入您的 API Key 和 Secret\n4. 点击“开始认证”并在浏览器中批准\n5. 点击“获取并保存会话密钥”以完成';
 
   @override
   String get lastfmApiKey => 'API 密钥';
@@ -857,8 +862,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pluginDefaultsNoPriority => '未加载内容解析器。加载插件后，优先级排序将显示在这里。';
 
   @override
-  String get pluginDefaultsPriorityDesc =>
-      '拖动以重新排序。解析榜单项或导入音轨时，将首先尝试优先级较高的解析器。';
+  String get pluginDefaultsPriorityDesc => '拖动以重新排序。解析榜单项或导入音轨时，将首先尝试优先级较高的解析器。';
 
   @override
   String get pluginDefaultsLyricsHeader => '歌词优先级';
@@ -963,8 +967,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get storageLocationDialogTitle => '备份位置';
 
   @override
-  String get storageLocationAndroid =>
-      '备份存储在：\n\n1. 下载目录\n2. Android/data/FukatMusic.player/data\n\n请从任一位置复制文件。';
+  String get storageLocationAndroid => '备份存储在：\n\n1. 下载目录\n2. Android/data/FukatMusic.player/data\n\n请从任一位置复制文件。';
 
   @override
   String get storageLocationOther => '备份存储在“下载”目录中。请从那里复制文件。';
@@ -1525,7 +1528,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get importNoPluginsLoaded => '未加载内容导入插件。\n请安装导入插件以从外部服务导入歌单。';
 
   @override
-  String get importBloomeeFiles => '导入 Bloomee 文件';
+  String get importFukatMusicFiles => 'Import FukatMusic Files';
 
   @override
   String get importM3UFiles => '导入 M3U 歌单';
@@ -1543,8 +1546,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get importNoteTitle => '注';
 
   @override
-  String get importNoteMessage =>
-      '您只能导入由 Bloomee 创建的文件。\n如果文件来自其他来源，将无法工作。是否仍要继续？';
+  String get importNoteMessage => '您只能导入由 Bloomee 创建的文件。\n如果文件来自其他来源，将无法工作。是否仍要继续？';
 
   @override
   String get importTitle => '导入';
@@ -1882,8 +1884,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pluginBootstrapErrorTitle => '连接过慢';
 
   @override
-  String get pluginBootstrapErrorBody =>
-      '部分插件无法安装。您仍可使用 Bloomee —— 插件将在下次启动时重试。';
+  String get pluginBootstrapErrorBody => '部分插件无法安装。您仍可使用 Bloomee —— 插件将在下次启动时重试。';
 
   @override
   String get pluginBootstrapContinue => '仍然继续';
