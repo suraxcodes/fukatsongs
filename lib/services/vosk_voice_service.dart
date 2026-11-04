@@ -81,11 +81,36 @@ class VoskVoiceService {
     'music back',
     'music previous',
 
+    // Volume up commands
+    'volume up',
+    'increase volume',
+    'volume increase',
+
+    // Volume down commands
+    'volume down',
+    'decrease volume',
+    'volume decrease',
+
+    // Shuffle commands
+    'shuffle on',
+    'shuffle off',
+    'turn on shuffle',
+    'turn off shuffle',
+
+    // Stop hands-free
+    'stop listening',
+    'stop voice',
+    'turn off voice',
+    'stop hands free',
+
     // Sink model for unmatching chatter and background noise
     '[unk]',
   ];
 
   DateTime _lastActionTime = DateTime.now();
+
+  /// 10% per voice command, clamped to [0.0, 1.0].
+  static const double _volumeStep = 0.10;
 
   /// Check if model is already downloaded locally
   Future<bool> isModelReady() async {
@@ -172,7 +197,7 @@ class VoskVoiceService {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-                'Hands-free ON: Say "Pause music", "Next song", or "Play music"'),
+                'Hands-free ON: Say "Pause music", "Next song", "Volume up", "Shuffle on", or "Stop listening"'),
             duration: Duration(seconds: 4),
             behavior: SnackBarBehavior.floating,
           ),
@@ -248,7 +273,7 @@ class VoskVoiceService {
     _resultSub?.cancel();
     _resultSub = _speechService!.onResult().listen(
       (data) {
-        _handleFinalResult(data, cubit);
+        unawaited(_handleFinalResult(data, cubit));
       },
       onError: (err) {
         log('onResult stream error: $err, auto-recovering...',
@@ -277,6 +302,8 @@ class VoskVoiceService {
           log('Vosk onRecognitionError during recovery: $err',
               name: 'VoskVoiceService');
         });
+        // Re-bind listeners after restart, otherwise commands stop working.
+        _attachListeners(cubit);
         log('Vosk SpeechService successfully recovered & listening!',
             name: 'VoskVoiceService');
       }
@@ -308,7 +335,8 @@ class VoskVoiceService {
     }
   }
 
-  void _handleFinalResult(String rawJson, BloomeePlayerCubit cubit) {
+  Future<void> _handleFinalResult(
+      String rawJson, BloomeePlayerCubit cubit) async {
     if (rawJson.isEmpty) return;
 
     try {
@@ -320,9 +348,19 @@ class VoskVoiceService {
 
       log('Vosk final utterance: "$text"', name: 'VoskVoiceService');
 
-      // Debounce: prevent duplicate executions within 2 seconds
-      final now = DateTime.now();
-      if (now.difference(_lastActionTime).inMilliseconds < 2000) return;
+      // ── Stop hands-free must bypass debounce (user wants out NOW). ──
+      final isStopListening = text == 'stop listening' ||
+          text == 'stop voice' ||
+          text == 'turn off voice' ||
+          text == 'stop hands free';
+
+      if (isStopListening) {
+        _lastActionTime = DateTime.now();
+        lastCommand.value = 'Stopping...';
+        // Fire-and-forget: we're about to tear down the stream we're in.
+        unawaited(stopListening());
+        return;
+      }
 
       // Exact intent matching — prevents false triggers from casual chatter
       final isPause = text == 'pause music' ||
@@ -358,22 +396,83 @@ class VoskVoiceService {
           text == 'music back' ||
           text == 'music previous';
 
+      // ── Volume intents ──────────────────────────────────────────────
+      final isVolumeUp = text == 'volume up' ||
+          text == 'increase volume' ||
+          text == 'volume increase';
+
+      final isVolumeDown = text == 'volume down' ||
+          text == 'decrease volume' ||
+          text == 'volume decrease';
+
+      // ── Shuffle intents ─────────────────────────────────────────────
+      final isShuffleOn =
+          text == 'shuffle on' || text == 'turn on shuffle';
+
+      final isShuffleOff =
+          text == 'shuffle off' || text == 'turn off shuffle';
+
+      // Volume/shuffle repeats are allowed faster than transport commands
+      // so that saying "volume up, volume up, volume up" bumps three times.
+      final isFastIntent =
+          isVolumeUp || isVolumeDown || isShuffleOn || isShuffleOff;
+      final debounceMs = isFastIntent ? 400 : 2000;
+
+      final now = DateTime.now();
+      if (now.difference(_lastActionTime).inMilliseconds < debounceMs) {
+        return;
+      }
+
       if (isPause) {
         _lastActionTime = now;
         lastCommand.value = 'Pause';
-        cubit.bloomeePlayer.pause();
+        await cubit.bloomeePlayer.pause();
       } else if (isNext) {
         _lastActionTime = now;
         lastCommand.value = 'Next';
-        cubit.bloomeePlayer.skipToNext();
+        await cubit.bloomeePlayer.skipToNext();
       } else if (isPlay) {
         _lastActionTime = now;
         lastCommand.value = 'Play';
-        cubit.bloomeePlayer.play();
+        await cubit.bloomeePlayer.play();
       } else if (isPrevious) {
         _lastActionTime = now;
         lastCommand.value = 'Previous';
-        cubit.bloomeePlayer.skipToPrevious();
+        await cubit.bloomeePlayer.skipToPrevious();
+      } else if (isVolumeUp) {
+        _lastActionTime = now;
+        final next =
+            (cubit.bloomeePlayer.engine.volume + _volumeStep).clamp(0.0, 1.0);
+        await cubit.bloomeePlayer.engine.setVolume(next);
+        lastCommand.value = 'Vol ${(next * 100).round()}%';
+        log('Volume → ${(next * 100).round()}%',
+            name: 'VoskVoiceService');
+      } else if (isVolumeDown) {
+        _lastActionTime = now;
+        final next =
+            (cubit.bloomeePlayer.engine.volume - _volumeStep).clamp(0.0, 1.0);
+        await cubit.bloomeePlayer.engine.setVolume(next);
+        lastCommand.value = 'Vol ${(next * 100).round()}%';
+        log('Volume → ${(next * 100).round()}%',
+            name: 'VoskVoiceService');
+      } else if (isShuffleOn) {
+        _lastActionTime = now;
+        if (cubit.bloomeePlayer.shuffleMode.value) {
+          lastCommand.value = 'Shuffle already on';
+        } else {
+          await cubit.bloomeePlayer.shuffle(true);
+          lastCommand.value = 'Shuffle ON';
+        }
+        log('Shuffle → ON', name: 'VoskVoiceService');
+      } else if (isShuffleOff) {
+        _lastActionTime = now;
+        if (!cubit.bloomeePlayer.shuffleMode.value) {
+          lastCommand.value = 'Shuffle already off';
+        } else {
+          await cubit.bloomeePlayer.shuffle(false);
+          lastCommand.value = 'Shuffle OFF';
+        }
+        log('Shuffle → OFF', name: 'VoskVoiceService');
       } else {
         log('Ignored non-command speech: "$text"', name: 'VoskVoiceService');
       }
