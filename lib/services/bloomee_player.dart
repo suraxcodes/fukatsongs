@@ -504,6 +504,16 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   @override
   Future<void> play() async {
     if (_isDisposed) return;
+
+    // Immediately broadcast playback state to update UI controls.
+    _broadcastPlaybackState(
+      engine.state,
+      engine.playing,
+      engine.position,
+      engine.buffered,
+      engine.speed,
+    );
+
     _errorHandler.resetCircuitBreaker();
     _shouldResumeAfterInterruption = false;
     final granted = await _activateAudioSession();
@@ -522,7 +532,6 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     }
     await engine.play();
   }
-
   @override
   Future<void> pause() async {
     if (_isDisposed) return;

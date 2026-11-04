@@ -302,3 +302,36 @@ None
 
 ## Status
 Completed
+---
+
+## Date
+2026-11-04 14:41
+
+## Task
+Fix UI playback state broadcast after play
+
+## Reason
+UI didn't update play/pause button and progress bar.
+
+## what problem/error we fixed 
+Added immediate broadcast of playback state after engine.play() to sync UI controls and notification.
+
+## Files Changed 
+- lib/services/bloomee_player.dart
+- changes/changesmade.md
+
+## Main Changes
+- Inserted `_broadcastPlaybackState` call at end of `play()` method.
+- Ensures UI and notification reflect playback instantly.
+
+## Technical Notes
+- Uses existing `_broadcastPlaybackState` helper to emit PlaybackState with current engine state, position, buffered, speed, and shuffle mode.
+- No other logic changes; safe to invoke after `engine.play()`.
+
+## Breaking Changes
+None
+
+## Status
+Completed
+
+---
