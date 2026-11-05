@@ -2,6 +2,7 @@ import 'dart:developer';
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:fukatsongs/core/adapters/track_adapter.dart';
 import 'package:fukatsongs/core/models/exported.dart' hide MediaItem;
 import 'package:fukatsongs/core/models/media_playlist_model.dart';
@@ -35,22 +36,16 @@ import 'package:rxdart/rxdart.dart';
 /// the notification, headset buttons, lock screen, and Android Auto all work
 /// correctly without any extra native code.
 ///
-/// ## Audio Session / Focus Lifecycle
-/// AudioSession.configure() is called **before** this class is instantiated
-/// (in audio_service_initializer.dart → setupPlayerCubit()). By the time the
-/// first user tap reaches play(), the session is already fully configured and
-/// setActive(true) → requestAudioFocus() is guaranteed to work.
+/// ## Volume Architecture
 ///
-/// ## Interruption Handling
-/// The handler is **synchronous** — matches the official audio_session example.
-/// Per the audio_session documentation:
-///   - AudioInterruptionType.pause END → auto-resume (e.g. call ended)
-///   - AudioInterruptionType.unknown END → do NOT auto-resume (user must press play)
-/// The `_shouldResumeAfterInterruption` bool is a single field encoding one decision.
-///
-/// ## Concurrency
-/// All play/resolve operations use [CancelableCompleter] / [CancelableOperation]
-/// so that rapid track skipping never leaves orphaned network requests.
+/// All user-visible volume is controlled via `AudioManager.STREAM_MUSIC`
+/// through the `com.fukatsongs.app/voice_service` method channel. The
+/// media_kit engine volume is pinned to 1.0 forever (see
+/// audio_service_initializer.dart) so effective_loudness == system_volume.
+/// This guarantees:
+///   - Voice commands, hardware buttons, and the in-app slider all agree.
+///   - Ducking (navigation, notifications) changes what the user sees.
+///   - No mismatch between the Android volume UI and actual sound level.
 class BloomeeMusicPlayer extends BaseAudioHandler
     with SeekHandler, QueueHandler {
   late PlayerEngine engine;
@@ -84,8 +79,6 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     return super.customAction(name, extras);
   }
 
-  // Long-lived stream subjects — kept open to prevent downstream StreamBuilder
-  // widgets from entering error state when the player is revived.
   BehaviorSubject<bool> fromPlaylist = BehaviorSubject<bool>.seeded(false);
   BehaviorSubject<bool> isOffline = BehaviorSubject<bool>.seeded(false);
   BehaviorSubject<LoopMode> loopMode =
@@ -94,17 +87,14 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
   bool _isDisposed = false;
 
-  // ── Concurrency tokens ─────────────────────────────────────────────────────
   CancelableCompleter<void>? _playCompleter;
   CancelableOperation<ResolvedMediaSource>? _preResolveOp;
   CancelableOperation<(Track, ResolvedMediaSource)>? _currentResolveOp;
   bool _isAdvancing = false;
 
-  // ── Preload identity ───────────────────────────────────────────────────────
   String? _preloadedTrackId;
   bool _preloadedTrackOffline = false;
 
-  // ── Stream subscriptions ───────────────────────────────────────────────────
   StreamSubscription? _engineStateSub;
   StreamSubscription? _completionSub;
   StreamSubscription? _errorSub;
@@ -115,18 +105,49 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   StreamSubscription<Duration>? _durationSub;
   Timer? _relatedSongTimer;
 
-  // ── Audio session state ────────────────────────────────────────────────────
+  // ── Audio session state ──────────────────────────────────────────────────
   AudioSession? _audioSession;
-  // Volume before duck — restored when duck ends.
-  double? _volumeBeforeDuck;
-  // True only when we paused due to an interruption with AudioInterruptionType.pause.
-  // Per audio_session docs: only resume automatically on 'pause' end, never on 'unknown'.
   bool _shouldResumeAfterInterruption = false;
 
-  // ── M-12 ──────────────────────────────────────────────────────────────────
+  // ── System media volume state ────────────────────────────────────────────
+  //
+  // All user-visible volume is STREAM_MUSIC. media_kit engine stays at 1.0.
+  static const MethodChannel _voiceChannel =
+      MethodChannel('com.fukatsongs.app/voice_service');
+  double _cachedSystemVolume = 1.0;
+  Timer? _systemVolumePollTimer;
+
+  /// Pre-duck system volume, restored when the duck ends.
+  double? _duckRestoreVolume;
+
+  Future<double> _readSystemVolume() async {
+    try {
+      return await _voiceChannel.invokeMethod<double>('getMediaVolume') ?? 1.0;
+    } catch (_) {
+      return 1.0;
+    }
+  }
+
+  Future<void> _setSystemVolumeSilent(double v) async {
+    try {
+      await _voiceChannel.invokeMethod(
+          'duckMediaVolume', {'fraction': v.clamp(0.0, 1.0)});
+    } catch (_) {}
+  }
+
+  void _startSystemVolumePoll() {
+    _systemVolumePollTimer?.cancel();
+    _systemVolumePollTimer = Timer.periodic(
+      const Duration(milliseconds: 500),
+      (_) async {
+        final v = await _readSystemVolume();
+        _cachedSystemVolume = v;
+      },
+    );
+  }
+
   Duration _savedPositionForRevive = Duration.zero;
 
-  // ── Modular component accessors ───────────────────────────────────────────
   BehaviorSubject<bool> get shuffleMode => _queueManager.shuffleMode;
   BehaviorSubject<PlayerError?> get lastError => _errorHandler.lastError;
   BehaviorSubject<List<Track>> get relatedSongs =>
@@ -141,29 +162,23 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   int get currentQueueIndex => _queueManager.currentIndex;
   PluginService get pluginService => ServiceLocator.pluginService;
 
-  // ─── Constructor ───────────────────────────────────────────────────────────
+  // ─── Constructor ─────────────────────────────────────────────────────────
 
   BloomeeMusicPlayer() {
     _initEngine();
     _initModules();
     _initSubscriptions();
     _setupInterruptionListeners();
-    // Engine settings (EQ, crossfade) restore happens async — acceptable
-    // because the first play() will work with defaults until restore completes.
+    _startSystemVolumePoll();
     _restoreEngineSettings();
-    // Session restore runs after engine settings but does NOT auto-play.
     _restoreLastSession();
   }
 
-  /// Restores the last queue from SettingsDAO so the user sees it on relaunch.
-  ///
-  /// Intentionally does NOT auto-play — the user must tap play to resume.
-  /// Guarded by [_isDisposed] so a rapid dispose() during cold start is safe.
   Future<void> _restoreLastSession() async {
     if (_isDisposed) return;
     try {
       final restored = await _queueManager.restoreQueueState();
-      if (_isDisposed) return; // re-check after await
+      if (_isDisposed) return;
       if (restored) {
         final track = _queueManager.currentTrack;
         if (track != null) {
@@ -175,32 +190,19 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     }
   }
 
-  // ─── Engine & Module Initialization ───────────────────────────────────────
-
   void _initEngine() {
     _isDisposed = false;
     engine = PlayerEngine();
   }
 
-  /// Attaches to the already-configured AudioSession singleton and subscribes
-  /// to interruption events. Since setupAudioSession() ran before this class
-  /// was constructed, AudioSession.instance is guaranteed to be configured.
-  ///
-  /// This method is synchronous in its listener setup — it only calls `.then()`
-  /// to retrieve the singleton, not to do async work. The listeners themselves
-  /// are synchronous per the official audio_session example pattern.
   void _setupInterruptionListeners() {
     AudioSession.instance.then((session) {
       if (_isDisposed) return;
       _audioSession = session;
 
-      // Cancel any existing subs first (safe for revive() calls).
       _audioInterruptionSub?.cancel();
       _audioNoisySub?.cancel();
 
-      // Synchronous listener body: per audio_session official example, the
-      // handler does NOT use async/await. Operations like pause/play are
-      // called fire-and-forget — the engine queues them internally.
       _audioInterruptionSub =
           session.interruptionEventStream.listen(_handleInterruptionSync);
 
@@ -209,19 +211,12 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     });
   }
 
-  // ─── Interruption Handler ─────────────────────────────────────────────────
+  // ─── Interruption Handler ────────────────────────────────────────────────
+  //
+  // Synchronous — per audio_session official example. Ducking changes the
+  // SYSTEM media volume (not the engine), preserving the "engine = 1.0"
+  // invariant that makes voice / hardware / in-app volume all agree.
 
-  /// Synchronous interruption handler.
-  ///
-  /// CRITICAL: This MUST be synchronous. The audio_session official example
-  /// (pub.dev/packages/audio_session/example) uses synchronous calls throughout.
-  /// Async handlers create a race: if BEGIN and END events arrive close together
-  /// (short call, short notification), two async handlers can run concurrently
-  /// and read/write `_shouldResumeAfterInterruption` in undefined order.
-  ///
-  /// Per the audio_session documentation:
-  ///   - `pause` END   → interruption ended, auto-resume
-  ///   - `unknown` END → interruption ended, do NOT auto-resume (user presses play)
   void _handleInterruptionSync(AudioInterruptionEvent event) {
     if (_isDisposed) return;
 
@@ -231,15 +226,15 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       }
       switch (event.type) {
         case AudioInterruptionType.duck:
-          // Lower volume to 35% for notifications/navigation. Restore on end.
-          _volumeBeforeDuck ??= engine.volume;
-          engine.setVolume((engine.volume * 0.35).clamp(0.0, 1.0));
+          _duckRestoreVolume ??= _cachedSystemVolume;
+          unawaited(_setSystemVolumeSilent(_cachedSystemVolume * 0.35));
+          break;
 
         case AudioInterruptionType.pause:
         case AudioInterruptionType.unknown:
-          // Both map to "pause" on begin — the distinction matters only on END.
           _shouldResumeAfterInterruption = engine.playing;
-          engine.pause(); // fire-and-forget — engine queues the command
+          engine.pause();
+          break;
       }
       return;
     }
@@ -247,27 +242,31 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     // — Interruption ended —
     switch (event.type) {
       case AudioInterruptionType.duck:
-        final prev = _volumeBeforeDuck;
-        _volumeBeforeDuck = null;
-        if (prev != null) engine.setVolume(prev.clamp(0.0, 1.0));
+        final restoreTo = _duckRestoreVolume;
+        _duckRestoreVolume = null;
+        if (restoreTo != null) {
+          final expectedDucked = restoreTo * 0.35;
+          final userIntervened =
+              (_cachedSystemVolume - expectedDucked).abs() > 0.05;
+          if (!userIntervened) {
+            unawaited(_setSystemVolumeSilent(restoreTo));
+          }
+        }
+        break;
 
       case AudioInterruptionType.pause:
-        // e.g. short phone call ended, alarm finished → auto-resume.
         if (_shouldResumeAfterInterruption) {
           _shouldResumeAfterInterruption = false;
           _resumePlaybackAfterInterruption();
         }
+        break;
 
       case AudioInterruptionType.unknown:
-        // Per audio_session docs: "The interruption ended but we should NOT resume."
-        // This includes the case where the OS sends AUDIOFOCUS_LOSS (permanent)
-        // followed later by AUDIOFOCUS_GAIN — the user should press play manually.
         _shouldResumeAfterInterruption = false;
+        break;
     }
   }
 
-  /// Re-requests audio focus and resumes playback after an interruption ends.
-  /// Called fire-and-forget from the synchronous handler.
   void _resumePlaybackAfterInterruption() {
     _activateAudioSession().then((granted) {
       if (granted && !_isDisposed) engine.play();
@@ -280,7 +279,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     if (!_isDisposed) engine.pause();
   }
 
-  // ─── Audio Session Activation ──────────────────────────────────────────────
+  // ─── Audio Session Activation ────────────────────────────────────────────
 
   Future<bool> _activateAudioSession() async {
     try {
@@ -299,7 +298,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     } catch (_) {}
   }
 
-  // ─── Engine Settings Restore ───────────────────────────────────────────────
+  // ─── Engine Settings Restore ─────────────────────────────────────────────
 
   Future<void> _restoreEngineSettings() async {
     try {
@@ -311,7 +310,6 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
       final eqSource = await dao.getSettingStr(SettingKeys.eqSource);
       if (eqSource == EqSourceValues.device) {
-        // Device EQ mode: in-app EQ must stay off.
         await engine.setEqualizerEnabled(false);
         return;
       }
@@ -335,7 +333,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     }
   }
 
-  // ─── Module Init ───────────────────────────────────────────────────────────
+  // ─── Module Init ─────────────────────────────────────────────────────────
 
   void _initModules() {
     _errorHandler = PlayerErrorHandler();
@@ -369,10 +367,9 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     );
   }
 
-  // ─── Subscriptions ─────────────────────────────────────────────────────────
+  // ─── Subscriptions ───────────────────────────────────────────────────────
 
   void _initSubscriptions() {
-    // Combine engine state signals into a single broadcast.
     _engineStateSub = Rx.combineLatest4(
       engine.stateStream,
       engine.playingStream,
@@ -392,7 +389,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
         if (track != null) _errorHandler.markTrackSuccess(track.id);
       }
 
-      EasyThrottle.throttle('sync_position_notification', const Duration(seconds: 1), () {
+      EasyThrottle.throttle('sync_position_notification',
+          const Duration(seconds: 1), () {
         if (!engine.playing) return;
         _broadcastPlaybackState(
           engine.state,
@@ -427,11 +425,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
     _queueSyncSub = _queueManager.tracksStream.listen((tracks) {
       queue.add(tracks.map(trackToMediaItem).toList());
-      // Don't persist during restore — we'd just write back what we read.
       if (_queueManager.isRestoring) return;
-      // Throttle persistence writes — queue mutations can fire in rapid bursts
-      // (e.g. batch-loading a 50-track playlist). 2s throttle coalesces them
-      // into a single DB write while still capturing the final state.
       EasyThrottle.throttle(
         'persist_queue',
         const Duration(seconds: 2),
@@ -439,15 +433,12 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       );
     });
 
-    // M-11: Related songs check fires every 15s, but only if actively playing.
-    // A 15-second Timer.periodic is negligible battery impact — no need for
-    // a reactive subscription approach that adds implementation complexity.
     _relatedSongTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (!_isDisposed && engine.playing) _checkRelatedSongs();
     });
   }
 
-  // ─── Playback State Broadcast ─────────────────────────────────────────────
+  // ─── Playback State Broadcast ────────────────────────────────────────────
 
   void _broadcastPlaybackState(EngineState state, bool playing,
       Duration position, Duration buffered, double speed) {
@@ -481,7 +472,9 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       playing: playing,
       bufferedPosition: buffered,
       speed: speed,
-      shuffleMode: shuffleMode.value ? AudioServiceShuffleMode.all : AudioServiceShuffleMode.none,
+      shuffleMode: shuffleMode.value
+          ? AudioServiceShuffleMode.all
+          : AudioServiceShuffleMode.none,
     ));
 
     EasyThrottle.throttle('discord_rpc', const Duration(seconds: 1), () {
@@ -490,8 +483,6 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     });
   }
 
-  // ─── Track Identity ───────────────────────────────────────────────────────
-
   Track get currentMedia => _queueManager.currentTrack ?? trackNull;
 
   void _updateCurrentTrack(Track track) {
@@ -499,13 +490,12 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     mediaItem.add(trackToMediaItem(track));
   }
 
-  // ─── Public Playback Controls ─────────────────────────────────────────────
+  // ─── Public Playback Controls ────────────────────────────────────────────
 
   @override
   Future<void> play() async {
     if (_isDisposed) return;
 
-    // Immediately broadcast playback state to update UI controls.
     _broadcastPlaybackState(
       engine.state,
       engine.playing,
@@ -521,8 +511,6 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       SnackbarService.showMessage('Audio focus denied. Cannot start playback.');
       return;
     }
-    // Cold resume: engine has nothing loaded, but queue has a track
-    // (happens after session restore). Resolve and play the current track.
     if (engine.state == EngineState.idle) {
       final track = _queueManager.currentTrack;
       if (track != null) {
@@ -532,10 +520,10 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     }
     await engine.play();
   }
+
   @override
   Future<void> pause() async {
     if (_isDisposed) return;
-    // Manual pause clears any pending auto-resume.
     _shouldResumeAfterInterruption = false;
     await engine.pause();
   }
@@ -589,7 +577,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     }
   }
 
-  // ─── Loop / Shuffle ────────────────────────────────────────────────────────
+  // ─── Loop / Shuffle ──────────────────────────────────────────────────────
 
   void setLoopMode(LoopMode mode) {
     loopMode.add(mode);
@@ -610,7 +598,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     _queueManager.shuffle(enabled);
   }
 
-  // ─── Core Play Dispatch ────────────────────────────────────────────────────
+  // ─── Core Play Dispatch ──────────────────────────────────────────────────
 
   void _clearPreloadedMarker() {
     _preloadedTrackId = null;
@@ -624,7 +612,6 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   }) {
     if (_isDisposed) return Future.value();
 
-    // Cancel any in-flight play operation — user changed track.
     final prev = _playCompleter;
     final completer = CancelableCompleter<void>(
       onCancel: () => log('Track load cancelled: ${track.title}',
@@ -775,7 +762,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
         msg.contains('plugin not found');
   }
 
-  // ─── Preload ───────────────────────────────────────────────────────────────
+  // ─── Preload ─────────────────────────────────────────────────────────────
 
   void _preResolveNextTrack() {
     final next = _queueManager.peekNext(loopMode: loopMode.value);
@@ -807,7 +794,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     });
   }
 
-  // ─── Completion / Auto-Next ────────────────────────────────────────────────
+  // ─── Completion / Auto-Next ──────────────────────────────────────────────
 
   void _onTrackCompleted() {
     if (loopMode.value == LoopMode.one || _isAdvancing) return;
@@ -835,11 +822,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
         doPlay: true, initialPosition: engine.position);
   }
 
-  // ─── Related Songs ────────────────────────────────────────────────────────
+  // ─── Related Songs ───────────────────────────────────────────────────────
 
-  // bool guard is correct in Dart's single-threaded cooperative model:
-  // no two microtasks can read this field simultaneously. The try/finally
-  // guarantees it resets even on exception.
   bool _checkingRelated = false;
 
   Future<void> _checkRelatedSongs() async {
@@ -861,7 +845,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
   Future<void> check4RelatedSongs() => _checkRelatedSongs();
 
-  // ─── Player Health ─────────────────────────────────────────────────────────
+  // ─── Player Health ───────────────────────────────────────────────────────
 
   bool get isPlayerHealthy {
     if (_isDisposed) return false;
@@ -879,13 +863,14 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     }
   }
 
-  /// Rebuilds the engine and subscriptions when the OS has killed the
-  /// underlying audio service (e.g. memory pressure, OEM task killers).
   Future<void> revive() async {
     if (!_isDisposed && isPlayerHealthy) return;
     log('Reviving BloomeeMusicPlayer...', name: 'BloomeeMusicPlayer');
 
-    // Save position before engine teardown (M-12).
+    _systemVolumePollTimer?.cancel();
+    _systemVolumePollTimer = null;
+    _duckRestoreVolume = null;
+
     try {
       _savedPositionForRevive = engine.position;
     } catch (_) {}
@@ -905,6 +890,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     _initModules();
     _initSubscriptions();
     _setupInterruptionListeners();
+    _startSystemVolumePoll();
     _restoreEngineSettings();
     _isDisposed = false;
 
@@ -913,7 +899,6 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       playing: false,
     ));
 
-    // M-12: reload last track at saved position (paused, no auto-play).
     final track = _queueManager.currentTrack;
     if (track != null) {
       Future.delayed(const Duration(milliseconds: 200), () async {
@@ -946,7 +931,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     if (_currentTrack.id == replacement.id) _updateCurrentTrack(replacement);
   }
 
-  // ─── Queue Operations ─────────────────────────────────────────────────────
+  // ─── Queue Operations ────────────────────────────────────────────────────
 
   @override
   Future<void> playMediaItem(MediaItem mi,
@@ -1132,13 +1117,11 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   void setRecentlyPlayedPercentThreshold(double p) =>
       _recentlyPlayedTracker.setPercentThreshold(p);
 
-  // ─── Lifecycle ─────────────────────────────────────────────────────────────
+  // ─── Lifecycle ───────────────────────────────────────────────────────────
 
   @override
   Future<void> onTaskRemoved() async {
-    // Always persist queue before the OS kills us — this is our last chance.
     await _queueManager.persistQueueState();
-    // Immediate stop and cleanup when swiped from recents
     await stop();
     await _cleanup();
     return super.onTaskRemoved();
@@ -1154,6 +1137,10 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   Future<void> _cleanup() async {
     if (_isDisposed) return;
     _isDisposed = true;
+
+    _systemVolumePollTimer?.cancel();
+    _systemVolumePollTimer = null;
+    _duckRestoreVolume = null;
 
     _playCompleter?.operation.cancel();
     _playCompleter = null;

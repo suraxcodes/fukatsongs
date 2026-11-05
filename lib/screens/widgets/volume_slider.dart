@@ -1,9 +1,8 @@
 import 'dart:async';
-import 'package:fukatsongs/blocs/media_player/bloomee_player_cubit.dart';
 import 'package:fukatsongs/core/theme/app_theme.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/services.dart';
 import 'package:icons_plus/icons_plus.dart';
 
 class VolumeDragController extends StatefulWidget {
@@ -15,69 +14,66 @@ class VolumeDragController extends StatefulWidget {
 }
 
 class _VolumeDragControllerState extends State<VolumeDragController> {
-  double _volume = 0.5; // Initial volume
+  static const _voiceChannel = MethodChannel('com.fukatsongs.app/voice_service');
+
+  double _volume = 0.5;
   bool _showVolumeController = false;
-  Timer? _timer;
-  StreamSubscription? _volumeSubscription;
+  Timer? _hideTimer;
+  Timer? _pollTimer;
 
   @override
   void initState() {
-    volumeStrm();
     super.initState();
+    _fetchSystemVolume();
+    _pollTimer = Timer.periodic(
+      const Duration(milliseconds: 400),
+      (_) => _fetchSystemVolume(),
+    );
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
-    _volumeSubscription?.cancel();
+    _hideTimer?.cancel();
+    _pollTimer?.cancel();
     super.dispose();
   }
 
-  void volumeStrm() {
-    _volumeSubscription = context
-        .read<BloomeePlayerCubit>()
-        .bloomeePlayer
-        .engine
-        .volumeStream
-        .listen((event) {
-      setState(() {
-        _volume = event;
-      });
-    });
+  Future<void> _fetchSystemVolume() async {
+    try {
+      final v = await _voiceChannel.invokeMethod<double>('getMediaVolume');
+      if (v != null && mounted && (v - _volume).abs() > 0.005) {
+        setState(() => _volume = v);
+      }
+    } catch (_) {}
   }
 
-  void setVolume(double volume) {
-    setState(() {
-      _volume = volume;
-    });
-    context.read<BloomeePlayerCubit>().bloomeePlayer.engine.setVolume(volume);
+  Future<void> _setSystemVolume(double volume) async {
+    final clamped = volume.clamp(0.0, 1.0);
+    setState(() => _volume = clamped);
+    try {
+      await _voiceChannel.invokeMethod('setMediaVolume', {'fraction': clamped});
+    } catch (_) {}
   }
 
   void _onDragStart(DragStartDetails details) {
-    setState(() {
-      _showVolumeController = true;
-    });
-    _startTimer();
+    setState(() => _showVolumeController = true);
+    _startHideTimer();
   }
 
   void _onDragEnd(DragEndDetails details) {
-    _startTimer(); // Restart the timer on drag end
+    _startHideTimer();
   }
 
   void _updateVolume(DragUpdateDetails details) {
-    setState(() {
-      _volume = (_volume - details.delta.dy / 200).clamp(0.0, 1.0);
-    });
-    setVolume(_volume);
-    _startTimer(); // Restart the timer on volume change
+    final next = (_volume - details.delta.dy / 200).clamp(0.0, 1.0);
+    _setSystemVolume(next);
+    _startHideTimer();
   }
 
-  void _startTimer() {
-    _timer?.cancel();
-    _timer = Timer(const Duration(seconds: 3), () {
-      setState(() {
-        _showVolumeController = false;
-      });
+  void _startHideTimer() {
+    _hideTimer?.cancel();
+    _hideTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _showVolumeController = false);
     });
   }
 
@@ -86,12 +82,11 @@ class _VolumeDragControllerState extends State<VolumeDragController> {
     return Listener(
       onPointerSignal: (event) {
         if (event is PointerScrollEvent) {
-          setState(() {
-            _showVolumeController = true;
-            _volume = (_volume - (event.scrollDelta.dy / 500)).clamp(0.0, 1.0);
-          });
-          _startTimer();
-          setVolume(_volume);
+          setState(() => _showVolumeController = true);
+          final next =
+              (_volume - (event.scrollDelta.dy / 500)).clamp(0.0, 1.0);
+          _setSystemVolume(next);
+          _startHideTimer();
         }
       },
       child: GestureDetector(
@@ -110,7 +105,6 @@ class _VolumeDragControllerState extends State<VolumeDragController> {
                   fit: BoxFit.scaleDown,
                   child: AnimatedOpacity(
                     opacity: _showVolumeController ? 1.0 : 0.0,
-                    // opacity: 1,
                     duration: const Duration(milliseconds: 300),
                     child: Center(
                       child: Container(
@@ -132,8 +126,7 @@ class _VolumeDragControllerState extends State<VolumeDragController> {
                               quarterTurns: -1,
                               child: SliderTheme(
                                 data: SliderTheme.of(context).copyWith(
-                                  inactiveTrackColor: Default_Theme
-                                      .primaryColor2
+                                  inactiveTrackColor: Default_Theme.primaryColor2
                                       .withValues(alpha: 0.3),
                                   thumbShape: const RoundSliderThumbShape(
                                       enabledThumbRadius: 6.0),
@@ -146,14 +139,11 @@ class _VolumeDragControllerState extends State<VolumeDragController> {
                                 child: Slider(
                                   value: _volume,
                                   onChanged: (value) {
-                                    // update local UI, audio player and keep the
-                                    // volume controller visible while interacting
-                                    setVolume(value);
-                                    _startTimer();
+                                    _setSystemVolume(value);
+                                    _startHideTimer();
                                   },
                                   onChangeEnd: (value) {
-                                    // ensure hide timer restarts when user lifts finger
-                                    _startTimer();
+                                    _startHideTimer();
                                   },
                                   min: 0.0,
                                   max: 1.0,

@@ -11,8 +11,9 @@ import androidx.core.content.ContextCompat
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import kotlin.math.roundToInt
 
-class MainActivity: AudioServiceActivity() {
+class MainActivity : AudioServiceActivity() {
     private val DEVICE_CHANNEL = "com.fukatsongs.app/device"
     private val VOICE_CHANNEL = "com.fukatsongs.app/voice_service"
 
@@ -26,47 +27,94 @@ class MainActivity: AudioServiceActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEVICE_CHANNEL).setMethodCallHandler { call, result ->
-            if (call.method == "getAndroidId") {
-                val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-                result.success(androidId)
-            } else {
-                result.notImplemented()
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEVICE_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                if (call.method == "getAndroidId") {
+                    val androidId =
+                        Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+                    result.success(androidId)
+                } else {
+                    result.notImplemented()
+                }
             }
-        }
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, VOICE_CHANNEL).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "startVoiceService" -> {
-                    // 1) RECORD_AUDIO must be granted FIRST, otherwise the FGS
-                    //    start will throw SecurityException on Android 14+.
-                    if (ContextCompat.checkSelfPermission(
-                            this, Manifest.permission.RECORD_AUDIO
-                        ) != PackageManager.PERMISSION_GRANTED
-                    ) {
-                        pendingVoiceResult = result
-                        ActivityCompat.requestPermissions(
-                            this,
-                            arrayOf(Manifest.permission.RECORD_AUDIO),
-                            REQ_RECORD_AUDIO
-                        )
-                        return@setMethodCallHandler
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, VOICE_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "startVoiceService" -> {
+                        // RECORD_AUDIO must be granted FIRST, otherwise the FGS
+                        // start will throw SecurityException on Android 14+.
+                        if (ContextCompat.checkSelfPermission(
+                                this, Manifest.permission.RECORD_AUDIO
+                            ) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            pendingVoiceResult = result
+                            ActivityCompat.requestPermissions(
+                                this,
+                                arrayOf(Manifest.permission.RECORD_AUDIO),
+                                REQ_RECORD_AUDIO
+                            )
+                            return@setMethodCallHandler
+                        }
+
+                        requestIgnoreBatteryOptimizations()
+                        VoiceCommandForegroundService.start(this)
+                        result.success(true)
                     }
 
-                    // 2) Ask for battery optimization exemption (non-blocking)
-                    requestIgnoreBatteryOptimizations()
+                    "stopVoiceService" -> {
+                        VoiceCommandForegroundService.stop(this)
+                        result.success(true)
+                    }
 
-                    // 3) Now safe to start the mic FGS
-                    VoiceCommandForegroundService.start(this)
-                    result.success(true)
+                    // ── Media volume control ───────────────────────────────
+                    "getMediaVolume" -> {
+                        val am = getSystemService(AUDIO_SERVICE) as android.media.AudioManager
+                        val current =
+                            am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+                        val max =
+                            am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                        result.success(
+                            if (max > 0) current.toDouble() / max.toDouble() else 0.0
+                        )
+                    }
+
+                    "setMediaVolume" -> {
+                        val fraction =
+                            (call.argument<Double>("fraction") ?: 0.5).coerceIn(0.0, 1.0)
+                        val am = getSystemService(AUDIO_SERVICE) as android.media.AudioManager
+                        val max =
+                            am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                        val target = (fraction * max).roundToInt()
+                        am.setStreamVolume(
+                            android.media.AudioManager.STREAM_MUSIC,
+                            target,
+                            android.media.AudioManager.FLAG_SHOW_UI
+                        )
+                        result.success(true)
+                    }
+
+                    // Silent ducking — no UI shown. Used by the interruption
+                    // handler in bloomee_player.dart when navigation/notification
+                    // wants to be heard over music.
+                    "duckMediaVolume" -> {
+                        val fraction =
+                            (call.argument<Double>("fraction") ?: 1.0).coerceIn(0.0, 1.0)
+                        val am = getSystemService(AUDIO_SERVICE) as android.media.AudioManager
+                        val max =
+                            am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                        val target = (fraction * max).roundToInt()
+                        am.setStreamVolume(
+                            android.media.AudioManager.STREAM_MUSIC,
+                            target,
+                            0   // 0 = silent, no UI
+                        )
+                        result.success(true)
+                    }
+
+                    else -> result.notImplemented()
                 }
-                "stopVoiceService" -> {
-                    VoiceCommandForegroundService.stop(this)
-                    result.success(true)
-                }
-                else -> result.notImplemented()
             }
-        }
     }
 
     override fun onRequestPermissionsResult(

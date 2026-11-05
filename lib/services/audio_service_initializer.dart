@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:fukatsongs/services/bloomee_player.dart';
 import 'package:fukatsongs/core/theme/app_theme.dart';
 import 'package:audio_service/audio_service.dart';
@@ -84,11 +85,28 @@ class PlayerInitializer {
         androidNotificationIcon: 'mipmap/ic_launcher',
         androidResumeOnClick: true,
         androidShowNotificationBadge: true,
-        // Keep foreground service alive while paused — reduces OEM process kills.
         androidStopForegroundOnPause: false,
         notificationColor: Default_Theme.accentColor2,
       ),
     );
+
+    // ─────────────────────────────────────────────────────────────────
+    // Force media_kit engine volume to 100% permanently.
+    //
+    // After this, ALL volume changes — from voice commands, the physical
+    // hardware buttons, the in-app volume slider, and the volume ducking
+    // logic in BloomeeMusicPlayer._handleInterruptionSync — must go
+    // through Android's AudioManager.STREAM_MUSIC (via the
+    // setMediaVolume method channel). The engine's internal volume stays
+    // pinned at 1.0 so that effective_loudness == system_volume, and the
+    // Android volume UI is always the source of truth.
+    // ─────────────────────────────────────────────────────────────────
+    try {
+      await player.engine.setVolume(1.0);
+    } catch (e) {
+      debugPrint('Failed to pin media_kit volume to 100%: $e');
+    }
+
     _player = player;
     return player;
   }
