@@ -1,0 +1,24 @@
+name: audio_capture_plugin
+description: Configurable audio capture with audio source selection for Vosk.
+version: 0.1.0
+homepage: none
+publish_to: none
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+  flutter: '>=3.19.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.fukatsongs.audio_capture
+        pluginClass: AudioCapturePlugin

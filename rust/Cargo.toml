@@ -29,11 +29,11 @@ sha2 = "0.10"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "bmp", "webp"] }
 
 [profile.release]
-opt-level = "z"     # Optimize for size
-lto = true          # Enable Link Time Optimization
-codegen-units = 1   # Reduce parallel code generation units to increase optimization
-panic = "abort"     # Remove panic string and unwinding code
-strip = true        # Strip symbols from binary
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "unwind"    # ← REQUIRED for flutter_rust_bridge error handling
+strip = false       # ← REQUIRED for FFI symbol resolution
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

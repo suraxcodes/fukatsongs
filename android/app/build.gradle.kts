@@ -29,12 +29,7 @@ defaultConfig {
     versionCode = flutter.versionCode
     versionName = flutter.versionName
 
-    ndk {
-        // Poco M6 Pro (Helio G99) is arm64-v8a.
-        // Only build Rust + native libs for real ARM phones.
-        // Removes: armeabi-v7a (old 32-bit), x86 (emulator), x86_64 (emulator).
-        abiFilters += listOf("arm64-v8a")
-    }
+
 }
 
     buildTypes {
@@ -42,6 +37,8 @@ defaultConfig {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = false // Disable R8/ProGuard shrinking
+            isShrinkResources = false // Keep all resources
         }
     }
 
