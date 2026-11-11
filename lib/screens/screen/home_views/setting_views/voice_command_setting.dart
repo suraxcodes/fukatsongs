@@ -79,6 +79,10 @@ class _VoiceCommandSettingsState extends State<VoiceCommandSettings> {
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         children: [
+          // ── Battery tip (same text as the download box) ───────────────
+          const _BatteryTipCard(),
+          const SizedBox(height: 20),
+
           // ── Hands-free master switch ──────────────────────────────────
           const SettingSectionHeader(label: 'Hands-free'),
           SettingCard(
@@ -257,6 +261,61 @@ class _CommandGroupTile extends StatelessWidget {
                     ),
                   )
                   .toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Static hint: without switching battery optimisation off, Android (and
+/// especially MIUI / HyperOS) suspends the hands-free mic service.
+///
+/// Text-only on purpose — no permission request, no plugin call.
+class _BatteryTipCard extends StatelessWidget {
+  const _BatteryTipCard();
+
+  @override
+  Widget build(BuildContext context) {
+    const amber = Color(0xFFFFB74D);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: amber.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: amber.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.battery_alert_rounded, size: 17, color: amber),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Keep hands-free alive',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: amber,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Long-press the app icon → App info → Battery → '
+                  'set No restrictions. Otherwise Android stops listening '
+                  'after a while.',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    height: 1.45,
+                    color: Default_Theme.primaryColor1.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

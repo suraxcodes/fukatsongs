@@ -24,6 +24,19 @@ class VoiceCommandService {
 
   bool get enabled => _vosk.isListening.value;
 
+  /// Every phrase the offline recogniser accepts, grouped for display.
+  ///
+  /// Delegates to [VoskVoiceService.grammarGroups] so the settings screen,
+  /// the download dialog and the actual Vosk grammar can never drift apart.
+  Map<String, List<String>> get commandGroups =>
+      VoskVoiceService.grammarGroups;
+
+  /// Number of user-facing phrases (the `[unk]` noise sink is excluded).
+  int get commandCount => VoskVoiceService.grammar.length;
+
+  /// True once the ~39 MB offline model exists on disk.
+  Future<bool> isModelReady() => _vosk.isModelReady();
+
   /// Toggle hands-free voice command mode ON or OFF.
   Future<void> toggle({
     required bool on,

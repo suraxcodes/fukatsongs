@@ -689,11 +689,15 @@ class VoiceCommandIcon extends StatelessWidget {
     return ValueListenableBuilder<bool>(
       valueListenable: ServiceLocator.voiceCommandService.isEnabled,
       builder: (context, isEnabled, child) {
-        return IconButton(
+                return IconButton(
           padding: const EdgeInsets.all(5),
           constraints: const BoxConstraints(),
-          tooltip: isEnabled ? 'Hands-Free Voice: ON' : 'Hands-Free Voice: OFF',
-          onPressed: () async {
+          tooltip: isEnabled
+              ? 'Hands-Free Voice: ON\nLong-press to see all commands'
+              : 'Hands-Free Voice: OFF\nLong-press to see all commands',
+          // Long-press = read-only help box. Never downloads, never toggles.
+          onLongPress: () => showVoiceCommandsDialog(context),
+          onPressed: () async  {
             final cubit = context.read<BloomeePlayerCubit>();
             if (!isEnabled) {
               final ready = await showVoiceModelDownloadDialog(context);

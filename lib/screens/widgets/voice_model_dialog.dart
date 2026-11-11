@@ -38,6 +38,22 @@ Future<bool> showVoiceModelDownloadDialog(
   return result ?? false;
 }
 
+/// Read-only help box: every voice command. Safe to open any time —
+/// never downloads anything and never touches the toggle.
+///
+/// Entry points:
+/// - Settings → Voice Commands → "N voice commands" row
+/// - Explore screen: long-press the mic icon
+Future<void> showVoiceCommandsDialog(
+  BuildContext context, {
+  String title = 'Voice commands',
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (_) => _VoiceModelDialog(title: title, onlyInfo: true),
+  );
+}
+
 class _VoiceModelDialog extends StatefulWidget {
   const _VoiceModelDialog({required this.title, this.onlyInfo = false});
 
@@ -101,6 +117,9 @@ class _VoiceModelDialogState extends State<_VoiceModelDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Battery tip — shown in the download box AND the help box.
+              const _BatteryTipCard(),
+              const SizedBox(height: 16),
               if (!widget.onlyInfo) ...[
                 ValueListenableBuilder<VoiceModelProgress>(
                   valueListenable: _downloader.progress,
@@ -302,6 +321,61 @@ class _CommandList extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Static hint: without switching battery optimisation off, Android (and
+/// especially MIUI / HyperOS) suspends the hands-free mic service.
+///
+/// Deliberately text-only — no permission request, no plugin call.
+class _BatteryTipCard extends StatelessWidget {
+  const _BatteryTipCard();
+
+  @override
+  Widget build(BuildContext context) {
+    const amber = Color(0xFFFFB74D);
+
+    return Container(
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: amber.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: amber.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.battery_alert_rounded, size: 16, color: amber),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Keep hands-free alive',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: amber,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Long-press the app icon → App info → Battery → '
+                  'set No restrictions. Otherwise Android stops listening '
+                  'after a while.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    height: 1.45,
+                    color: Default_Theme.primaryColor1.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
