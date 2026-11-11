@@ -55,22 +55,42 @@ class PlayerInitializer {
   // while init is in progress simply await the same future.
   Future<BloomeeMusicPlayer>? _initFuture;
 
+  /// Set by the player when the user swipes the app out of Recents.
+  /// A disposed handler must NEVER be revived in the same process — audio_service
+  /// allows only one AudioService.init() per process. The app process terminates
+  /// on teardown, so the next cold start occurs in a fresh process.
+  bool _tornDown = false;
+  bool _hasInitialized = false;
+
+  void markTornDown() => _tornDown = true;
+
   Future<BloomeeMusicPlayer> getBloomeeMusicPlayer() async {
-    // 1. Already initialized and healthy — fast path.
     final p = _player;
+
+    // audio_service allows exactly ONE AudioService.init() per process
+    // (it asserts on a static _cacheManager that can never be reset).
+    // After task-removal teardown the process is killed on purpose, so if we
+    // ever reach this point the handler is gone for good in this process.
+    if (_tornDown || (p != null && p.isDisposed) || (_hasInitialized && p == null)) {
+      throw StateError(
+        'Player was torn down with the task; the app must be restarted.',
+      );
+    }
+
     if (p != null) {
       if (!p.isPlayerHealthy) await p.revive();
       return p;
     }
 
-    // 2. Initialization in progress — wait for it.
+    // Cold-start initialization (exactly once per process).
     final running = _initFuture;
     if (running != null) return running;
 
-    // 3. Start initialization.
     _initFuture = _initializeInternal();
     try {
-      return await _initFuture!;
+      final player = await _initFuture!;
+      _hasInitialized = true;
+      return player;
     } finally {
       _initFuture = null;
     }

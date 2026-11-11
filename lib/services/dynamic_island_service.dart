@@ -148,4 +148,13 @@ class DynamicIslandService {
       }
     } catch (_) {}
   }
+
+  /// Cancel the fallback event poller. MUST be called on teardown — this
+  /// Timer.periodic otherwise keeps the UI isolate (and the whole process)
+  /// alive after the user dismissed the app.
+  static void stopPolling() {
+    _filePoller?.cancel();
+    _filePoller = null;
+    _processedEventLines.clear();
+  }
 }

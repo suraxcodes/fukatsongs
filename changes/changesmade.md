@@ -335,3 +335,53 @@ None
 Completed
 
 ---
+
+## Date
+2026-11-11 12:25
+
+## Task
+Swipe-Away Audio & Background Service Teardown Fix (Process Kill & Strict Teardown)
+
+## Reason
+Stop all playback and background services when app is dismissed.
+
+## what problem/error we fixed 
+- Audio, notification, and media session survived when swiping the app out of Recents.
+- Disposed player was revived in place by `getBloomeeMusicPlayer()` and `_ensurePlayerHealthyOnResume()`, resurrecting notifications.
+- AudioService only permits ONE `init()` per process (asserts on static cacheManager); attempted in-process rebuilding is illegal.
+- Duplicate `super.stop()` caused double `processingState.idle` emissions racing with foreground service shutdown.
+- Native libmpv media decoder resources were not freed on `engine.stop()`.
+- Microphone FGS was `START_STICKY` with no task-removal lifecycle hook.
+- OverlayService (Dynamic Island) had an uncancelled 700ms periodic timer keeping isolates alive.
+
+## Files Changed 
+- android/app/src/main/AndroidManifest.xml
+- android/app/src/main/kotlin/com/fukatsongs/app/VoiceCommandForegroundService.kt
+- android/app/src/main/kotlin/com/fukatsongs/app/VoiceFgsWrapper.kt
+- lib/main.dart
+- lib/services/audio_service_initializer.dart
+- lib/services/bloomee_player.dart
+- lib/services/dynamic_island_service.dart
+- lib/services/player/player_engine.dart
+- changes/changesmade.md
+
+## Main Changes
+- Added `markTornDown()` and `_tornDown` state to `PlayerInitializer`; throws `StateError` if `getBloomeeMusicPlayer()` is accessed after teardown or when disposed. Removed `_rebuild()`.
+- Consolidated `onTaskRemoved()` and `onNotificationDeleted()` in `BloomeeMusicPlayer` into a single `_teardownFromSystem()` with exact one idle emission, `_teardownStarted` guards, hands-free shutdown, cancellation of all 8 streams including `_durationSub`, and a final `exit(0)` after 400ms delay to cleanly kill the process.
+- Freed native media resources in `PlayerEngine.stop()` via `open(Media(''))`.
+- Added `stopPolling()` to `DynamicIslandService` to terminate the 700ms fallback poller timer on teardown.
+- Added `on StateError` guard in `_ensurePlayerHealthyOnResume()` in `main.dart` to prevent crashing UI on resume after task teardown.
+- Created `VoiceFgsWrapper` with `onTaskRemoved` teardown, changed return to `START_NOT_STICKY`, and added `android:stopWithTask="true"` to voice and overlay services in `AndroidManifest.xml`.
+
+## Technical Notes
+- Disposed player sessions are never revived and `audio_service` cannot be reinitialized in the same process. Terminating the process via `exit(0)` on task removal guarantees a clean atomic cleanup of bound services, notifications, and media sessions across all Android OEMs.
+- The next cold start occurs in a fresh process where `_initializeInternal()` can safely configure `AudioService.init()`.
+- Bound service `AudioService` relies on the single idle state emission and process termination for teardown; `stopWithTask` is applied only to started services (`VoiceFgsWrapper`, `OverlayService`).
+
+## Breaking Changes
+None
+
+## Status
+Completed
+
+---

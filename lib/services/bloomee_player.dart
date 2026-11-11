@@ -1,6 +1,7 @@
 import 'dart:developer';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show exit;
 
 import 'package:flutter/services.dart';
 import 'package:fukatsongs/core/adapters/track_adapter.dart';
@@ -29,6 +30,7 @@ import 'package:audio_session/audio_session.dart';
 import 'package:async/async.dart';
 import 'package:easy_debounce/easy_throttle.dart';
 import 'package:rxdart/rxdart.dart';
+import 'package:fukatsongs/services/audio_service_initializer.dart';
 
 /// FukatMusic main audio player.
 ///
@@ -86,6 +88,13 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   BehaviorSubject<bool> isResolving = BehaviorSubject<bool>.seeded(false);
 
   bool _isDisposed = false;
+
+  /// True once the OS asked us to tear down (task removed / notification
+  /// deleted). Prevents revive() + event callbacks from restarting playback.
+  bool _teardownStarted = false;
+
+  /// Read by PlayerInitializer to decide rebuild-vs-reuse.
+  bool get isDisposed => _isDisposed;
 
   CancelableCompleter<void>? _playCompleter;
   CancelableOperation<ResolvedMediaSource>? _preResolveOp;
@@ -218,7 +227,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   // invariant that makes voice / hardware / in-app volume all agree.
 
   void _handleInterruptionSync(AudioInterruptionEvent event) {
-    if (_isDisposed) return;
+    if (_isDisposed || _teardownStarted) return;
 
     if (event.begin) {
       if (ServiceLocator.voiceCommandService.isListening.value) {
@@ -269,14 +278,14 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
   void _resumePlaybackAfterInterruption() {
     _activateAudioSession().then((granted) {
-      if (granted && !_isDisposed) engine.play();
+      if (granted && !_isDisposed && !_teardownStarted) engine.play();
     }).catchError((Object e) {
       log('Resume after interruption failed: $e', name: 'BloomeeMusicPlayer');
     });
   }
 
   void _onHeadphonesUnplugged() {
-    if (!_isDisposed) engine.pause();
+    if (!_isDisposed && !_teardownStarted) engine.pause();
   }
 
   // ─── Audio Session Activation ────────────────────────────────────────────
@@ -554,15 +563,19 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     _playCompleter = null;
     _preResolveOp?.cancel();
     _currentResolveOp?.cancel();
-    playbackState.add(playbackState.value
-        .copyWith(processingState: AudioProcessingState.idle));
+    // Single idle emission: this is what makes audio_service drop the
+    // foreground service and remove the media notification.
+    playbackState.add(playbackState.value.copyWith(
+      processingState: AudioProcessingState.idle,
+      playing: false,
+    ));
     await engine.stop();
     await _deactivateAudioSession();
     DiscordService.clearPresence();
     try {
       await DynamicIslandService.closeDynamicIsland();
     } catch (_) {}
-    await super.stop();
+    // NOTE: intentionally NO super.stop() here (was a duplicate idle).
   }
 
   @override
@@ -797,7 +810,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   // ─── Completion / Auto-Next ──────────────────────────────────────────────
 
   void _onTrackCompleted() {
-    if (loopMode.value == LoopMode.one || _isAdvancing) return;
+    if (_isDisposed || _teardownStarted || loopMode.value == LoopMode.one || _isAdvancing) return;
     _isAdvancing = true;
     Future.microtask(() async {
       try {
@@ -864,6 +877,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   }
 
   Future<void> revive() async {
+    // A handler torn down by the OS is permanently dead.
+    if (_teardownStarted) return;
     if (!_isDisposed && isPlayerHealthy) return;
     log('Reviving BloomeeMusicPlayer...', name: 'BloomeeMusicPlayer');
 
@@ -1121,17 +1136,66 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
   @override
   Future<void> onTaskRemoved() async {
-    await _queueManager.persistQueueState();
-    await stop();
-    await _cleanup();
+    // Best-effort queue save; must never block the teardown.
+    try {
+      await _queueManager.persistQueueState();
+    } catch (_) {}
+
+    await _teardownFromSystem();
+
     return super.onTaskRemoved();
   }
 
   @override
   Future<void> onNotificationDeleted() async {
-    await stop();
-    await _cleanup();
+    await _teardownFromSystem();
     return super.onNotificationDeleted();
+  }
+
+  /// Single idempotent teardown for "user dismissed the app / killed playback".
+  Future<void> _teardownFromSystem() async {
+    if (_teardownStarted) return;
+    _teardownStarted = true;
+
+    // 1. Stop native audio first — this is the part the user hears.
+    try {
+      await engine.stop();
+    } catch (_) {}
+
+    // 2. Exactly ONE idle emission → audio_service stops the FGS,
+    //    removes the MediaStyle notification, releases the media session.
+    try {
+      playbackState.add(playbackState.value.copyWith(
+        processingState: AudioProcessingState.idle,
+        playing: false,
+      ));
+    } catch (_) {}
+
+    // 3. Stop hands-free (Vosk recognizer + microphone FGS) if it was ON.
+    try {
+      if (ServiceLocator.voiceCommandService.isListening.value) {
+        await ServiceLocator.voiceCommandService.stopListening();
+      }
+    } catch (_) {}
+
+    // 4. Release every Dart-side resource (engine, subjects, timers, overlay).
+    await _cleanup();
+
+    // 5. Tell the initializer to build a fresh handler next launch.
+    try {
+      PlayerInitializer().markTornDown();
+    } catch (_) {}
+
+    // ── Final step: end the process ──────────────────────────────────────
+    // This is deliberate, not a workaround. Reasons:
+    //  1. audio_service cannot be re-initialised in the same process, so a
+    //     "fresh player on reopen" is only possible in a new process.
+    //  2. The audio FGS is BOUND by our own MediaBrowser client; stopSelf()
+    //     cannot finish it while bound, so the FGS notification would linger.
+    //  3. Killing the process removes FGS + notification + media session
+    //     atomically, on every OEM, with no lifecycle races.
+    await Future<void>.delayed(const Duration(milliseconds: 400)); // let Isar flush
+    exit(0);
   }
 
   Future<void> _cleanup() async {
@@ -1158,6 +1222,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       _positionSuccessSub?.cancel() ?? Future.value(),
       _audioInterruptionSub?.cancel() ?? Future.value(),
       _audioNoisySub?.cancel() ?? Future.value(),
+      _durationSub?.cancel() ?? Future.value(), // was missing
     ]);
 
     _errorHandler.dispose();
@@ -1167,14 +1232,18 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
     DiscordService.clearPresence();
     try {
-      await engine.dispose();
+      await engine.dispose(); // disposes BOTH media_kit players
     } catch (_) {}
     await _deactivateAudioSession();
+
+    try {
+      DynamicIslandService.stopPolling(); // 700 ms timer must die
+    } catch (_) {}
 
     fromPlaylist.add(false);
     isOffline.add(false);
     loopMode.add(LoopMode.off);
 
-    await super.stop();
+    // NOTE: no super.stop() here (see D2.c) — prevents the double idle.
   }
 }

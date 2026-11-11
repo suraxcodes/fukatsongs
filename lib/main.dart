@@ -258,10 +258,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Future<void> _ensurePlayerHealthyOnResume() async {
     try {
       final player = await PlayerInitializer().getBloomeeMusicPlayer();
-      if (!player.isPlayerHealthy) {
-        await player.revive();
-      }
       player.syncPublicState();
+    } on StateError {
+      // Player was torn down with the task; a new process will rebuild it.
     } catch (error, stackTrace) {
       debugPrint('Player health check on resume failed: $error\n$stackTrace');
     }

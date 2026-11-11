@@ -20,14 +20,14 @@ import androidx.core.app.NotificationCompat
  * This service satisfies that requirement with minimum battery drain (0% CPU,
  * IMPORTANCE_LOW priority, no audio effects).
  */
-class VoiceCommandForegroundService : Service() {
+open class VoiceCommandForegroundService : Service() {
 
     companion object {
         const val CHANNEL_ID = "fukatsongs_voice_command_channel"
         const val NOTIFICATION_ID = 98765
 
         fun start(context: Context) {
-            val intent = Intent(context, VoiceCommandForegroundService::class.java)
+            val intent = Intent(context, VoiceFgsWrapper::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
@@ -36,7 +36,7 @@ class VoiceCommandForegroundService : Service() {
         }
 
         fun stop(context: Context) {
-            val intent = Intent(context, VoiceCommandForegroundService::class.java)
+            val intent = Intent(context, VoiceFgsWrapper::class.java)
             context.stopService(intent)
         }
     }
@@ -57,7 +57,9 @@ class VoiceCommandForegroundService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
-        return START_STICKY
+        // Must NOT restart itself: this service only exists while the user has
+        // hands-free ON. A sticky restart after a swipe = ghost microphone.
+        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

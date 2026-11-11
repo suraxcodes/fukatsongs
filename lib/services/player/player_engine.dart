@@ -562,6 +562,12 @@ class PlayerEngine {
 
     try {
       await Future.wait([_playerA.stop(), _playerB.stop()]);
+      // Drop the media resource as well: stop() alone leaves the native
+      // decoder/file handle attached until the next open().
+      await Future.wait([
+        _playerA.open(Media('')),
+        _playerB.open(Media('')),
+      ]);
       final vol = _userVolume * 100.0;
       await Future.wait([_playerA.setVolume(vol), _playerB.setVolume(vol)]);
     } catch (e) {
