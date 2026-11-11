@@ -59,6 +59,9 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   late MediaResolverService _resolver;
   late SmartTrackReplacementService _smartTrackReplacementService;
 
+  _PlaybackSourceSession? _sourceSession;
+  CancelableCompleter<void>? _openingToken;
+
   static final MediaControl _shuffleControlOn = MediaControl.custom(
     androidIcon: 'drawable/ic_shuffle_on',
     label: 'Disable Shuffle',
@@ -426,9 +429,19 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
     _errorSub = engine.errorStream.listen((error) {
       log('Engine error: $error', name: 'BloomeeMusicPlayer');
+      // Startup failures are handled by the open/activate result below.
+      // Do not schedule a parallel retry while the candidate loop owns open.
+      if (_openingToken != null || _isDisposed || _teardownStarted) return;
       final track = _queueManager.currentTrack;
       if (track != null) {
-        _errorHandler.handleError(PlayerErrorType.playbackError, error, track);
+        final session = _sourceSession;
+        if (session != null && session.original.id == track.id &&
+            _isAutoResolvableError(error) && !isOffline.value) {
+          final active = session.active;
+          if (active != null) session.failedIds.add(active.id);
+        }
+        _errorHandler.handleError(
+            _errorHandler.categorizeError(error), error, track);
       }
     });
 
@@ -557,6 +570,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
   @override
   Future<void> stop() async {
+    _sourceSession = null;
     _errorHandler.resetCircuitBreaker();
     _shouldResumeAfterInterruption = false;
     _playCompleter?.operation.cancel();
@@ -622,8 +636,13 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     Track track, {
     bool doPlay = true,
     Duration? initialPosition,
+    bool preserveSourceSession = false,
   }) {
-    if (_isDisposed) return Future.value();
+    if (_isDisposed || _teardownStarted) return Future.value();
+    _errorHandler.cancelPendingRetry();
+    if (!preserveSourceSession || _sourceSession?.original.id != track.id) {
+      _sourceSession = _PlaybackSourceSession(track);
+    }
 
     final prev = _playCompleter;
     final completer = CancelableCompleter<void>(
@@ -643,136 +662,145 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     bool doPlay = true,
     Duration? initialPosition,
   }) async {
-    bool alive() => !token.isCanceled && !_isDisposed;
+    final session = _sourceSession!;
+    bool alive() => !token.isCanceled && !_isDisposed && !_teardownStarted &&
+        identical(session, _sourceSession);
     void complete() {
       if (!token.isCompleted && !token.isCanceled) token.complete();
     }
-
     if (!alive()) return;
-
-    var resolvedTrack = track;
-    final canUsePreloaded = engine.isPreloaded &&
-        _preloadedTrackId != null &&
-        _preloadedTrackId == track.id;
+    _openingToken = token;
 
     try {
       _updateCurrentTrack(track);
-
       if (doPlay) {
         final granted = await _activateAudioSession();
         if (!alive()) return;
         if (!granted) {
-          SnackbarService.showMessage(
-              'Audio focus denied. Cannot start playback.');
-          return complete();
+          SnackbarService.showMessage('Audio focus denied. Cannot start playback.');
+          return;
         }
       }
-
+      final enabled = await SettingsDAO(DBProvider.db)
+          .getSettingBool(SettingKeys.autoResolveUnavailableTracks);
+      if (!alive()) return;
+      final allowFallback = enabled != false && !isLocalMediaId(track.id);
+      _errorHandler.registerAttempt(track.id);
+      final canUsePreloaded = engine.isPreloaded &&
+          _preloadedTrackId == track.id && session.failedIds.isEmpty;
       _currentResolveOp?.cancel();
-      engine.setLoadingState();
       isResolving.add(true);
+      engine.setLoadingState();
 
-      EngineResult result;
+      Track? candidate = session.active ?? track;
+      if (session.failedIds.contains(candidate.id)) candidate = null;
+      Object lastError = StateError('No safe playable alternative found');
+      var usePreloaded = canUsePreloaded;
 
-      if (canUsePreloaded) {
-        isOffline.add(_preloadedTrackOffline);
-        result = engine.crossfadeDuration > Duration.zero
-            ? await engine.crossfadeToPreloaded(engine.crossfadeDuration)
-            : await engine.activatePreloaded(autoPlay: doPlay);
-        _clearPreloadedMarker();
-      } else {
-        await engine.stop(keepLoadingState: true);
+      while (alive()) {
+        if (candidate == null) {
+          if (!allowFallback || session.failedIds.length >= 4) break;
+          if (!session.searched) {
+            session.searched = true;
+            final matches = await _smartTrackReplacementService
+                .searchPlaybackCandidates(track,
+                    excludeTrackIds: session.failedIds, limit: 3)
+                .timeout(const Duration(seconds: 20));
+            if (!alive()) return;
+            session.pending.addAll(matches.map((c) => c.track));
+          }
+          while (session.pending.isNotEmpty && candidate == null) {
+            final next = session.pending.removeAt(0);
+            if (!session.failedIds.contains(next.id)) candidate = next;
+          }
+          if (candidate == null) break;
+        }
         if (!alive()) return;
-
-        _currentResolveOp = CancelableOperation.fromFuture(
-          _resolveWithFallback(track).timeout(const Duration(seconds: 15)),
-        );
-        final resolved = await _currentResolveOp!.valueOrCancellation();
-        if (resolved == null || !alive()) return;
-
-        resolvedTrack = resolved.$1;
-        if (resolvedTrack.id != track.id) _updateCurrentTrack(resolvedTrack);
-        isOffline.add(resolved.$2.isOffline);
-
-        result = await engine.openDirect(
-          resolved.$2.uri,
-          httpHeaders: resolved.$2.headers,
-          autoPlay: doPlay,
-        );
+        final current = candidate;
+        session.active = current;
+        _errorHandler.registerAttempt(track.id);
+        var candidateOffline = false;
+        try {
+          EngineResult result;
+          if (usePreloaded) {
+            usePreloaded = false;
+            candidateOffline = _preloadedTrackOffline;
+            isOffline.add(candidateOffline);
+            result = doPlay && engine.crossfadeDuration > Duration.zero
+                ? await engine.crossfadeToPreloaded(engine.crossfadeDuration)
+                : await engine.activatePreloaded(autoPlay: doPlay);
+            if (!alive()) return;
+            _clearPreloadedMarker();
+          } else {
+            await engine.stop(keepLoadingState: true);
+            if (!alive()) return;
+            _currentResolveOp = CancelableOperation.fromFuture(
+              _resolver.resolve(current).then((source) => (current, source))
+                  .timeout(const Duration(seconds: 12)),
+            );
+            final resolved = await _currentResolveOp!.valueOrCancellation();
+            if (resolved == null || !alive()) return;
+            candidateOffline = resolved.$2.isOffline;
+            isOffline.add(candidateOffline);
+            result = await engine.openDirect(resolved.$2.uri,
+                httpHeaders: resolved.$2.headers, autoPlay: doPlay);
+            if (!alive()) return;
+          }
+          if (result is EngineCanceled) return;
+          if (result is EngineFailure) throw result.error;
+          if (initialPosition != null && initialPosition > Duration.zero) {
+            await engine.seek(initialPosition);
+            if (!alive()) return;
+          }
+          // Preserve original identity in queue, playlists and notification.
+          _errorHandler.clearError();
+          isResolving.add(false);
+          if (current.id != track.id) {
+            SnackbarService.showMessage('Playing another source for ${track.title}.');
+          }
+          _preResolveNextTrack();
+          _checkRelatedSongs();
+          return;
+        } catch (error) {
+          if (!alive()) return;
+          lastError = error;
+          final retryableFailure =
+              _isAutoResolvableError(error) && !candidateOffline;
+          if (!retryableFailure) break;
+          session.failedIds.add(current.id);
+          candidate = null;
+        }
       }
-
       if (!alive()) return;
-
-      if (result is EngineFailure) {
-        isResolving.add(false);
-        _errorHandler.handleError(
-          _errorHandler.categorizeError(result.error),
-          result.error.toString(),
-          resolvedTrack,
-          result.error,
-        );
-        return complete();
-      }
-
-      if (initialPosition != null && initialPosition > Duration.zero) {
-        await engine.seek(initialPosition);
-      }
-
-      isResolving.add(false);
-      _errorHandler.clearError();
-      _preResolveNextTrack();
-      _checkRelatedSongs();
-      complete();
-    } on TimeoutException catch (e) {
-      isResolving.add(false);
+      _errorHandler.handleError(_errorHandler.categorizeError(lastError),
+          lastError.toString(), track, lastError);
+    } catch (error, stack) {
       if (!alive()) return;
-      _errorHandler.handleError(
-          PlayerErrorType.networkDropped, 'Network timeout', track, e);
-      complete();
-    } catch (e, stack) {
-      isResolving.add(false);
-      if (!alive()) return;
-      log('Play failed: ${track.title}: $e',
+      // Search timeouts should not permanently consume the one search pass.
+      if (error is TimeoutException) session.searched = false;
+      log('Play failed: ${track.title}: $error',
           name: 'BloomeeMusicPlayer', stackTrace: stack);
-      _errorHandler.handleError(
-          _errorHandler.categorizeError(e), e.toString(), resolvedTrack, e);
+      _errorHandler.handleError(_errorHandler.categorizeError(error),
+          error.toString(), track, error);
+    } finally {
+      if (identical(_openingToken, token)) _openingToken = null;
+      if (alive()) isResolving.add(false);
       complete();
     }
-  }
-
-  Future<(Track, ResolvedMediaSource)> _resolveWithFallback(Track track) async {
-    try {
-      return (track, await _resolver.resolve(track));
-    } catch (e) {
-      final replacement = await _tryAutoReplace(track, e);
-      if (replacement == null) rethrow;
-      return (replacement, await _resolver.resolve(replacement));
-    }
-  }
-
-  Future<Track?> _tryAutoReplace(Track track, Object error) async {
-    if (!_isAutoResolvableError(error) || isLocalMediaId(track.id)) return null;
-    final enabled = await SettingsDAO(DBProvider.db)
-        .getSettingBool(SettingKeys.autoResolveUnavailableTracks);
-    if (enabled == false) return null;
-    final candidate =
-        await _smartTrackReplacementService.findBestReplacement(track);
-    if (candidate == null) return null;
-    SnackbarService.showMessage(
-      'Playing fallback source for ${track.title} from ${candidate.pluginName}.',
-      duration: const Duration(seconds: 3),
-    );
-    return candidate.track;
   }
 
   bool _isAutoResolvableError(Object error) {
     if (error is PluginNotLoadedException || error is PluginNotFoundException) {
       return true;
     }
-    final msg = error.toString().toLowerCase();
-    return msg.contains('no streams returned') ||
-        msg.contains('plugin is not loaded') ||
-        msg.contains('plugin not found');
+    final message = error.toString().toLowerCase();
+    // Device/session and network-wide failures are not missing catalogue items.
+    if (message.contains('audio focus') || message.contains('audio output') ||
+        message.contains('audiotrack') || message.contains('opensles') ||
+        message.contains('cancel')) return false;
+    final type = _errorHandler.categorizeError(error);
+    return type != PlayerErrorType.networkDropped &&
+        type != PlayerErrorType.permissionError;
   }
 
   // ─── Preload ─────────────────────────────────────────────────────────────
@@ -832,7 +860,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     if (track == null) return;
     _errorHandler.clearError();
     await _enqueuePlayTrack(track,
-        doPlay: true, initialPosition: engine.position);
+        doPlay: true, initialPosition: engine.position,
+        preserveSourceSession: true);
   }
 
   // ─── Related Songs ───────────────────────────────────────────────────────
@@ -1246,4 +1275,14 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
     // NOTE: no super.stop() here (see D2.c) — prevents the double idle.
   }
+}
+
+/// One logical playback request. Never persisted to the playlist database.
+class _PlaybackSourceSession {
+  _PlaybackSourceSession(this.original);
+  final Track original;
+  Track? active;
+  final Set<String> failedIds = {};
+  final List<Track> pending = [];
+  bool searched = false;
 }

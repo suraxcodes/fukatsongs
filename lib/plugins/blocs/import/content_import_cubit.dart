@@ -742,10 +742,10 @@ class ContentImportCubit extends Cubit<ContentImportState> {
         final tracks = videosBatch.map((video) {
           return ImportTrackItem(
             title: video['title'],
-            artists: ['YouTube Audio'], // Fallback artist
+            artists: const <String>[],// Fallback artist
             thumbnailUrl: 'https://i.ytimg.com/vi/${video['videoId']}/hqdefault.jpg',
             isExplicit: false,
-            durationMs: BigInt.zero, // Duration hard to extract reliably without full metadata
+            durationMs: null, // Duration hard to extract reliably without full metadata
             url: 'https://youtube.com/watch?v=${video['videoId']}',
             sourceId: 'content-resolver.bloomfactory.ytmusic::${video['videoId']}',
           );

@@ -73,7 +73,13 @@ class PlayerErrorHandler {
 
   /// Called strictly before the engine commands a play/open.
   /// Generates a new sequence ID to deterministically isolate error bursts.
+  void cancelPendingRetry() {
+    _reconnectionTimer?.cancel();
+    _reconnectionTimer = null;
+  }
+
   void registerAttempt(String trackId) {
+    cancelPendingRetry();
     _currentAttemptSequence++;
 
     if (_currentTrackId != trackId) {
@@ -160,7 +166,13 @@ class PlayerErrorHandler {
           duration: const Duration(seconds: 3));
 
       _reconnectionTimer?.cancel();
+      final sequence = _currentAttemptSequence;
+      final trackId = _currentTrackId;
       _reconnectionTimer = Timer(delay, () {
+        if (sequence != _currentAttemptSequence || trackId != _currentTrackId) {
+          return;
+        }
+        _reconnectionTimer = null;
         dev.log(
             'Retrying playback for ${track.title} (attempt $_currentTrackRetries)',
             name: 'PlayerErrorHandler');
@@ -229,6 +241,8 @@ class PlayerErrorHandler {
   }
 
   void resetCircuitBreaker() {
+    cancelPendingRetry();
+    _currentAttemptSequence++;
     _currentTrackId = null;
     _currentTrackRetries = 0;
     _consecutiveTrackFailures = 0;

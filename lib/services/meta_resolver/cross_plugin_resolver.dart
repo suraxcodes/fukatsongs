@@ -81,15 +81,21 @@ class TrackMatchTarget {
     this.durationMs,
   });
 
+  /// Matching-only normalization; saved playlist metadata is not modified.
+  static List<String> matchingArtists(Iterable<String> names) => names
+      .map((name) => name.trim())
+      .where((name) => name.isNotEmpty &&
+          name.toLowerCase() != 'youtube audio')
+      .toList(growable: false);
+
   /// Construct from a plugin [Track] model.
   factory TrackMatchTarget.fromTrack(Track track) => TrackMatchTarget(
         title: track.title,
-        artistNames: track.artists
-            .map((a) => a.name.trim())
-            .where((n) => n.isNotEmpty)
-            .toList(growable: false),
+        artistNames: matchingArtists(track.artists.map((a) => a.name)),
         albumTitle: track.album?.title,
-        durationMs: track.durationMs,
+        durationMs: track.durationMs != null && track.durationMs! > BigInt.zero
+            ? track.durationMs
+            : null,
       );
 
   /// Construct from raw import data (title + list of artist name strings).
@@ -100,10 +106,11 @@ class TrackMatchTarget {
   }) =>
       TrackMatchTarget(
         title: title,
-        artistNames:
-            artists.map((a) => a.trim()).where((a) => a.isNotEmpty).toList(),
+        artistNames: matchingArtists(artists),
         albumTitle: null,
-        durationMs: durationMs != null ? BigInt.from(durationMs) : null,
+        durationMs: durationMs != null && durationMs > 0
+            ? BigInt.from(durationMs)
+            : null,
       );
 
   String get primaryArtist => artistNames.isNotEmpty ? artistNames.first : '';

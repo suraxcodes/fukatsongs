@@ -114,6 +114,78 @@ class SmartTrackReplacementService {
         .toList(growable: false);
   }
 
+  /// Playback-only search. Does not mutate playlists or manual replacement.
+  Future<List<SmartTrackReplacementCandidate>> searchPlaybackCandidates(
+    Track originalTrack, {
+    required Set<String> excludeTrackIds,
+    int limit = 3,
+  }) async {
+    if (isLocalMediaId(originalTrack.id)) return const [];
+    // Refresh so a recently disabled/unloaded provider is not selected.
+    invalidateCache();
+    final plugins = await _getLoadedResolverPlugins();
+    final originalProvider = tryParseMediaId(originalTrack.id)?.pluginId;
+    final alternatives = plugins
+        .where((p) => p.manifest.id != originalProvider)
+        .toList(growable: false);
+    if (alternatives.isEmpty) return const [];
+
+    final target = TrackMatchTarget.fromTrack(originalTrack);
+    final scored = await _resolver.resolveTrack(
+      target: target,
+      pluginIds: alternatives.map((p) => p.manifest.id).toList(),
+      excludeTrackIds: {...excludeTrackIds, originalTrack.id},
+      sequential: false,
+      limit: 24,
+      minConfidence: 0.45,
+    );
+    final names = {for (final p in alternatives) p.manifest.id: p.name};
+    final safe = scored.where((c) {
+      final candidate = c.track;
+      if (_resolver.versionPenalty(target.title, target.albumTitle,
+              candidate.title, candidate.album?.title) > 0) return false;
+      final title = _resolver.normalized(target.title);
+      if (title.isEmpty) return false;
+      final candidateArtists = TrackMatchTarget.matchingArtists(
+          candidate.artists.map((a) => a.name));
+      final duration = target.durationMs;
+      final candidateDuration = candidate.durationMs;
+      if (duration != null && candidateDuration != null &&
+          candidateDuration > BigInt.zero) {
+        final difference = (duration - candidateDuration).abs().toDouble();
+        if (difference > 8000 || difference / duration.toDouble() > 0.05) {
+          return false;
+        }
+      }
+      if (target.artistNames.isEmpty) {
+        // Legacy imports lack artist metadata: only exact titles qualify.
+        return title == _resolver.normalized(candidate.title) &&
+            candidateArtists.isNotEmpty;
+      }
+      return c.confidence >= 0.80 &&
+          _resolver.blendedTextSimilarity(target.title, candidate.title) >= 0.90 &&
+          _resolver.artistNamesSimilarity(
+              target.artistNames, candidateArtists) >= 0.85;
+    }).toList(growable: false);
+
+    // Do not guess between different artists for title-only legacy imports.
+    if (target.artistNames.isEmpty) {
+      final artistKeys = safe.map((c) {
+        final artists = TrackMatchTarget.matchingArtists(
+            c.track.artists.map((a) => a.name))
+            .map(_resolver.normalized).toList()..sort();
+        return artists.join('|');
+      }).toSet();
+      if (artistKeys.length != 1) return const [];
+    }
+    return safe.take(limit).map((c) => SmartTrackReplacementCandidate(
+      track: c.track,
+      pluginId: c.pluginId,
+      pluginName: names[c.pluginId] ?? c.pluginId,
+      confidence: c.confidence,
+    )).toList(growable: false);
+  }
+
   Future<SmartTrackReplacementCandidate?> findBestReplacement(
     Track originalTrack,
   ) async {
