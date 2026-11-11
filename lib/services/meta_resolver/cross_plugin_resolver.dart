@@ -612,6 +612,34 @@ class CrossPluginResolver {
         .replaceAll(_kMultiSpace, ' ')
         .trim();
   }
+  /// Playback-only title key. Keep normal search/manual scoring unchanged.
+  /// Accept a delimited film/presentation suffix, not arbitrary substrings.
+  String playbackTitleKey(String title) {
+    var value = title.trim();
+    value = value.split(RegExp(r'\s*\|+\s*')).first;
+    value = value.replaceAll(
+        RegExp(r'\s*[\(\[]from\b[^\)\]]*[\)\]]',
+            caseSensitive: false), ' ');
+    value = value.replaceAll(
+        RegExp(r'\s*[\(\[](?:official\s+)?(?:audio|video|lyric|lyrics)'
+            r'(?:\s+(?:audio|video))?\s*[\)\]]',
+            caseSensitive: false), ' ');
+    return normalized(value);
+  }
+
+  /// Check raw titles BEFORE suffix removal so remix/cover tags survive.
+  bool playbackVersionMatches(TrackMatchTarget target, Track candidate) {
+    if (versionPenalty(target.title, target.albumTitle,
+            candidate.title, candidate.album?.title) > 0) return false;
+    final extraTags = RegExp(
+        r'\b(slowed|sped|reverb|lofi|8d|nightcore|mashup)\b',
+        caseSensitive: false);
+    Set<String> tags(String value) => extraTags.allMatches(value)
+        .map((m) => m.group(0)!.toLowerCase()).toSet();
+    final a = tags('${target.title} ${target.albumTitle ?? ''}');
+    final b = tags('${candidate.title} ${candidate.album?.title ?? ''}');
+    return a.length == b.length && a.containsAll(b);
+  }
 
   /// Aggressive title simplification: strip parenthetical content *first*
   /// (before lowercasing), then remove feat/version/edition markers.

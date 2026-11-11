@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io' show exit;
 
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:fukatsongs/core/adapters/track_adapter.dart';
 import 'package:fukatsongs/core/models/exported.dart' hide MediaItem;
 import 'package:fukatsongs/core/models/media_playlist_model.dart';
@@ -685,6 +686,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
           .getSettingBool(SettingKeys.autoResolveUnavailableTracks);
       if (!alive()) return;
       final allowFallback = enabled != false && !isLocalMediaId(track.id);
+      debugPrint('[FallbackPlay] REQUEST title="${track.title}" '
+          'id=${track.id} enabled=$allowFallback autoPlay=$doPlay');
       _errorHandler.registerAttempt(track.id);
       final canUsePreloaded = engine.isPreloaded &&
           _preloadedTrackId == track.id && session.failedIds.isEmpty;
@@ -718,6 +721,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
         if (!alive()) return;
         final current = candidate;
         session.active = current;
+        debugPrint('[FallbackPlay] TRY id=${current.id} title="${current.title}"');
         _errorHandler.registerAttempt(track.id);
         var candidateOffline = false;
         try {
@@ -746,6 +750,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
                 httpHeaders: resolved.$2.headers, autoPlay: doPlay);
             if (!alive()) return;
           }
+          debugPrint('[FallbackPlay] RESULT id=${current.id} '
+              'result=${result.runtimeType} position=${engine.position}');
           if (result is EngineCanceled) return;
           if (result is EngineFailure) throw result.error;
           if (initialPosition != null && initialPosition > Duration.zero) {
@@ -766,6 +772,9 @@ class BloomeeMusicPlayer extends BaseAudioHandler
           lastError = error;
           final retryableFailure =
               _isAutoResolvableError(error) && !candidateOffline;
+          debugPrint('[FallbackPlay] FAILED id=${current.id} '
+              'type=${error.runtimeType} category=${_errorHandler.categorizeError(error)} '
+              'allowSourceSwitch=$retryableFailure offline=$candidateOffline');
           if (!retryableFailure) break;
           session.failedIds.add(current.id);
           candidate = null;

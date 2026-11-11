@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:developer';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:fukatsongs/core/constants/setting_keys.dart';
 import 'package:fukatsongs/plugins/utils/media_id.dart';
 import 'package:fukatsongs/services/db/dao/lyrics_dao.dart';
@@ -113,78 +115,149 @@ class SmartTrackReplacementService {
             ))
         .toList(growable: false);
   }
-
-  /// Playback-only search. Does not mutate playlists or manual replacement.
+  /// Playback-only search. Never changes stored playlists or manual replacement.
   Future<List<SmartTrackReplacementCandidate>> searchPlaybackCandidates(
     Track originalTrack, {
     required Set<String> excludeTrackIds,
     int limit = 3,
   }) async {
-    if (isLocalMediaId(originalTrack.id)) return const [];
-    // Refresh so a recently disabled/unloaded provider is not selected.
+    if (isLocalMediaId(originalTrack.id) || limit <= 0) return const [];
     invalidateCache();
     final plugins = await _getLoadedResolverPlugins();
     final originalProvider = tryParseMediaId(originalTrack.id)?.pluginId;
-    final alternatives = plugins
-        .where((p) => p.manifest.id != originalProvider)
-        .toList(growable: false);
-    if (alternatives.isEmpty) return const [];
-
+    final excluded = {...excludeTrackIds, originalTrack.id};
     final target = TrackMatchTarget.fromTrack(originalTrack);
-    final scored = await _resolver.resolveTrack(
-      target: target,
-      pluginIds: alternatives.map((p) => p.manifest.id).toList(),
-      excludeTrackIds: {...excludeTrackIds, originalTrack.id},
-      sequential: false,
-      limit: 24,
-      minConfidence: 0.45,
-    );
-    final names = {for (final p in alternatives) p.manifest.id: p.name};
-    final safe = scored.where((c) {
-      final candidate = c.track;
-      if (_resolver.versionPenalty(target.title, target.albumTitle,
-              candidate.title, candidate.album?.title) > 0) return false;
-      final title = _resolver.normalized(target.title);
-      if (title.isEmpty) return false;
-      final candidateArtists = TrackMatchTarget.matchingArtists(
-          candidate.artists.map((a) => a.name));
-      final duration = target.durationMs;
-      final candidateDuration = candidate.durationMs;
-      if (duration != null && candidateDuration != null &&
-          candidateDuration > BigInt.zero) {
-        final difference = (duration - candidateDuration).abs().toDouble();
-        if (difference > 8000 || difference / duration.toDouble() > 0.05) {
-          return false;
+    final titleKey = _resolver.playbackTitleKey(target.title);
+    debugPrint('[FallbackSearch] START title="${target.title}" '
+        'artists=${target.artistNames} duration=${target.durationMs} '
+        'providers=${plugins.map((p) => p.manifest.id).join(",")} '
+        'excluded=${excluded.join(",")}');
+    if (plugins.isEmpty || titleKey.isEmpty) {
+      debugPrint('[FallbackSearch] EMPTY no providers or usable title');
+      return const [];
+    }
+
+    // One query per provider, in parallel: no multi-query waterfall under
+    // the caller's 20-second search deadline. Include the original provider,
+    // but exclude its failed track ID. Keep each provider's own candidate pool.
+    final batches = await Future.wait(plugins.map((plugin) async {
+      final id = plugin.manifest.id;
+      final scored = await _resolver.resolveTrack(
+        target: target,
+        pluginIds: [id],
+        queries: [target.artistNames.isEmpty
+            ? titleKey : '$titleKey ${target.allArtists}'],
+        excludeTrackIds: excluded,
+        sequential: false,
+        limit: 12,
+        // The generic score penalizes missing artists and title decorations.
+        // Inspect these results with the explicit playback guards below.
+        minConfidence: 0.0,
+      );
+      debugPrint('[FallbackSearch] RESULTS provider=$id count=${scored.length}');
+      final accepted = <ScoredTrackCandidate>[];
+      for (final candidate in scored) {
+        final track = candidate.track;
+        final artists = TrackMatchTarget.matchingArtists(
+            track.artists.map((a) => a.name));
+        String? reason;
+        if (excluded.contains(track.id)) {
+          reason = 'failed-track-id';
+        } else if (!_resolver.playbackVersionMatches(target, track)) {
+          reason = 'different-version';
+        } else if (_resolver.playbackTitleKey(track.title) != titleKey) {
+          reason = 'title-mismatch';
+        } else if (artists.isEmpty) {
+          reason = 'missing-candidate-artist';
+        } else if (target.artistNames.isNotEmpty) {
+          final originalArtists = target.artistNames
+              .map((name) => _resolver.normalized(name))
+              .where((name) => name.isNotEmpty)
+              .toSet();
+
+          final candidateArtists = artists
+              .map((name) => _resolver.normalized(name))
+              .where((name) => name.isNotEmpty)
+              .toSet();
+
+          // Providers may include additional singer/composer credits.
+          // Accept that difference when ALL original artists are present.
+          final containsAllOriginalArtists =
+              originalArtists.isNotEmpty &&
+              candidateArtists.containsAll(originalArtists);
+
+          final similarArtists =
+              _resolver.artistNamesSimilarity(
+                target.artistNames,
+                artists,
+              ) >= 0.85;
+
+          if (!containsAllOriginalArtists && !similarArtists) {
+            reason = 'artist-mismatch';
+          }
+        }
+        final duration = target.durationMs;
+        final candidateDuration = track.durationMs;
+        if (reason == null && duration != null &&
+            candidateDuration != null && candidateDuration > BigInt.zero) {
+          final difference = (duration - candidateDuration).abs().toDouble();
+          if (difference > 8000 || difference / duration.toDouble() > 0.05) {
+            reason = 'duration-mismatch';
+          }
+        }
+        debugPrint('[FallbackSearch] ${reason == null ? "ACCEPT" : "REJECT"} '
+            'provider=$id id=${track.id} title="${track.title}" '
+            'artists=$artists reason=${reason ?? "matched"}');
+        if (reason == null) accepted.add(candidate);
+      }
+
+      // Missing original artist: reject ambiguity within this provider.
+      // A different provider's uploader/artist formatting must not invalidate
+      // a clean catalogue match from this provider.
+      if (target.artistNames.isEmpty) {
+        final artistKeys = accepted.map((c) {
+          final names = TrackMatchTarget.matchingArtists(
+              c.track.artists.map((a) => a.name))
+              .map(_resolver.normalized).toList()..sort();
+          return names.join('|');
+        }).toSet();
+        if (artistKeys.length > 1) {
+          debugPrint('[FallbackSearch] REJECT_PROVIDER provider=$id '
+              'reason=ambiguous-artists');
+          return <SmartTrackReplacementCandidate>[];
         }
       }
-      if (target.artistNames.isEmpty) {
-        // Legacy imports lack artist metadata: only exact titles qualify.
-        return title == _resolver.normalized(candidate.title) &&
-            candidateArtists.isNotEmpty;
-      }
-      return c.confidence >= 0.80 &&
-          _resolver.blendedTextSimilarity(target.title, candidate.title) >= 0.90 &&
-          _resolver.artistNamesSimilarity(
-              target.artistNames, candidateArtists) >= 0.85;
-    }).toList(growable: false);
+      return accepted.map((c) => SmartTrackReplacementCandidate(
+        track: c.track,
+        pluginId: id,
+        pluginName: plugin.name,
+        confidence: c.confidence,
+      )).toList(growable: false);
+    }));
 
-    // Do not guess between different artists for title-only legacy imports.
-    if (target.artistNames.isEmpty) {
-      final artistKeys = safe.map((c) {
-        final artists = TrackMatchTarget.matchingArtists(
-            c.track.artists.map((a) => a.name))
-            .map(_resolver.normalized).toList()..sort();
-        return artists.join('|');
-      }).toSet();
-      if (artistKeys.length != 1) return const [];
+    // Other providers first. Preserve configured provider priority, and give
+    // each provider a first chance before taking its additional candidates.
+    final ordered = <List<SmartTrackReplacementCandidate>>[
+      for (var i = 0; i < plugins.length; i++)
+        if (plugins[i].manifest.id != originalProvider) batches[i],
+      for (var i = 0; i < plugins.length; i++)
+        if (plugins[i].manifest.id == originalProvider) batches[i],
+    ];
+    final selected = <SmartTrackReplacementCandidate>[];
+    final seen = <String>{};
+    for (var rank = 0; rank < 12 && selected.length < limit; rank++) {
+      for (final batch in ordered) {
+        if (rank >= batch.length) continue;
+        final c = batch[rank];
+        if (seen.add(c.track.id)) selected.add(c);
+        if (selected.length == limit) break;
+      }
     }
-    return safe.take(limit).map((c) => SmartTrackReplacementCandidate(
-      track: c.track,
-      pluginId: c.pluginId,
-      pluginName: names[c.pluginId] ?? c.pluginId,
-      confidence: c.confidence,
-    )).toList(growable: false);
+    debugPrint('[FallbackSearch] SELECTED '
+        '${selected.map((c) => "${c.pluginId}:${c.track.id}").join(",")}');
+    return selected;
   }
+
 
   Future<SmartTrackReplacementCandidate?> findBestReplacement(
     Track originalTrack,
