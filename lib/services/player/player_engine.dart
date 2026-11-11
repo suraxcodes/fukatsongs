@@ -447,10 +447,10 @@ class PlayerEngine {
 
       if (autoPlay) {
         final ok = await _startWithVerify(_active, uri, httpHeaders);
+        if (_generation != gen || _disposed) return EngineCanceled();
         if (!ok) {
-          log('Audio failed to start after retries', name: 'PlayerEngine');
+          throw StateError('Preloaded playback did not start after retries');
         }
-        if (_disposed || _generation != gen) return EngineCanceled();
       }
 
       _hasMedia = true;
@@ -503,11 +503,10 @@ class PlayerEngine {
         // The standby is already open (preloadNext used play:false), so this
         // only needs to start it — with verification and retries.
         final ok = await _startWithVerify(newPlayer, nextUri, nextHeaders);
-        if (!ok) {
-          log('Standby audio failed to start after retries',
-              name: 'PlayerEngine');
-        }
         if (_generation != gen || _disposed) return EngineCanceled();
+        if (!ok) {
+          throw StateError('Preloaded playback did not start after retries');
+        }
       }
 
       _standbyPreloaded = false;
@@ -566,16 +565,15 @@ class PlayerEngine {
       // play() inside a try/catch whose fallback never fired, because play()
       // does not throw when the AudioTrack is rejected.
       final ok = await _startWithVerify(newPlayer, nextUri, nextHeaders);
-      if (!ok) {
-        log('Crossfade standby failed to start after retries',
-            name: 'PlayerEngine');
-      }
-
       if (_generation != gen || _disposed) {
         newPlayer.stop().catchError((_) {});
         return EngineCanceled();
       }
 
+      if (!ok) {
+        newPlayer.stop().catchError((_) {});
+        throw StateError('Crossfade playback did not start after retries');
+      }
       _standbyPreloaded = false;
       _preloadedNextUri = null;
       _hasMedia = true;
