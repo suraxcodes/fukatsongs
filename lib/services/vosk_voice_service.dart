@@ -5,9 +5,9 @@ import 'dart:developer';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:vosk_flutter_service/vosk_flutter_service.dart';
 import 'package:fukatsongs/blocs/media_player/bloomee_player_cubit.dart';
+import 'package:fukatsongs/services/voice_model_downloader.dart';
 
 /// Offline, ultra-lightweight Keyword Spotting Voice Service powered by Vosk.
 ///
@@ -36,11 +36,13 @@ class VoskVoiceService {
   bool _isRecovering = false;
 
   final ValueNotifier<bool> isListening = ValueNotifier<bool>(false);
-  final ValueNotifier<bool> isModelLoading = ValueNotifier<bool>(false);
   final ValueNotifier<String> lastCommand = ValueNotifier<String>('');
 
-  static const String _modelUrl =
-      'https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip';
+  /// True while the (one-time) model download / extraction is running.
+  /// Owned by [VoiceModelDownloader] so the progress dialog and this service
+  /// observe exactly the same flag.
+  ValueNotifier<bool> get isModelLoading =>
+      VoiceModelDownloader.instance.isDownloading;
 
   // Strict multi-word vocabulary recognized by Vosk US English acoustic model
   static const List<String> _grammar = [
@@ -115,33 +117,34 @@ class VoskVoiceService {
   /// Check if model is already downloaded locally
   Future<bool> isModelReady() async {
     if (_model != null) return true;
-    try {
-      final appDir = await getApplicationDocumentsDirectory();
-      final modelDir =
-          Directory('${appDir.path}/models/vosk-model-small-en-us-0.15');
-      return modelDir.existsSync();
-    } catch (_) {
-      return false;
-    }
+    return VoiceModelDownloader.instance.isReady();
   }
 
-  /// Initialize model and recognizer
+  /// Initialize model and recognizer.
+  ///
+  /// The ~39 MB model is downloaded through [VoiceModelDownloader] so the UI
+  /// can show a real progress bar (see VoiceModelDialog). Downloads once; on
+  /// every later launch the folder already exists and this is instant.
   Future<bool> _initModel({BuildContext? context}) async {
     if (_model != null && _recognizer != null) return true;
 
     try {
-      isModelLoading.value = true;
-      if (context != null && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Setting up. Wait for 1-2 min (one-time setup)'),
-            duration: Duration(seconds: 4),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      final modelPath = await VoiceModelDownloader.instance.ensureModel();
+      if (modelPath == null) {
+        final reason =
+            VoiceModelDownloader.instance.progress.value.message;
+        log('Vosk model download failed: $reason', name: 'VoskVoiceService');
+        if (context != null && context.mounted && reason.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Voice model download failed: $reason'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return false;
       }
 
-      final modelPath = await ModelLoader().loadFromNetwork(_modelUrl);
       _model = await _vosk.createModel(modelPath);
 
       _recognizer = await _vosk.createRecognizer(
@@ -150,13 +153,38 @@ class VoskVoiceService {
         grammar: _grammar,
       );
 
-      isModelLoading.value = false;
       return true;
     } catch (e) {
       log('Vosk model initialization error: $e', name: 'VoskVoiceService');
-      isModelLoading.value = false;
       return false;
     }
+  }
+    /// Every phrase Vosk can recognise. `[unk]` (the noise sink) is filtered out
+  /// because it is not a user-facing command.
+  static List<String> get grammar =>
+      _grammar.where((g) => g != '[unk]').toList(growable: false);
+
+  /// The same phrases, grouped for display.
+  /// Ranges are walked in `_grammar` order — phrases are never duplicated here.
+  static Map<String, List<String>> get grammarGroups {
+    return {
+      'Pause / stop': _slice(['pause music', 'stop the music']),
+      'Next / skip': _slice(['next song', 'play next song']),
+      'Play / resume': _slice(['play music', 'music start']),
+      'Previous': _slice(['previous song', 'music previous']),
+      'Volume up': _slice(['volume up', 'volume increase']),
+      'Volume down': _slice(['volume down', 'volume decrease']),
+      'Shuffle': _slice(['shuffle on', 'turn off shuffle']),
+      'Stop hands-free': _slice(['stop listening', 'stop hands free']),
+    };
+  }
+
+  /// Contiguous slice of `_grammar` from [first] to [last] (inclusive).
+  static List<String> _slice(List<String> firstToLast) {
+    final from = _grammar.indexOf(firstToLast.first);
+    final to = _grammar.indexOf(firstToLast.last);
+    if (from == -1 || to == -1 || to < from) return const [];
+    return _grammar.sublist(from, to + 1);
   }
 
   /// Toggle hands-free riding mode

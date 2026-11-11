@@ -32,6 +32,7 @@ import '../widgets/horizontal_card_view.dart';
 import '../widgets/tab_list_widget.dart';
 import 'package:badges/badges.dart' as badges;
 import 'package:fukatsongs/services/dynamic_island_service.dart';
+import 'package:fukatsongs/screens/widgets/voice_model_dialog.dart';
 
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
@@ -694,6 +695,11 @@ class VoiceCommandIcon extends StatelessWidget {
           tooltip: isEnabled ? 'Hands-Free Voice: ON' : 'Hands-Free Voice: OFF',
           onPressed: () async {
             final cubit = context.read<BloomeePlayerCubit>();
+            if (!isEnabled) {
+              final ready = await showVoiceModelDownloadDialog(context);
+              if (!ready) return;
+              if (!context.mounted) return;
+            }
             await ServiceLocator.voiceCommandService.toggle(
               on: !isEnabled,
               cubit: cubit,

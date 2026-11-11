@@ -9,7 +9,7 @@ import 'package:fukatsongs/screens/screen/home_views/setting_views/download_sett
 import 'package:fukatsongs/screens/screen/home_views/setting_views/lastfm_setting.dart';
 import 'package:fukatsongs/screens/screen/home_views/setting_views/player_setting.dart';
 import 'package:fukatsongs/screens/screen/home_views/setting_views/updates_setting.dart';
-
+import 'package:fukatsongs/screens/widgets/voice_model_dialog.dart';
 import 'package:fukatsongs/core/di/service_locator.dart';
 import 'package:fukatsongs/blocs/media_player/bloomee_player_cubit.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -152,12 +152,17 @@ class SettingsView extends StatelessWidget {
                                   title: const Text('Enable voice commands'),
                                   value: isOn,
                                   onChanged: (value) async {
-                                    setState(() => isOn = value);
-                                    await ServiceLocator.voiceCommandService.toggle(
-                                      on: value,
-                                      cubit: context.read<BloomeePlayerCubit>(),
-                                    );
-                                  },
+                                  if (value) {
+                                    final ready = await showVoiceModelDownloadDialog(context);
+                                    if (!ready) return;
+                                    if (!context.mounted) return;
+                                  }
+                                  setState(() => isOn = value);
+                                  await ServiceLocator.voiceCommandService.toggle(
+                                    on: value,
+                                    cubit: context.read<BloomeePlayerCubit>(),
+                                  );
+                                },
                                 );
                               },
                             ),
