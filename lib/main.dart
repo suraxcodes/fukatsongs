@@ -70,7 +70,7 @@ import 'package:fukatsongs/services/shared_url_resolver_service.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:fukatsongs/screens/widgets/dynamic_island_overlay.dart';
 import 'package:fukatsongs/services/dynamic_island_service.dart';
-
+import 'package:fukatsongs/services/connectivity_service.dart';
 // Top-level function for flutter_overlay_window
 @pragma("vm:entry-point")
 void overlayMain() {
@@ -252,6 +252,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(_ensurePlayerHealthyOnResume());
+      unawaited(ConnectivityService.instance.refresh());
     }
   }
 

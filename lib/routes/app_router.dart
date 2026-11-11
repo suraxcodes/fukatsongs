@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fukatsongs/core/constants/route_paths.dart';
 import 'package:fukatsongs/screens/widgets/global_footer.dart';
 import 'package:flutter/material.dart';
@@ -14,9 +16,25 @@ import 'package:fukatsongs/screens/screen/chart/chart_view.dart';
 import 'package:fukatsongs/screens/screen/gatekeeper_screen.dart';
 import 'package:fukatsongs/services/db/dao/settings_dao.dart';
 import 'package:fukatsongs/services/db/db_provider.dart';
+import 'package:fukatsongs/services/connectivity_service.dart'; // >>> 1 of 4
 
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fukatsongs/blocs/internet_connectivity/cubit/connectivity_cubit.dart';
+/// Bridges [ConnectivityService]'s broadcast stream to a [Listenable] so that
+/// GoRouter re-runs `redirect` whenever the internet comes up or goes down.
+/// >>> 2 of 4 (new class)
+class ConnectivityRefreshNotifier extends ChangeNotifier {
+  ConnectivityRefreshNotifier() {
+    _sub = ConnectivityService.instance.onStatusChanged
+        .listen((_) => notifyListeners());
+  }
+
+  late final StreamSubscription<bool> _sub;
+
+  @override
+  void dispose() {
+    _sub.cancel();
+    super.dispose();
+  }
+}
 
 /// Canonical app router configuration.
 ///
@@ -28,30 +46,44 @@ class AppRouter {
   static final globalRouter = GoRouter(
     initialLocation: '/Gatekeeper',
     navigatorKey: globalRouterKey,
+    // >>> 3a: re-run redirect when connectivity flips
+    refreshListenable: ConnectivityRefreshNotifier(),
     redirect: (context, state) async {
       final settingsDao = SettingsDAO(DBProvider.db);
       // final isUnlocked = await settingsDao.getSettingBool('is_unlocked', defaultValue: false) ?? false;
       // final isBanned = await settingsDao.getSettingBool('is_banned', defaultValue: false) ?? false;
-      
+
       const isUnlocked = true; // Hardcoded unlock for development
       const isBanned = false;
-      
+
       if (isBanned) {
         return '/Gatekeeper';
       }
-      
+
       if (!isUnlocked && state.uri.path != '/Gatekeeper') {
         return '/Gatekeeper';
       }
-      
+
       if (isUnlocked && state.uri.path == '/Gatekeeper') {
-        final hasInternet = context.read<ConnectivityCubit>().state == ConnectivityState.connected;
+        // >>> 3b: await the REAL reachability probe instead of reading a
+        // ConnectivityCubit state that is seeded `disconnected`.
+        final hasInternet = await ConnectivityService.instance.ensureChecked();
         if (!hasInternet) {
           return '/Offline';
         }
         return '/Explore';
       }
-      
+
+      // >>> 3c: sitting on /Offline when the internet returns → go home.
+      // Deliberately NOT the reverse: opening /Explore while offline must
+      // still be possible.
+      if (isUnlocked && state.uri.path == '/Offline') {
+        final hasInternet = await ConnectivityService.instance.ensureChecked();
+        if (hasInternet) {
+          return '/Explore';
+        }
+      }
+
       return null;
     },
     routes: [
