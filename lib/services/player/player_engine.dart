@@ -71,6 +71,18 @@ class PlayerEngine {
   static const double _eqMinGainDb = -15.0;
   static const double _eqMaxGainDb = 15.0;
 
+  /// How long to wait after open(play: false) before calling play(), giving
+  /// mpv time to finish configuring the audio output.
+  static const Duration _prePlayDelay = Duration(milliseconds: 150);
+
+  /// How long to wait between pause() and the retry play().
+  static const Duration _retryDelay = Duration(milliseconds: 250);
+
+  /// How many 150ms samples we watch position for before declaring a
+  /// start attempt dead (12 * 150ms = 1.8s).
+  static const int _startPollCount = 12;
+  static const Duration _startPollInterval = Duration(milliseconds: 150);
+
   late final Player _playerA;
   late final Player _playerB;
   bool _aIsActive = true;
@@ -169,12 +181,27 @@ class PlayerEngine {
   void _configureNativePlayer(Player player) {
     if (player.platform is NativePlayer) {
       final native = player.platform as NativePlayer;
-      native.setProperty('user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+      native.setProperty('user-agent',
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
       native.setProperty('stream-lavf-o',
           'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5');
       native.setProperty('cache', 'yes');
       native.setProperty('demuxer-max-bytes', '134217728'); // 128 MB
       native.setProperty('network-timeout', '15');
+
+      // FIX: OpenSL ES on MIUI fails to re-initialise after an open() and
+      // emits:
+      //   E/libOpenSLES: Configuration error: unknown key
+      //   W/libOpenSLES: Leaving AndroidConfiguration::GetConfiguration
+      //                  (SL_RESULT_PARAMETER_INVALID)
+      // The AudioTrack is then torn down with "0 frames delivered" and the
+      // song never starts. 'audiotrack' is the modern AAudio-backed output
+      // and does not have this failure mode.
+      //
+      // If libmpv in your build lacks 'audiotrack', change this to 'aaudio'.
+      // If both are unavailable, delete this line — the retry logic in
+      // _startWithVerify() still recovers the track.
+      native.setProperty('ao', 'audiotrack');
     }
   }
 
@@ -224,6 +251,73 @@ class PlayerEngine {
       _playerA.stream.volume.listen((v) => _playerAVolume = v),
       _playerB.stream.volume.listen((v) => _playerBVolume = v),
     ];
+  }
+
+  /// Watches [player]'s position for up to ~1.8s and reports whether audio
+  /// actually started flowing.
+  ///
+  /// Needed because mpv + OpenSL ES on MIUI can ACCEPT `play()` and then tear
+  /// the AudioTrack down with "0 frames delivered". `play()` never throws in
+  /// that case, so without this check a dead track looks like a success.
+  Future<bool> _audioActuallyStarted(Player player) async {
+    for (var i = 0; i < _startPollCount; i++) {
+      await Future.delayed(_startPollInterval);
+      if (_disposed) return false;
+      if (player.state.position > Duration.zero) return true;
+    }
+    return false;
+  }
+
+  /// Starts playback on [player], which must already have [uri] open with
+  /// `play: false`. Verifies audio started and escalates through two retries.
+  ///
+  /// Returns true if audio is confirmed flowing.
+  Future<bool> _startWithVerify(
+    Player player,
+    Uri uri,
+    Map<String, String>? headers,
+  ) async {
+    // 1. Give mpv time to finish configuring the audio output before
+    //    un-pausing. Playing too early is what triggers the OpenSL ES
+    //    "unknown key" rejection on MIUI.
+    await Future.delayed(_prePlayDelay);
+    if (_disposed) return false;
+
+    try {
+      await player.play();
+    } catch (e) {
+      log('play() threw: $e', name: 'PlayerEngine');
+    }
+    if (await _audioActuallyStarted(player)) return true;
+
+    // 2. Cheapest recovery: pause + play on the SAME AudioTrack. Field logs
+    //    show a second start() on the same session id succeeds.
+    log('Start delivered 0 frames - retrying pause/play',
+        name: 'PlayerEngine');
+    try {
+      await player.pause();
+      await Future.delayed(_retryDelay);
+      if (_disposed) return false;
+      await player.play();
+    } catch (e) {
+      log('Pause/play retry threw: $e', name: 'PlayerEngine');
+    }
+    if (await _audioActuallyStarted(player)) return true;
+
+    // 3. Last resort: tear the media down and re-open from scratch.
+    log('Pause/play retry failed - re-opening from scratch',
+        name: 'PlayerEngine');
+    try {
+      await player.stop();
+      await player.open(Media(uri.toString(), httpHeaders: headers),
+          play: false);
+      await Future.delayed(_prePlayDelay);
+      if (_disposed) return false;
+      await player.play();
+    } catch (e) {
+      log('Re-open retry threw: $e', name: 'PlayerEngine');
+    }
+    return _audioActuallyStarted(player);
   }
 
   void _checkCrossfadeTrigger(Duration pos) {
@@ -317,7 +411,9 @@ class PlayerEngine {
     _positionSubject.add(p.state.position);
     _durationSubject.add(p.state.duration);
     _bufferedSubject.add(p.state.buffer);
-    if (!_isTransitioning) _volumeSubject.add((p.state.volume / 100.0).clamp(0.0, 1.0));
+    if (!_isTransitioning) {
+      _volumeSubject.add((p.state.volume / 100.0).clamp(0.0, 1.0));
+    }
     _deriveState();
   }
 
@@ -339,9 +435,23 @@ class PlayerEngine {
 
     try {
       await _active.setVolume(_userVolume * 100.0);
-      await _active.open(Media(uri.toString(), httpHeaders: httpHeaders),
-          play: autoPlay);
       if (_disposed || _generation != gen) return EngineCanceled();
+
+      // Open WITHOUT autoplay. Passing play:true to open() makes media_kit
+      // set mpv's `pause` property while the audio output is still being
+      // configured — that is what produces the OpenSL ES "unknown key"
+      // rejection and a permanently silent 0-frame track on MIUI.
+      await _active.open(Media(uri.toString(), httpHeaders: httpHeaders),
+          play: false);
+      if (_disposed || _generation != gen) return EngineCanceled();
+
+      if (autoPlay) {
+        final ok = await _startWithVerify(_active, uri, httpHeaders);
+        if (!ok) {
+          log('Audio failed to start after retries', name: 'PlayerEngine');
+        }
+        if (_disposed || _generation != gen) return EngineCanceled();
+      }
 
       _hasMedia = true;
       // FIX M-09: Apply EQ only to active player after open; standby gets it
@@ -390,18 +500,15 @@ class PlayerEngine {
       if (_generation != gen || _disposed) return EngineCanceled();
 
       if (autoPlay) {
-        try {
-          await newPlayer.play();
-        } catch (e) {
-          log('Socket dropped while idle on standby. Executing fallback re-open.',
+        // The standby is already open (preloadNext used play:false), so this
+        // only needs to start it — with verification and retries.
+        final ok = await _startWithVerify(newPlayer, nextUri, nextHeaders);
+        if (!ok) {
+          log('Standby audio failed to start after retries',
               name: 'PlayerEngine');
-          await newPlayer.open(
-              Media(nextUri.toString(), httpHeaders: nextHeaders),
-              play: true);
         }
+        if (_generation != gen || _disposed) return EngineCanceled();
       }
-
-      if (_generation != gen || _disposed) return EngineCanceled();
 
       _standbyPreloaded = false;
       _preloadedNextUri = null;
@@ -454,14 +561,14 @@ class PlayerEngine {
 
     try {
       await newPlayer.setVolume(0.0);
-      try {
-        await newPlayer.play();
-      } catch (e) {
-        log('Socket dropped while idle on standby. Executing fallback re-open.',
+
+      // Same verified-start path as everywhere else. The previous code called
+      // play() inside a try/catch whose fallback never fired, because play()
+      // does not throw when the AudioTrack is rejected.
+      final ok = await _startWithVerify(newPlayer, nextUri, nextHeaders);
+      if (!ok) {
+        log('Crossfade standby failed to start after retries',
             name: 'PlayerEngine');
-        await newPlayer.open(
-            Media(nextUri.toString(), httpHeaders: nextHeaders),
-            play: true);
       }
 
       if (_generation != gen || _disposed) {

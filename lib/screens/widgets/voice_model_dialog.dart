@@ -7,6 +7,14 @@ import 'package:fukatsongs/services/vosk_voice_service.dart';
 /// Shows the one-time hands-free model download **and** the list of every
 /// voice command the app understands.
 ///
+/// Behaviour:
+/// - Model missing  → download box with live progress (unchanged).
+/// - Model present, command list never shown → show the list once, mark it
+///   seen, return true.
+/// - Model present, list already seen → return true silently. The full
+///   reference stays reachable any time via the long-press on the mic icon
+///   or the "voice commands" row in Settings.
+///
 /// The command list is read from [VoskVoiceService.grammarGroups], i.e. from
 /// the same `_grammar` array that is handed to Vosk — there is no second copy
 /// to keep in sync.
@@ -20,12 +28,17 @@ Future<bool> showVoiceModelDownloadDialog(
   final downloader = VoiceModelDownloader.instance;
 
   if (await downloader.isReady()) {
-    // Model already there → this is just the "what can I say?" box.
-    if (!context.mounted) return true;
-    await showDialog<bool>(
-      context: context,
-      builder: (_) => _VoiceModelDialog(title: 'Voice commands', onlyInfo: true),
-    );
+    // Model already on disk → nothing to download.
+    //
+    // Show the command reference exactly ONCE per install. The marker is
+    // written before the dialog opens, so a force-close mid-read can never
+    // make it reappear on every future toggle.
+    final seen = await downloader.hasSeenCommands;
+    if (!seen) {
+      await downloader.markCommandsSeen();
+      if (!context.mounted) return true;
+      await showVoiceCommandsDialog(context);
+    }
     return true;
   }
   if (!context.mounted) return false;
@@ -35,11 +48,22 @@ Future<bool> showVoiceModelDownloadDialog(
     barrierDismissible: false,
     builder: (_) => _VoiceModelDialog(title: title),
   );
+
+  // Freshly downloaded model → this is the first time hands-free is usable,
+  // so also show the command list once (unless it was somehow already seen).
+  if (result == true) {
+    final seen = await downloader.hasSeenCommands;
+    if (!seen) {
+      await downloader.markCommandsSeen();
+      if (!context.mounted) return true;
+      await showVoiceCommandsDialog(context);
+    }
+  }
   return result ?? false;
 }
 
 /// Read-only help box: every voice command. Safe to open any time —
-/// never downloads anything and never touches the toggle.
+/// never downloads anything and never touches the toggle or the seen marker.
 ///
 /// Entry points:
 /// - Settings → Voice Commands → "N voice commands" row

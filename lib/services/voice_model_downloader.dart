@@ -85,6 +85,11 @@ class VoiceModelDownloader {
   /// the download instead of hanging forever at "Connecting…".
   static const Duration _chunkTimeout = Duration(seconds: 30);
 
+  /// Marker file that records "the full voice-command list has been shown
+  /// once already". Deliberately a file, not a SharedPreferences key: this
+  /// class has no settings/DB dependency and must not grow one.
+  static const String _seenMarkerName = '.voice_commands_seen';
+
   /// Publishes progress. UI listens to this for the bar.
   final ValueNotifier<VoiceModelProgress> progress =
       ValueNotifier<VoiceModelProgress>(const VoiceModelProgress());
@@ -114,6 +119,36 @@ class VoiceModelDownloader {
           Directory(p.join(dir, 'conf')).existsSync();
     } catch (_) {
       return false;
+    }
+  }
+
+  /// <appDocs>/models/.voice_commands_seen
+  Future<File> get _seenMarkerFile async {
+    final docs = await getApplicationDocumentsDirectory();
+    return File(p.join(docs.path, 'models', _seenMarkerName));
+  }
+
+  /// True once the full command list has been shown to this install.
+  ///
+  /// Called on every hands-free ON toggle, so it must never throw and must
+  /// be cheap — a single `exists()` stat, no downloader state touched.
+  Future<bool> get hasSeenCommands async {
+    try {
+      return (await _seenMarkerFile).existsSync();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Record that the command list has been shown. Best-effort: if the write
+  /// fails the only consequence is that the list shows once more next time.
+  Future<void> markCommandsSeen() async {
+    try {
+      final f = await _seenMarkerFile;
+      await f.parent.create(recursive: true);
+      await f.writeAsString('1', flush: true);
+    } catch (_) {
+      // Non-fatal by design.
     }
   }
 
