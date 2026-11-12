@@ -11,9 +11,71 @@ import 'package:google_nav_bar/google_nav_bar.dart';
 import 'package:icons_plus/icons_plus.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 
-class GlobalFooter extends StatelessWidget {
-  const GlobalFooter({super.key, required this.navigationShell});
+class GlobalFooter extends StatefulWidget {
+  const GlobalFooter({
+    super.key,
+    required this.navigationShell,
+    required this.branchNavigatorKeys,
+  });
+
   final StatefulNavigationShell navigationShell;
+  final List<GlobalKey<NavigatorState>> branchNavigatorKeys;
+
+  @override
+  State<GlobalFooter> createState() => _GlobalFooterState();
+}
+
+class _GlobalFooterState extends State<GlobalFooter> {
+  StatefulNavigationShell get navigationShell => widget.navigationShell;
+
+  /// Three taps on the same tab, with at most 450 ms between adjacent taps.
+  static const _maxTapGap = Duration(milliseconds: 450);
+
+  final Stopwatch _tapClock = Stopwatch()..start();
+
+  Duration? _lastTabTap;
+  int? _lastTappedTab;
+  int _consecutiveTabTaps = 0;
+
+  void _onTabSelected(int index) {
+    final now = _tapClock.elapsed;
+    final last = _lastTabTap;
+
+    final continuesSequence = _lastTappedTab == index &&
+        last != null &&
+        now - last <= _maxTapGap;
+
+    _consecutiveTabTaps =
+        continuesSequence ? _consecutiveTabTaps + 1 : 1;
+    _lastTappedTab = index;
+    _lastTabTap = now;
+
+    if (_consecutiveTabTaps < 3) {
+      // Normal taps restore the tab's remembered navigation stack.
+      navigationShell.goBranch(index);
+      return;
+    }
+
+    // The third tap resets the sequence.
+    _consecutiveTabTaps = 0;
+    _lastTappedTab = null;
+    _lastTabTap = null;
+
+    // Clear imperative routes such as Settings → nested Settings pages.
+    // Only the selected tab's stack is affected.
+    widget.branchNavigatorKeys[index].currentState?.popUntil(
+      (route) => route.isFirst,
+    );
+
+    // Reset the selected branch's declarative route to its initial page.
+    navigationShell.goBranch(index, initialLocation: true);
+  }
+
+  @override
+  void dispose() {
+    _tapClock.stop();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,38 +84,31 @@ class GlobalFooter extends StatelessWidget {
 
     return PlayerOverlayWrapper(
       child: BackButtonListener(
-        // FIX H-04: Back button priority order:
-        // ① Navigator routes (FullscreenLyricsView, PlayerSettings, TimerView, etc.)
-        // ② UpNext panel collapse
-        // ③ Player overlay hide
-        // ④ GoRouter shell navigation
-        // ⑤ System exit
-        //
-        // Previously the handler short-circuited at step ③ whenever the player
-        // was visible, swallowing Navigator pops and causing sub-screens to
-        // appear orphaned over a hidden/collapsed player.
+        // Preserve the existing hardware-back priority:
+        // 1. Navigator routes
+        // 2. UpNext panel
+        // 3. Player overlay
+        // 4. Shell tab navigation
+        // 5. System exit
         onBackButtonPressed: () async {
           final overlayC = context.read<PlayerOverlayCubit>();
           final router = GoRouter.of(context);
 
-          // ① Navigator MUST have first priority — always.
           if (router.canPop()) {
             router.pop();
             return true;
           }
 
-          // ② Collapse UpNext panel if expanded (player must be visible).
           if (overlayC.state && overlayC.collapseUpNextPanel()) {
             return true;
           }
 
-          // ③ Hide the player overlay.
           if (overlayC.state) {
             overlayC.hidePlayer();
             return true;
           }
 
-          // ④ Let PopScope handle tab/exit navigation below.
+          // Let PopScope handle tab/exit navigation below.
           return false;
         },
         child: PopScope(
@@ -71,11 +126,15 @@ class GlobalFooter extends StatelessWidget {
                     children: [
                       Padding(
                         padding: const EdgeInsets.only(left: 4),
-                        child: VerticalNavBar(navigationShell: navigationShell),
+                        child: VerticalNavBar(
+                          navigationShell: navigationShell,
+                          onTabSelected: _onTabSelected,
+                        ),
                       ),
                       Expanded(
-                        child:
-                            _AnimatedPageView(navigationShell: navigationShell),
+                        child: _AnimatedPageView(
+                          navigationShell: navigationShell,
+                        ),
                       ),
                     ],
                   ),
@@ -89,8 +148,13 @@ class GlobalFooter extends StatelessWidget {
                     Container(
                       color: Colors.transparent,
                       margin: const EdgeInsets.symmetric(
-                          vertical: 5, horizontal: 10),
-                      child: HorizontalNavBar(navigationShell: navigationShell),
+                        vertical: 5,
+                        horizontal: 10,
+                      ),
+                      child: HorizontalNavBar(
+                        navigationShell: navigationShell,
+                        onTabSelected: _onTabSelected,
+                      ),
                     ),
                 ],
               ),
@@ -101,34 +165,33 @@ class GlobalFooter extends StatelessWidget {
     );
   }
 
-  /// Handles PopScope back presses using the same priority order as
-  /// BackButtonListener above.
+  /// Handles PopScope back presses using the existing priority order.
   Future<void> _handleHardwareBackPress(BuildContext context) async {
     final overlayC = context.read<PlayerOverlayCubit>();
     final router = GoRouter.of(context);
 
-    // ① Navigator routes first
+    // 1. Navigator routes first.
     if (router.canPop()) {
       router.pop();
       return;
     }
 
-    // ② Collapse UpNext panel
+    // 2. Collapse UpNext panel.
     if (overlayC.state && overlayC.collapseUpNextPanel()) return;
 
-    // ③ Hide player
+    // 3. Hide player.
     if (overlayC.state) {
       overlayC.hidePlayer();
       return;
     }
 
-    // ④ Navigate to home tab
+    // 4. Navigate to Home.
     if (navigationShell.currentIndex != 0) {
       navigationShell.goBranch(0);
       return;
     }
 
-    // ⑤ Exit app
+    // 5. Exit app.
     if (context.mounted) {
       await SystemNavigator.pop();
     }
@@ -137,6 +200,7 @@ class GlobalFooter extends StatelessWidget {
 
 class _AnimatedPageView extends StatefulWidget {
   const _AnimatedPageView({required this.navigationShell});
+
   final StatefulNavigationShell navigationShell;
 
   @override
@@ -148,11 +212,13 @@ class _AnimatedPageViewState extends State<_AnimatedPageView>
   late final AnimationController _animationController;
   late final Animation<double> _fadeAnimation;
   late final Animation<double> _scaleAnimation;
+
   int _previousIndex = 0;
 
   @override
   void initState() {
     super.initState();
+
     _previousIndex = widget.navigationShell.currentIndex;
 
     _animationController = AnimationController(
@@ -165,7 +231,10 @@ class _AnimatedPageViewState extends State<_AnimatedPageView>
       curve: Curves.easeOutCubic,
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.96, end: 1.0).animate(
+    _scaleAnimation = Tween<double>(
+      begin: 0.96,
+      end: 1.0,
+    ).animate(
       CurvedAnimation(
         parent: _animationController,
         curve: Curves.easeOutCubic,
@@ -178,6 +247,7 @@ class _AnimatedPageViewState extends State<_AnimatedPageView>
   @override
   void didUpdateWidget(_AnimatedPageView oldWidget) {
     super.didUpdateWidget(oldWidget);
+
     if (widget.navigationShell.currentIndex != _previousIndex) {
       _previousIndex = widget.navigationShell.currentIndex;
       _animationController.forward(from: 0.0);
@@ -203,8 +273,14 @@ class _AnimatedPageViewState extends State<_AnimatedPageView>
 }
 
 class VerticalNavBar extends StatelessWidget {
-  const VerticalNavBar({super.key, required this.navigationShell});
+  const VerticalNavBar({
+    super.key,
+    required this.navigationShell,
+    required this.onTabSelected,
+  });
+
   final StatefulNavigationShell navigationShell;
+  final ValueChanged<int> onTabSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -214,23 +290,29 @@ class VerticalNavBar extends StatelessWidget {
       backgroundColor: Default_Theme.themeColor.withValues(alpha: 0.3),
       destinations: [
         NavigationRailDestination(
-            icon: const Icon(MingCute.home_4_fill), label: Text(l10n.navHome)),
+          icon: const Icon(MingCute.home_4_fill),
+          label: Text(l10n.navHome),
+        ),
         NavigationRailDestination(
-            icon: const Icon(MingCute.book_5_fill),
-            label: Text(l10n.navLibrary)),
+          icon: const Icon(MingCute.book_5_fill),
+          label: Text(l10n.navLibrary),
+        ),
         NavigationRailDestination(
-            icon: const Icon(MingCute.search_2_fill),
-            label: Text(l10n.navSearch)),
+          icon: const Icon(MingCute.search_2_fill),
+          label: Text(l10n.navSearch),
+        ),
         NavigationRailDestination(
-            icon: const Icon(MingCute.folder_download_fill),
-            label: Text(l10n.navOffline)),
+          icon: const Icon(MingCute.folder_download_fill),
+          label: Text(l10n.navOffline),
+        ),
       ],
       selectedIndex: navigationShell.currentIndex,
       minWidth: 70,
-      onDestinationSelected: navigationShell.goBranch,
+      onDestinationSelected: onTabSelected,
       groupAlignment: 0.0,
-      unselectedIconTheme:
-          const IconThemeData(color: Default_Theme.primaryColor2),
+      unselectedIconTheme: const IconThemeData(
+        color: Default_Theme.primaryColor2,
+      ),
       indicatorColor: Default_Theme.accentColor2,
       indicatorShape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.all(Radius.circular(15)),
@@ -240,31 +322,49 @@ class VerticalNavBar extends StatelessWidget {
 }
 
 class HorizontalNavBar extends StatelessWidget {
-  const HorizontalNavBar({super.key, required this.navigationShell});
+  const HorizontalNavBar({
+    super.key,
+    required this.navigationShell,
+    required this.onTabSelected,
+  });
+
   final StatefulNavigationShell navigationShell;
+  final ValueChanged<int> onTabSelected;
 
   @override
+  @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-
     return GNav(
+
+      // google_nav_bar ignores taps during its animation duration.
+      // Disable that lockout so rapid triple taps reach our handler.
+      // The page fade/scale animation above is unchanged.
+      duration: Duration.zero,
       gap: 7.0,
-      tabBackgroundColor: Default_Theme.accentColor2.withValues(alpha: 0.22),
+      tabBackgroundColor:
+          Default_Theme.accentColor2.withValues(alpha: 0.22),
       color: Default_Theme.primaryColor2,
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       activeColor: Default_Theme.accentColor2,
       textStyle: Default_Theme.secondoryTextStyleMedium.merge(
-          const TextStyle(color: Default_Theme.accentColor2, fontSize: 18)),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        const TextStyle(
+          color: Default_Theme.accentColor2,
+          fontSize: 18,
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 10,
+      ),
       backgroundColor: Default_Theme.themeColor.withValues(alpha: 0.3),
-      tabs: [
-        GButton(icon: MingCute.home_4_fill, text: l10n.navHome),
-        GButton(icon: MingCute.book_5_fill, text: l10n.navLibrary),
-        GButton(icon: MingCute.search_2_fill, text: l10n.navSearch),
-        GButton(icon: MingCute.folder_download_fill, text: l10n.navOffline),
+      tabs: const [
+        GButton(icon: MingCute.home_4_fill),
+        GButton(icon: MingCute.book_5_fill),
+        GButton(icon: MingCute.search_2_fill),
+        GButton(icon: MingCute.folder_download_fill),
       ],
       selectedIndex: navigationShell.currentIndex,
-      onTabChange: navigationShell.goBranch,
+      onTabChange: onTabSelected,
     );
   }
 }

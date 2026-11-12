@@ -1,9 +1,10 @@
 import 'dart:async';
 
-import 'package:fukatsongs/core/constants/route_paths.dart';
-import 'package:fukatsongs/screens/widgets/global_footer.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
+import 'package:fukatsongs/core/constants/route_paths.dart';
+import 'package:fukatsongs/screens/widgets/global_footer.dart';
 import 'package:fukatsongs/screens/screen/common_views/add_to_playlist_screen.dart';
 import 'package:fukatsongs/screens/screen/explore_screen.dart';
 import 'package:fukatsongs/screens/screen/library_screen.dart';
@@ -14,17 +15,14 @@ import 'package:fukatsongs/screens/screen/offline_screen.dart';
 import 'package:fukatsongs/screens/screen/search_screen.dart';
 import 'package:fukatsongs/screens/screen/chart/chart_view.dart';
 import 'package:fukatsongs/screens/screen/gatekeeper_screen.dart';
-import 'package:fukatsongs/services/db/dao/settings_dao.dart';
-import 'package:fukatsongs/services/db/db_provider.dart';
-import 'package:fukatsongs/services/connectivity_service.dart'; // >>> 1 of 4
+import 'package:fukatsongs/services/connectivity_service.dart';
 
-/// Bridges [ConnectivityService]'s broadcast stream to a [Listenable] so that
-/// GoRouter re-runs `redirect` whenever the internet comes up or goes down.
-/// >>> 2 of 4 (new class)
+/// Refreshes router redirects when connectivity changes.
 class ConnectivityRefreshNotifier extends ChangeNotifier {
   ConnectivityRefreshNotifier() {
-    _sub = ConnectivityService.instance.onStatusChanged
-        .listen((_) => notifyListeners());
+    _sub = ConnectivityService.instance.onStatusChanged.listen(
+      (_) => notifyListeners(),
+    );
   }
 
   late final StreamSubscription<bool> _sub;
@@ -37,23 +35,25 @@ class ConnectivityRefreshNotifier extends ChangeNotifier {
 }
 
 /// Canonical app router configuration.
-///
-/// Use [AppRouter] in new code. The [GlobalRoutes] typedef at the bottom
-/// provides backward-compatible access for existing callers.
 class AppRouter {
   static final globalRouterKey = GlobalKey<NavigatorState>();
+
+  /// Stable keys, ordered to match the bottom-navigation tabs:
+  /// Home, Library, Search, Offline.
+  static final branchNavigatorKeys = <GlobalKey<NavigatorState>>[
+    GlobalKey<NavigatorState>(debugLabel: 'homeBranch'),
+    GlobalKey<NavigatorState>(debugLabel: 'libraryBranch'),
+    GlobalKey<NavigatorState>(debugLabel: 'searchBranch'),
+    GlobalKey<NavigatorState>(debugLabel: 'offlineBranch'),
+  ];
 
   static final globalRouter = GoRouter(
     initialLocation: '/Gatekeeper',
     navigatorKey: globalRouterKey,
-    // >>> 3a: re-run redirect when connectivity flips
     refreshListenable: ConnectivityRefreshNotifier(),
     redirect: (context, state) async {
-      final settingsDao = SettingsDAO(DBProvider.db);
-      // final isUnlocked = await settingsDao.getSettingBool('is_unlocked', defaultValue: false) ?? false;
-      // final isBanned = await settingsDao.getSettingBool('is_banned', defaultValue: false) ?? false;
-
-      const isUnlocked = true; // Hardcoded unlock for development
+      // Preserve the existing development gate behaviour.
+      const isUnlocked = true;
       const isBanned = false;
 
       if (isBanned) {
@@ -65,25 +65,14 @@ class AppRouter {
       }
 
       if (isUnlocked && state.uri.path == '/Gatekeeper') {
-        // >>> 3b: await the REAL reachability probe instead of reading a
-        // ConnectivityCubit state that is seeded `disconnected`.
-        final hasInternet = await ConnectivityService.instance.ensureChecked();
-        if (!hasInternet) {
-          return '/Offline';
-        }
-        return '/Explore';
+        final hasInternet =
+            await ConnectivityService.instance.ensureChecked();
+
+        return hasInternet ? '/Explore' : '/Offline';
       }
 
-      // >>> 3c: sitting on /Offline when the internet returns → go home.
-      // Deliberately NOT the reverse: opening /Explore while offline must
-      // still be possible.
-      if (isUnlocked && state.uri.path == '/Offline') {
-        final hasInternet = await ConnectivityService.instance.ensureChecked();
-        if (hasInternet) {
-          return '/Explore';
-        }
-      }
-
+      // Offline is a user-selectable page, not only a connection fallback.
+      // Do not redirect away when internet is available or reconnects.
       return null;
     },
     routes: [
@@ -98,90 +87,115 @@ class AppRouter {
         builder: (context, state) => const AddToPlaylistScreen(),
       ),
       StatefulShellRoute.indexedStack(
-          builder: (context, state, navigationShell) =>
-              GlobalFooter(navigationShell: navigationShell),
-          branches: [
-            StatefulShellBranch(routes: [
+        builder: (context, state, navigationShell) => GlobalFooter(
+          navigationShell: navigationShell,
+          branchNavigatorKeys: branchNavigatorKeys,
+        ),
+        branches: [
+          // Home
+          StatefulShellBranch(
+            navigatorKey: branchNavigatorKeys[0],
+            routes: [
               GoRoute(
-                  name: RoutePaths.exploreScreen,
-                  path: '/Explore',
-                  builder: (context, state) => const ExploreScreen(),
-                  routes: [
-                    GoRoute(
-                        name: RoutePaths.chartScreen,
-                        path: 'ChartScreen',
-                        builder: (context, state) {
-                          final qp = state.uri.queryParameters;
-                          return ChartScreen(
-                            pluginId: qp['pluginId'] ?? '',
-                            chartId: qp['chartId'] ?? '',
-                            chartTitle: qp['chartTitle'] ?? 'Chart',
-                          );
-                        }),
-                  ])
-            ]),
-            StatefulShellBranch(routes: [
+                name: RoutePaths.exploreScreen,
+                path: '/Explore',
+                builder: (context, state) => const ExploreScreen(),
+                routes: [
+                  GoRoute(
+                    name: RoutePaths.chartScreen,
+                    path: 'ChartScreen',
+                    builder: (context, state) {
+                      final qp = state.uri.queryParameters;
+
+                      return ChartScreen(
+                        pluginId: qp['pluginId'] ?? '',
+                        chartId: qp['chartId'] ?? '',
+                        chartTitle: qp['chartTitle'] ?? 'Chart',
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // Library
+          StatefulShellBranch(
+            navigatorKey: branchNavigatorKeys[1],
+            routes: [
               GoRoute(
-                  name: RoutePaths.libraryScreen,
-                  path: '/Library',
-                  builder: (context, state) => const LibraryScreen(),
-                  routes: [
-                    GoRoute(
-                      path: RoutePaths.importMediaFromPlatforms,
-                      name: RoutePaths.importMediaFromPlatforms,
-                      builder: (context, state) =>
-                          const ImportMediaFromPlatformsView(),
-                    ),
-                    GoRoute(
-                      path: RoutePaths.importProcess,
-                      name: RoutePaths.importProcess,
-                      builder: (context, state) {
-                        final pluginId =
-                            state.uri.queryParameters['pluginId'] ?? '';
-                        return ImportProcessScreen(pluginId: pluginId);
-                      },
-                    ),
-                    GoRoute(
-                      name: RoutePaths.playlistView,
-                      path: RoutePaths.playlistView,
-                      builder: (context, state) {
-                        final initialPlaylistName = state.extra as String?;
-                        return PlaylistView(
-                          initialPlaylistName: initialPlaylistName,
-                        );
-                      },
-                    ),
-                  ]),
-            ]),
-            StatefulShellBranch(routes: [
+                name: RoutePaths.libraryScreen,
+                path: '/Library',
+                builder: (context, state) => const LibraryScreen(),
+                routes: [
+                  GoRoute(
+                    path: RoutePaths.importMediaFromPlatforms,
+                    name: RoutePaths.importMediaFromPlatforms,
+                    builder: (context, state) =>
+                        const ImportMediaFromPlatformsView(),
+                  ),
+                  GoRoute(
+                    path: RoutePaths.importProcess,
+                    name: RoutePaths.importProcess,
+                    builder: (context, state) {
+                      final pluginId =
+                          state.uri.queryParameters['pluginId'] ?? '';
+
+                      return ImportProcessScreen(pluginId: pluginId);
+                    },
+                  ),
+                  GoRoute(
+                    name: RoutePaths.playlistView,
+                    path: RoutePaths.playlistView,
+                    builder: (context, state) {
+                      final initialPlaylistName = state.extra as String?;
+
+                      return PlaylistView(
+                        initialPlaylistName: initialPlaylistName,
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // Search
+          StatefulShellBranch(
+            navigatorKey: branchNavigatorKeys[2],
+            routes: [
               GoRoute(
                 name: RoutePaths.searchScreen,
                 path: '/Search',
                 builder: (context, state) {
-                  if (state.uri.queryParameters['query'] != null) {
-                    return SearchScreen(
-                      searchQuery:
-                          state.uri.queryParameters['query']!.toString(),
-                    );
-                  } else {
-                    return const SearchScreen();
+                  final query = state.uri.queryParameters['query'];
+
+                  if (query != null) {
+                    return SearchScreen(searchQuery: query);
                   }
+
+                  return const SearchScreen();
                 },
               ),
-            ]),
+            ],
+          ),
 
-            StatefulShellBranch(routes: [
+          // Offline
+          StatefulShellBranch(
+            navigatorKey: branchNavigatorKeys[3],
+            routes: [
               GoRoute(
                 name: RoutePaths.offlineScreen,
                 path: '/Offline',
                 builder: (context, state) => const OfflineScreen(),
               ),
-            ]),
-          ])
+            ],
+          ),
+        ],
+      ),
     ],
   );
 }
 
-/// Backward-compat alias for [AppRouter].
-/// Prefer importing from [routes/app_router.dart] and using [AppRouter] directly.
+/// Backward-compatible alias.
 typedef GlobalRoutes = AppRouter;
