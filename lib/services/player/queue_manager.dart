@@ -25,6 +25,11 @@ class QueueManager {
   final BehaviorSubject<bool> shuffleMode = BehaviorSubject.seeded(false);
   final BehaviorSubject<String> queueTitle = BehaviorSubject.seeded('Queue');
 
+  // Origins are bound when a saved playlist creates a queue, never inferred
+  // from the currently open page or from a display title.
+  final Map<String, int> _playlistOrigins = {};
+  int? playlistOriginFor(String mediaId) => _playlistOrigins[mediaId];
+
   int _currentIndex = 0;
   int _shuffleIndex = 0;
   List<int> _shuffleList = [];
@@ -111,12 +116,14 @@ class QueueManager {
       if (_shuffleIndex < _shuffleList.length - 1) {
         _shuffleIndex++;
         _currentIndex =
-            _shuffleList[_shuffleIndex].clamp(0, _queue.value.length - 1);
+            _shuffleList[_shuffleIndex].clamp(0, _queue.value.length - 1,
+        );
         return true;
       } else if (loopMode == LoopMode.all) {
         _shuffleIndex = 0;
         _currentIndex =
-            _shuffleList[_shuffleIndex].clamp(0, _queue.value.length - 1);
+            _shuffleList[_shuffleIndex].clamp(0, _queue.value.length - 1,
+        );
         return true;
       }
     }
@@ -140,12 +147,14 @@ class QueueManager {
       if (_shuffleIndex > 0) {
         _shuffleIndex--;
         _currentIndex =
-            _shuffleList[_shuffleIndex].clamp(0, _queue.value.length - 1);
+            _shuffleList[_shuffleIndex].clamp(0, _queue.value.length - 1,
+        );
         return true;
       } else if (loopMode == LoopMode.all) {
         _shuffleIndex = _shuffleList.length - 1;
         _currentIndex =
-            _shuffleList[_shuffleIndex].clamp(0, _queue.value.length - 1);
+            _shuffleList[_shuffleIndex].clamp(0, _queue.value.length - 1,
+        );
         return true;
       }
     }
@@ -156,7 +165,8 @@ class QueueManager {
   void jumpTo(int index) {
     if (index < 0 || index >= _queue.value.length) {
       log('jumpTo: index $index out of bounds (len: ${_queue.value.length})',
-          name: 'QueueManager');
+          name: 'QueueManager',
+      );
       return;
     }
     _currentIndex = index;
@@ -172,6 +182,7 @@ class QueueManager {
   void loadTracks(
     List<Track> tracks, {
     String playlistName = 'Queue',
+    int? sourcePlaylistId,
     int idx = 0,
     bool shuffling = false,
   }) {
@@ -192,6 +203,12 @@ class QueueManager {
       remappedIdx = pos != -1 ? pos : 0;
     }
 
+    _playlistOrigins.clear();
+    if (sourcePlaylistId != null) {
+      for (final track in deduped) {
+        _playlistOrigins[track.id] = sourcePlaylistId;
+      }
+    }
     _queue.add(deduped);
     queueTitle.add(playlistName);
 
@@ -212,7 +229,8 @@ class QueueManager {
       _shuffleList = [];
       _shuffleIndex = 0;
       _currentIndex =
-          remappedIdx.clamp(0, deduped.isEmpty ? 0 : deduped.length - 1);
+          remappedIdx.clamp(0, deduped.isEmpty ? 0 : deduped.length - 1,
+      );
     }
   }
 
@@ -320,6 +338,7 @@ class QueueManager {
   void removeTrackAt(int index) {
     if (index >= _queue.value.length) return;
 
+    _playlistOrigins.remove(_queue.value[index].id);
     final newQueue = List<Track>.from(_queue.value)..removeAt(index);
     _queue.add(newQueue);
 
@@ -333,7 +352,8 @@ class QueueManager {
         } else if (posInShuffle == _shuffleIndex &&
             _shuffleIndex >= _shuffleList.length) {
           _shuffleIndex =
-              (_shuffleList.length - 1).clamp(0, _shuffleList.length);
+              (_shuffleList.length - 1).clamp(0, _shuffleList.length,
+          );
         }
       }
       for (int i = 0; i < _shuffleList.length; i++) {
@@ -392,6 +412,7 @@ class QueueManager {
   /// track so playback does not stop abruptly.
   void clearQueue() {
     final current = currentTrack;
+    _playlistOrigins.removeWhere((id, _) => id != current?.id);
     if (current == null) {
       _queue.add([]);
       _currentIndex = 0;
@@ -405,12 +426,14 @@ class QueueManager {
 
   /// Replace the entire queue with new tracks.
   void updateQueue(List<Track> tracks, {int startIndex = 0}) {
+    _playlistOrigins.clear();
     final seenIds = <String>{};
     final deduped =
         tracks.where((t) => seenIds.add(t.id)).toList(growable: false);
     _queue.add(deduped);
     _currentIndex =
-        startIndex.clamp(0, deduped.isEmpty ? 0 : deduped.length - 1);
+        startIndex.clamp(0, deduped.isEmpty ? 0 : deduped.length - 1,
+    );
     if (shuffleMode.value && deduped.isNotEmpty) {
       _shuffleList = generateRandomIndices(deduped.length);
       _shuffleIndex = 0;
@@ -471,9 +494,11 @@ class QueueManager {
         'trackIds': tracks.map((t) => t.id).toList(),
         'currentIndex': _currentIndex,
         'queueTitle': queueTitle.value,
+        'playlistOrigins': _playlistOrigins,
       };
       await dao.putSettingStr(
-          SettingKeys.lastQueueState, jsonEncode(queueData));
+          SettingKeys.lastQueueState, jsonEncode(queueData),
+      );
     } catch (e) {
       log('Failed to persist queue: $e', name: 'QueueManager');
     }
@@ -513,6 +538,17 @@ class QueueManager {
           0;
       _isRestoring = true;
       loadTracks(tracks, idx: idx, playlistName: data['queueTitle'] ?? 'Queue');
+      final origins = data['playlistOrigins'];
+      if (origins is Map) {
+        final currentIds = tracks.map((t) => t.id).toSet();
+        for (final entry in origins.entries) {
+          if (entry.key is String &&
+              entry.value is int &&
+              currentIds.contains(entry.key)) {
+            _playlistOrigins[entry.key as String] = entry.value as int;
+          }
+        }
+      }
       _isRestoring = false;
       return true;
     } catch (e) {

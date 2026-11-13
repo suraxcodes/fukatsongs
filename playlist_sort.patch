@@ -1,0 +1,3424 @@
+--- a/lib/blocs/library/cubit/library_items_cubit.dart
++++ b/lib/blocs/library/cubit/library_items_cubit.dart
+@@ -74,7 +74,8 @@
+ 
+   /// Convert DB rows to view-model items using only domain types.
+   Future<List<PlaylistItemProperties>> _toItemProperties(
+-      List<PlaylistDB> dbs) async {
++      List<PlaylistDB> dbs,
++  ) async {
+     final items = <PlaylistItemProperties>[];
+ 
+     for (final p in dbs) {
+@@ -165,7 +166,8 @@
+ 
+   /// Add a [Track] to a named playlist.
+   Future<void> addToPlaylist(Track track, String playlistName,
+-      {bool showSnackbar = true}) async {
++      {bool showSnackbar = true,
++  }) async {
+     if (playlistName == 'Null' || playlistName.isEmpty) return;
+     try {
+       await _playlistDao.addTrackToPlaylistByName(playlistName, track);
+@@ -174,17 +176,20 @@
+       }
+     } catch (e) {
+       log('Failed to add "${track.title}" to "$playlistName": $e',
+-          name: 'LibraryItemsCubit');
++          name: 'LibraryItemsCubit',
++      );
+       if (showSnackbar) {
+         SnackbarService.showMessage(
+-            'Failed to add to playlist: ${e.toString().split('\n').first}');
++            'Failed to add to playlist: ${e.toString().split('\n').first}',
++        );
+       }
+     }
+   }
+ 
+   /// Remove a [Track] from a named playlist.
+   Future<void> removeFromPlaylist(Track track, String playlistName,
+-      {bool showSnackbar = true}) async {
++      {bool showSnackbar = true,
++  }) async {
+     if (playlistName == 'Null' || playlistName.isEmpty) return;
+     final playlist = await _playlistDao.getPlaylistByName(playlistName);
+     if (playlist == null) return;
+@@ -192,6 +197,19 @@
+     if (showSnackbar) {
+       SnackbarService.showMessage('${track.title} removed from $playlistName');
+     }
++  }
++
++  /// Resolve saved identity and sorted snapshot together for explicit playlist play.
++  Future<(int, Playlist)?> getSavedPlaylistForPlayback(String name) async {
++    final playlist = await _playlistDao.getPlaylistByName(name);
++    if (playlist == null) return null;
++    final snapshot = await _playlistDao.getOrderSnapshot(playlist.id);
++    final rows = await _playlistDao.getTracksByDbIds(snapshot.trackDbIds);
++    return (
++      playlist.id,
++      playlistDBToPlaylist(playlist)
++          .copyWith(tracks: rows.map(trackDBToTrack).toList()),
++    );
+   }
+ 
+   /// Get all tracks in a named playlist.
+@@ -237,7 +255,8 @@
+   Future<void> saveRemoteArtist(
+       {required ArtistSummary artist,
+       required String sourceName,
+-      bool showSnackbar = true}) async {
++      bool showSnackbar = true,
++  }) async {
+     await _libraryDao.saveArtist(artist, sourceName: sourceName);
+     if (showSnackbar) {
+       SnackbarService.showMessage('Artist "${artist.name}" saved to library');
+@@ -247,7 +266,8 @@
+   Future<void> saveRemoteAlbum(
+       {required AlbumSummary album,
+       required String sourceName,
+-      bool showSnackbar = true}) async {
++      bool showSnackbar = true,
++  }) async {
+     await _libraryDao.saveAlbum(album, sourceName: sourceName);
+     if (showSnackbar) {
+       SnackbarService.showMessage('Album "${album.title}" saved to library');
+@@ -257,11 +277,13 @@
+   Future<void> saveRemotePlaylist(
+       {required PlaylistSummary playlist,
+       required String sourceName,
+-      bool showSnackbar = true}) async {
++      bool showSnackbar = true,
++  }) async {
+     await _libraryDao.saveRemotePlaylist(playlist, sourceName: sourceName);
+     if (showSnackbar) {
+       SnackbarService.showMessage(
+-          'Playlist "${playlist.title}" saved to library');
++          'Playlist "${playlist.title}" saved to library',
++      );
+     }
+   }
+ 
+--- a/lib/plugins/blocs/import/content_import_cubit.dart
++++ b/lib/plugins/blocs/import/content_import_cubit.dart
+@@ -1,5 +1,7 @@
+ import 'dart:async';
+ import 'dart:developer';
++
++import 'package:fukatsongs/services/playlist_sort/playlist_sort_store.dart';
+ import 'dart:convert';
+ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+ import 'package:dio/dio.dart';
+@@ -60,10 +62,12 @@
+         _paginationFetcher = paginationFetcher ??
+             PlaylistPaginationFetcher(
+                 spotify: spotifyService ??
+-                    SpotifyApiService(clientId: '<YOUR_SPOTIFY_CLIENT_ID>')),
++                    SpotifyApiService(clientId: '<YOUR_SPOTIFY_CLIENT_ID>'),
++           ),
+         _playlistSaveService = playlistSaveService ??
+             PlaylistSaveService(
+-                playlistDao: playlistDao ?? _defaultPlaylistDao()),
++                playlistDao: playlistDao ?? _defaultPlaylistDao(),
++           ),
+         super(const ContentImportState());
+ 
+   static PlaylistDAO _defaultPlaylistDao() {
+@@ -80,7 +84,8 @@
+       pluginId: pluginId,
+       url: url,
+       clearError: true,
+-    ));
++    ),
++    );
+ 
+     // Force direct import for youtube and spotify because the WASM plugins are currently failing
+     if (url.contains('youtube.com') || url.contains('youtu.be')) {
+@@ -107,7 +112,8 @@
+         }
+       } catch (e) {
+         log('Plugin check failed: $e, falling back to direct check',
+-            name: 'ContentImportCubit');
++            name: 'ContentImportCubit',
++        );
+       }
+     }
+ 
+@@ -117,7 +123,8 @@
+       emit(state.copyWith(
+         phase: ImportPhase.error,
+         error: 'This URL cannot be handled by the selected importer.',
+-      ));
++      ),
++      );
+     }
+   }
+ 
+@@ -140,25 +147,29 @@
+         emit(state.copyWith(
+           collectionInfo: response.field0,
+           phase: ImportPhase.fetchingTracks,
+-        ));
++        ),
++        );
+         await _fetchTracks(pluginId, url);
+       } else {
+         emit(state.copyWith(
+           phase: ImportPhase.error,
+           error: 'Unexpected response when fetching collection info.',
+-        ));
++        ),
++        );
+       }
+     } on TimeoutException {
+       emit(state.copyWith(
+         phase: ImportPhase.error,
+         error: 'Timed out fetching collection info.',
+-      ));
++      ),
++      );
+     } catch (e) {
+       log('_fetchCollectionInfo failed: $e', name: 'ContentImportCubit');
+       emit(state.copyWith(
+         phase: ImportPhase.error,
+         error: 'Failed to fetch collection info: $e',
+-      ));
++      ),
++      );
+     }
+   }
+ 
+@@ -180,33 +191,39 @@
+             .map((t) => ImportTrackEntry(sourceTrack: t))
+             .toList();
+         log('Fetched ${entries.length} tracks from provider for url=$url',
+-            name: 'ContentImportCubit');
++            name: 'ContentImportCubit',
++        );
+         if (state.collectionInfo != null) {
+           log('Provider reports total ${state.collectionInfo!.trackCount} tracks',
+-              name: 'ContentImportCubit');
++              name: 'ContentImportCubit',
++          );
+         }
+         emit(state.copyWith(
+           tracks: List.unmodifiable(entries),
+           phase: ImportPhase.resolving,
+-        ));
++        ),
++        );
+         await _resolveTracks();
+       } else {
+         emit(state.copyWith(
+           phase: ImportPhase.error,
+           error: 'Unexpected response when fetching tracks.',
+-        ));
++        ),
++        );
+       }
+     } on TimeoutException {
+       emit(state.copyWith(
+         phase: ImportPhase.error,
+         error: 'Timed out fetching tracks.',
+-      ));
++      ),
++      );
+     } catch (e) {
+       log('_fetchTracks failed: $e', name: 'ContentImportCubit');
+       emit(state.copyWith(
+         phase: ImportPhase.error,
+         error: 'Failed to fetch tracks: $e',
+-      ));
++      ),
++      );
+     }
+   }
+ 
+@@ -216,7 +233,8 @@
+     final resolverPluginIds = await _getContentResolverPluginIds();
+     if (resolverPluginIds.isEmpty) {
+       log('No content-resolver plugins loaded; using fallback tracks directly.',
+-          name: 'ContentImportCubit');
++          name: 'ContentImportCubit',
++      );
+       final fallbackTracks = state.tracks.map((entry) {
+         final fallback = _toTrack(entry.sourceTrack);
+         return entry.copyWith(
+@@ -230,7 +248,8 @@
+         resolvedCount: fallbackTracks.length,
+         failedCount: 0,
+         phase: ImportPhase.review,
+-      ));
++      ),
++      );
+       return;
+     }
+ 
+@@ -245,7 +264,8 @@
+               tracks: tracks,
+               index: index,
+               pluginIds: resolverPluginIds,
+-            )),
++            ),
++        ),
+       );
+     }
+ 
+@@ -263,7 +283,8 @@
+         resolvedCount: counts.resolved,
+         failedCount: counts.failed,
+         phase: ImportPhase.review,
+-      ));
++      ),
++      );
+     }
+   }
+ 
+@@ -339,7 +360,8 @@
+         tracks: List.unmodifiable(tracks),
+         resolvedCount: counts.resolved,
+         failedCount: counts.failed,
+-      ));
++      ),
++      );
+     }
+   }
+ 
+@@ -355,7 +377,8 @@
+       phase: ImportPhase.review,
+       resolvedCount: counts.resolved,
+       failedCount: counts.failed,
+-    ));
++    ),
++    );
+   }
+ 
+   // ── User candidate selection ─────────────────────────────────────────────
+@@ -373,7 +396,8 @@
+       tracks: List.unmodifiable(tracks),
+       resolvedCount: counts.resolved,
+       failedCount: counts.failed,
+-    ));
++    ),
++    );
+   }
+ 
+   // ── Step 5: Save to Library ──────────────────────────────────────────────
+@@ -407,7 +431,8 @@
+       final tempDir = await getTemporaryDirectory();
+       final safeName = playlistName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
+       final progressFile =
+-          File('${tempDir.path}/import_progress_${safeName}.json');
++          File('${tempDir.path}/import_progress_${safeName}.json',
++      );
+ 
+       int resumeIndex = 0;
+       if (await progressFile.exists()) {
+@@ -416,7 +441,8 @@
+           final map = jsonDecode(content) as Map<String, dynamic>;
+           if (map['nextIndex'] is int) resumeIndex = map['nextIndex'] as int;
+           log('Resuming import from index $resumeIndex for "$playlistName"',
+-              name: 'ContentImportCubit');
++              name: 'ContentImportCubit',
++          );
+         } catch (_) {
+           // ignore and start from 0
+         }
+@@ -434,7 +460,8 @@
+         savingImported: importedSoFar,
+         savingSkipped: userSkipped,
+         savingFailed: 0,
+-      ));
++      ),
++      );
+ 
+       // Delegate to PlaylistSaveService which handles batching and resume.
+       final result = await _playlistSaveService.saveDomainTracks(
+@@ -447,7 +474,8 @@
+             savingImported: imported,
+             savingTotal: total,
+             savingSkipped: userSkipped + (skipped as int),
+-          ));
++          ),
++          );
+         },
+       );
+ 
+@@ -460,20 +488,23 @@
+       } catch (_) {}
+ 
+       log('Saved $importedSoFar tracks to "$playlistName"; duplicatesSkipped=$duplicatesSkipped, userSkipped=$userSkipped',
+-          name: 'ContentImportCubit');
++          name: 'ContentImportCubit',
++      );
+ 
+       emit(state.copyWith(
+         phase: ImportPhase.done,
+         resolvedCount: importedSoFar,
+         savingImported: importedSoFar,
+         savingSkipped: userSkipped + duplicatesSkipped,
+-      ));
++      ),
++      );
+     } catch (e) {
+       log('saveToLibrary failed: $e', name: 'ContentImportCubit');
+       emit(state.copyWith(
+         phase: ImportPhase.error,
+         error: 'Failed to save playlist: $e',
+-      ));
++      ),
++      );
+     }
+   }
+ 
+@@ -502,7 +533,8 @@
+         tracks.map((t) => ImportTrackEntry(sourceTrack: t)).toList(),
+       ),
+       clearError: true,
+-    ));
++    ),
++    );
+     await _resolveTracks();
+   }
+ 
+@@ -547,7 +579,8 @@
+             savingImported: 0,
+             savingSkipped: 0,
+             clearError: true,
+-          ));
++          ),
++          );
+           
+           final result = await _playlistSaveService.saveTracks(
+             dbPlaylistId,
+@@ -562,7 +595,8 @@
+             phase: ImportPhase.done,
+             savingImported: imported,
+             resolvedCount: imported,
+-          ));
++          ),
++          );
+           
+           yt.close();
+           return;
+@@ -577,7 +611,28 @@
+       // Determine progress file for this playlist to resume imports
+       final tempDir = await getTemporaryDirectory();
+       final progressFile = File(
+-          '${tempDir.path}/youtube_import_progress_$playlistId.json');
++          '${tempDir.path}/youtube_import_progress_$playlistId.json',
++      );
++      var sortBatchToken = PlaylistSortStore.newBatchToken();
++      if (await progressFile.exists()) {
++        try {
++          final saved = jsonDecode(await progressFile.readAsString());
++          if (saved is Map && saved['sortBatchToken'] is String) {
++            sortBatchToken = saved['sortBatchToken'] as String;
++          }
++        } catch (_) {}
++      }
++      // Only sorting metadata; existing fetching/parsing/resume logic remains.
++      Map<String, dynamic> sortProgress = {};
++      if (await progressFile.exists()) {
++        try {
++          sortProgress = Map<String, dynamic>.from(
++            jsonDecode(await progressFile.readAsString()) as Map,
++          );
++        } catch (_) {}
++      }
++      sortProgress['sortBatchToken'] = sortBatchToken;
++      await progressFile.writeAsString(jsonEncode(sortProgress), flush: true);
+       int resumeIndex = 0;
+       if (await progressFile.exists()) {
+         try {
+@@ -585,7 +640,8 @@
+           final map = jsonDecode(content) as Map<String, dynamic>;
+           if (map['nextIndex'] is int) resumeIndex = map['nextIndex'] as int;
+           log('Resuming YouTube import from index $resumeIndex for playlist $playlistId',
+-              name: 'ContentImportCubit');
++              name: 'ContentImportCubit',
++          );
+         } catch (_) {
+           // ignore malformed progress file
+         }
+@@ -734,7 +790,8 @@
+         savingImported: 0,
+         savingSkipped: 0,
+         clearError: true,
+-      ));
++      ),
++      );
+ 
+       Future<void> saveBatch(List<Map<String, dynamic>> videosBatch) async {
+         if (videosBatch.isEmpty) return;
+@@ -756,6 +813,7 @@
+           playlistName,
+           tracks,
+           batchSize: 500,
++          importBatchToken: sortBatchToken,
+           onProgress: null, // We handle state updates manually below
+         );
+ 
+@@ -777,7 +835,8 @@
+           savingSkipped: duplicatesSkipped,
+           savingTotal: uniqueVideos.length, // update total
+           resolvedCount: importedSoFar,
+-        ));
++        ),
++        );
+       }
+ 
+       // Save initial batch
+@@ -823,11 +882,11 @@
+       }
+ 
+       log('YouTube playlist $title imported $importedSoFar tracks, $duplicatesSkipped duplicates skipped',
+-          name: 'ContentImportCubit');
+-
+-      emit(state.copyWith(
+-        phase: ImportPhase.done,
+-      ));
++          name: 'ContentImportCubit',
++      );
++
++      emit(state.copyWith(
++        phase: ImportPhase.done));
+ 
+       // Cleanup progress file after successful import
+       try {
+@@ -838,7 +897,8 @@
+       emit(state.copyWith(
+         phase: ImportPhase.error,
+         error: 'YouTube Import Error: $e',
+-      ));
++      ),
++      );
+     }
+   }
+ 
+@@ -864,7 +924,8 @@
+           }
+         } catch (apiError) {
+           log('Spotify API failed, falling back to embed scraper: $apiError',
+-              name: 'ContentImportCubit');
++              name: 'ContentImportCubit',
++          );
+         }
+       }
+ 
+@@ -947,7 +1008,8 @@
+               isExplicit: track['explicit'] as bool? ?? false,
+               url: uri,
+               sourceId: trackId,
+-            ));
++            ),
++            );
+           } else {
+             // New format (trackList)
+             final name = item['title'] as String? ?? 'Unknown Title';
+@@ -970,7 +1032,8 @@
+               isExplicit: isExplicit,
+               url: uri,
+               sourceId: trackId,
+-            ));
++            ),
++            );
+           }
+         }
+       }
+@@ -996,7 +1059,8 @@
+           items.map((t) => ImportTrackEntry(sourceTrack: t)).toList(),
+         ),
+         clearError: true,
+-      ));
++      ),
++      );
+ 
+       await _resolveTracks();
+     } catch (e) {
+@@ -1004,7 +1068,8 @@
+       emit(state.copyWith(
+         phase: ImportPhase.error,
+         error: 'Spotify Import Error: $e',
+-      ));
++      ),
++      );
+     }
+   }
+ 
+@@ -1017,7 +1082,8 @@
+     return available
+         .where((p) =>
+             p.pluginType == PluginType.contentResolver &&
+-            loadedIds.contains(p.manifest.id))
++            loadedIds.contains(p.manifest.id),
++        )
+         .map((p) => p.manifest.id)
+         .toList(growable: false);
+   }
+@@ -1051,7 +1117,8 @@
+     final artists = it.artists.map((a) {
+       final aid = md5.convert(utf8.encode(a)).toString();
+       return ArtistSummary(
+-          id: aid, name: a, thumbnail: null, subtitle: null, url: null);
++          id: aid, name: a, thumbnail: null, subtitle: null, url: null,
++          );
+     }).toList(growable: false);
+ 
+     final artwork = Artwork(
+--- a/lib/screens/screen/library_views/cubit/current_playlist_cubit.dart
++++ b/lib/screens/screen/library_views/cubit/current_playlist_cubit.dart
+@@ -1,8 +1,11 @@
+ // ignore_for_file: public_member_api_docs, sort_constructors_first
++import 'dart:async';
++
+ import 'package:fukatsongs/core/models/exported.dart';
+ import 'package:fukatsongs/core/models/media_playlist_model.dart';
+ import 'package:fukatsongs/services/db/dao/playlist_dao.dart';
+ import 'package:fukatsongs/services/db/mappers/media_item_mapper.dart';
++import 'package:fukatsongs/services/playlist_sort/playlist_sort_store.dart';
+ import 'package:equatable/equatable.dart';
+ import 'package:flutter_bloc/flutter_bloc.dart';
+ import 'package:palette_generator/palette_generator.dart';
+@@ -10,9 +13,8 @@
+ 
+ part 'current_playlist_state.dart';
+ 
+-/// Cubit for viewing / managing a single playlist.
+-///
+-/// Uses [PlaylistDAO.loadPlaylist] to get a fully-hydrated [Playlist].
++/// Uses one sorted ID snapshot per open/sort, then hydrates 40 tracks per page.
++/// Playback consumes this SAME snapshot, not a fresh differently ordered query.
+ class CurrentPlaylistCubit extends Cubit<CurrentPlaylistState> {
+   static const int _pageSize = 40;
+ 
+@@ -20,31 +22,34 @@
+   PaletteGenerator? _paletteGenerator;
+   final PlaylistDAO _playlistDao;
+   int? _playlistId;
+-  int _loadedCount = 0;
+-  bool _isFetchingPage = false;
++  int _offset = 0;
++  int _loadRevision = 0;
++  List<int> _orderedIds = const [];
++  Future<void>? _pageFuture;
++
++  int? get playlistId => _playlistId;
++  int get loadRevision => _loadRevision;
+ 
+   CurrentPlaylistCubit({
+     Playlist? playlist,
+-    required PlaylistDAO playlistDao,
+-  })  : _playlist = playlist,
++    required PlaylistDAO playlistDao})  : _playlist = playlist,
+         _playlistDao = playlistDao,
+         super(const CurrentPlaylistInitial());
+ 
+-  /// Load a playlist by [playlistName] and emit the loaded state.
+-  ///
+-  /// Maintains backward compatibility for existing callers.
+-  Future<void> setupPlaylist(String playlistName) async {
+-    await openPlaylist(playlistName);
+-  }
+-
+-  /// Open a playlist with staged hydration:
+-  /// 1) lightweight header state
+-  /// 2) first page of tracks
+-  /// 3) load more pages on demand
++  bool _alive(int revision) => !isClosed && revision == _loadRevision;
++
++  Future<void> setupPlaylist(String playlistName) => openPlaylist(playlistName);
++
+   Future<void> openPlaylist(
+     String playlistName, {
+     bool deferFirstPage = false,
+   }) async {
++    final revision = ++_loadRevision;
++    _pageFuture = null;
++    _paletteGenerator = null;
++    _offset = 0;
++    _orderedIds = const [];
++    _playlistId = null;
+     emit(
+       state.copyWith(
+         isFetched: false,
+@@ -53,220 +58,230 @@
+         totalTracks: 0,
+         hasMore: false,
+         isLoadingMore: false,
+-        errorMessage: null,
+       ),
+     );
+-
+-    _paletteGenerator = null;
+-    _loadedCount = 0;
+-    _playlistId = null;
+-
+-    final playlistDB = await _playlistDao.getPlaylistByName(playlistName);
+-    if (playlistDB == null) {
++    try {
++      final dbPlaylist = await _playlistDao.getPlaylistByName(playlistName);
++    if (!_alive(revision)) return;
++      if (dbPlaylist == null)
++        throw StateError('Playlist "$playlistName" not found');
++      final snapshot = await _playlistDao.getOrderSnapshot(dbPlaylist.id);
++      if (!_alive(revision)) return;
++      _playlistId = dbPlaylist.id;
++      _orderedIds = snapshot.trackDbIds;
++      _playlist = playlistDBToPlaylist(dbPlaylist).copyWith(tracks: const []);
+       emit(
+         state.copyWith(
++          isFetched: true,
++          playlist: _playlist,
++          sortMode: snapshot.mode,
++          totalTracks: _orderedIds.length,
++          hasMore: _orderedIds.isNotEmpty,
++          isLoadingMore: false,
++          status: _orderedIds.isEmpty
++              ? CurrentPlaylistLoadStatus.success
++              : CurrentPlaylistLoadStatus.partial,
++        ),
++      );
++      if (_orderedIds.isNotEmpty && !deferFirstPage) await loadMoreTracks();
++    } catch (error) {
++      if (_alive(revision))
++        emit(
++        state.copyWith(
+           status: CurrentPlaylistLoadStatus.error,
+-          errorMessage: 'Playlist "$playlistName" not found',
+-        ),
+-      );
+-      return;
+-    }
+-
+-    _playlistId = playlistDB.id;
+-    final totalTracks = await _playlistDao.getPlaylistTrackCount(playlistDB.id);
+-    final basePlaylist =
+-        playlistDBToPlaylist(playlistDB).copyWith(tracks: const []);
+-
+-    _playlist = basePlaylist;
+-
+-    emit(
+-      state.copyWith(
+-        isFetched: true,
+-        status: totalTracks == 0
+-            ? CurrentPlaylistLoadStatus.success
+-            : CurrentPlaylistLoadStatus.partial,
+-        playlist: basePlaylist,
+-        totalTracks: totalTracks,
+-        hasMore: totalTracks > 0,
+-        isLoadingMore: false,
+-        errorMessage: null,
++          errorMessage: error.toString(),
++            isLoadingMore: false,
++        ),
++      );
++    }
++  }
++
++  Future<void> loadMoreTracks() {
++    if (_pageFuture != null) return _pageFuture!;
++    if (_playlistId == null || !state.hasMore || isClosed)
++      return Future.value();
++    final revision = _loadRevision;
++    final completer = Completer<void>();
++    _pageFuture = completer.future;
++    unawaited(
++      _loadPage(revision).then(
++        (_) {
++          if (_alive(revision)) _pageFuture = null;
++          completer.complete();
++        },
++        onError: (Object error, StackTrace stack) {
++          if (_alive(revision)) _pageFuture = null;
++          completer.completeError(error, stack);
++        },
+       ),
+     );
+-
+-    if (totalTracks > 0 && !deferFirstPage) {
+-      await loadMoreTracks();
+-    }
+-  }
+-
+-  /// Load the next track page if available.
+-  Future<void> loadMoreTracks() async {
+-    final playlistId = _playlistId;
+-    if (playlistId == null || _isFetchingPage || !state.hasMore) return;
+-
+-    _isFetchingPage = true;
++    return completer.future;
++  }
++
++  Future<void> _loadPage(int revision) async {
+     emit(state.copyWith(isLoadingMore: true));
+ 
+     try {
+-      final page = await _playlistDao.getPlaylistTracksPage(
+-        playlistId,
+-        offset: _loadedCount,
+-        limit: _pageSize,
+-      );
+-      final pageTracks = page.map(trackDBToTrack).toList(growable: false);
++      final end = (_offset + _pageSize).clamp(0, _orderedIds.length);
++      final ids = _orderedIds.sublist(_offset, end);
++      final rows = await _playlistDao.getTracksByDbIds(ids);
++      if (!_alive(revision)) return;
+ 
+       final merged = <Track>[
+         ...state.playlist.tracks,
+-        ...pageTracks,
++        ...rows.map(trackDBToTrack),
+       ];
+-
+-      _loadedCount = merged.length;
+-      final hasMore = _loadedCount < state.totalTracks;
++      _offset = end;
++      final more = _offset < _orderedIds.length;
+       _playlist = state.playlist.copyWith(tracks: merged);
+ 
+       emit(
+         state.copyWith(
+           playlist: _playlist,
+-          hasMore: hasMore,
++          hasMore: more,
++          totalTracks: more ? _orderedIds.length : merged.length,
+           isLoadingMore: false,
+-          status: hasMore
++          status: more
+               ? CurrentPlaylistLoadStatus.partial
+               : CurrentPlaylistLoadStatus.success,
+-          errorMessage: null,
+         ),
+       );
+ 
+       if (_paletteGenerator == null && merged.isNotEmpty) {
+-        _generatePalette(merged.first.thumbnail.url);
++        unawaited(_generatePalette(merged.first.thumbnail.url, revision));
+       }
+     } catch (error) {
+-      emit(
++      if (_alive(revision))
++        emit(
+         state.copyWith(
+           isLoadingMore: false,
+           status: CurrentPlaylistLoadStatus.error,
+           errorMessage: error.toString(),
+         ),
+       );
+-    } finally {
+-      _isFetchingPage = false;
+-    }
+-  }
+-
+-  Future<void> _generatePalette(String imageUrl) async {
++    }
++  }
++
++  Future<void> _generatePalette(String imageUrl, int revision) async {
+     if (imageUrl.isEmpty) return;
+-    final palette = await getPalleteFromImage(imageUrl);
++    try {
++      final palette = await getPalleteFromImage(imageUrl);
++      if (!_alive(revision)) return;
+     _paletteGenerator = palette;
+     emit(state.copyWith());
+-  }
+-
+-  /// Ensure all pages are loaded (needed for play-all / shuffle behavior).
++  } catch (_) {
++      /* artwork failure must not block sorting/playback */
++    }
++  }
++
+   Future<Playlist> ensureAllTracksLoaded() async {
+-    while (state.hasMore) {
++    final revision = _loadRevision;
++    while (_alive(revision) && state.hasMore) {
+       await loadMoreTracks();
+-    }
++      if (state.status == CurrentPlaylistLoadStatus.error) {
++        throw StateError(state.errorMessage ?? 'Could not load playlist');
++      }
++    }
++    if (!_alive(revision)) throw StateError('Playlist changed while loading');
+     return state.playlist;
+   }
+ 
+-  /// Optimistically removes a track from the playlist and persists to DB.
+-  ///
+-  /// Returns the removed [Track] and its index so the UI can animate removal.
+-  Future<(Track, int)?> removeTrack(Track track) async {
+-    if (_playlist == null || _playlistId == null) return null;
+-    final tracks = List<Track>.from(state.playlist.tracks);
+-    final index = tracks.indexWhere((t) => t.id == track.id);
+-    if (index == -1) return null;
+-
+-    final removed = tracks.removeAt(index);
+-    _playlist = _playlist!.copyWith(tracks: tracks);
+-
+-    // Emit immediately for responsive UI
++  Future<void> setSortMode(PlaylistSortMode mode) async {
++    final id = _playlistId;
++    final name = _playlist?.title;
++    if (id == null || name == null) return;
++    final revision = ++_loadRevision;
++    _pageFuture = null;
+     emit(
+       state.copyWith(
+-        playlist: _playlist,
+-        totalTracks: (state.totalTracks - 1).clamp(0, 1 << 30),
+-        hasMore: _loadedCount < (state.totalTracks - 1),
++        isFetched: false,
++        isLoadingMore: false,
++        status: CurrentPlaylistLoadStatus.loading,
+       ),
+     );
+-
+-    // Persist to DB
+-    await _playlistDao.removeTrackFromPlaylist(_playlistId!, track.id);
+-
+-    _loadedCount = tracks.length;
+-
+-    return (removed, index);
++    try {
++      await _playlistDao.setSortMode(id, mode);
++      if (_alive(revision)) await openPlaylist(name);
++    } catch (error) {
++      if (_alive(revision))
++        emit(
++          state.copyWith(
++            isFetched: true,
++            status: CurrentPlaylistLoadStatus.error,
++            errorMessage: error.toString(),
++          ),
++        );
++      rethrow;
++    }
++  }
++
++  Future<(Track, int)?> removeTrack(Track track) async {
++    final id = _playlistId;
++    final name = _playlist?.title;
++    final revision = _loadRevision;
++    if (id == null || name == null) return null;
++    final index = state.playlist.tracks.indexWhere((t) => t.id == track.id);
++    if (index < 0) return null;
++    await _playlistDao.removeTrackFromPlaylist(id, track.id);
++    if (_alive(revision)) await openPlaylist(name);
++    return (track, index);
+   }
+ 
+   String getTitle() => state.playlist.title;
+ 
+   int getPlaylistLength() => _playlist?.tracks.length ?? 0;
+ 
+-  String? getPlaylistCoverArt() {
+-    if (_playlist != null && _playlist!.tracks.isNotEmpty) {
+-      return _playlist!.tracks.first.thumbnail.url;
+-    }
+-    return '';
+-  }
+-
++  String? getPlaylistCoverArt() => _playlist?.tracks.isNotEmpty == true
++      ? _playlist!.tracks.first.thumbnail.url
++      : '';
+   PaletteGenerator? getCurrentPlaylistPallete() => _paletteGenerator;
+ 
+-  /// Persists a fully reordered track list, replacing the old DB order.
+-  ///
+-  /// This is the canonical save from the edit view: it does a clean
+-  /// delete-then-re-insert so gaps from prior deletions never cause
+-  /// the position-index mismatch that silently broke the old approach.
+   Future<void> updatePlaylist(List<Track> reorderedTracks) async {
+-    if (_playlist == null || _playlistId == null) return;
+-    final fullyLoaded = await ensureAllTracksLoaded();
+-    final existingTracks = fullyLoaded.tracks;
+-
+-    if (reorderedTracks.length != existingTracks.length) {
+-      throw StateError(
+-        'Refusing to save partial playlist reorder: expected '
+-        '${existingTracks.length} tracks, got ${reorderedTracks.length}.',
+-      );
+-    }
+-
+-    final expectedIds = existingTracks.map((t) => t.id).toSet();
+-    final providedIds = reorderedTracks.map((t) => t.id).toSet();
+-    if (expectedIds.length != providedIds.length ||
+-        !expectedIds.containsAll(providedIds)) {
+-      throw StateError(
+-        'Refusing to save playlist reorder with mismatched track set.',
+-      );
+-    }
+-
+-    // Optimistic in-memory update so callers see the new order immediately.
+-    _playlist = _playlist!.copyWith(tracks: List<Track>.from(reorderedTracks));
+-    _loadedCount = reorderedTracks.length;
+-    emit(state.copyWith(
+-      playlist: _playlist,
+-      totalTracks: reorderedTracks.length,
+-      hasMore: false,
+-      status: CurrentPlaylistLoadStatus.success,
+-    ));
+-    // Persist: full replace keeps positions contiguous and correct.
+-    await _playlistDao.setPlaylistTracks(_playlistId!, reorderedTracks);
+-  }
+-
+-  /// Reorder tracks. [oldIndex] and [newIndex] are 0-based UI positions.
++    final id = _playlistId;
++    final name = _playlist?.title;
++    final revision = _loadRevision;
++    if (id == null || name == null) return;
++    final loaded = await ensureAllTracksLoaded();
++    if (!_alive(revision)) return;
++    final expected = loaded.tracks.map((t) => t.id).toSet();
++    final provided = reorderedTracks.map((t) => t.id).toSet();
++    if (reorderedTracks.length != loaded.tracks.length ||
++        provided.length != expected.length ||
++        !expected.containsAll(provided)) {
++      throw StateError('Refusing partial or mismatched playlist reorder');
++    }
++    await _playlistDao.setPlaylistTracks(id, reorderedTracks);
++    if (_alive(revision)) await openPlaylist(name);
++  }
++
+   Future<void> reorderTrack(int oldIndex, int newIndex) async {
+-    if (_playlist == null || _playlistId == null) return;
+-    await _playlistDao.reorderTrack(_playlistId!, oldIndex, newIndex);
+-    await openPlaylist(_playlist!.title);
+-  }
+-
+-  /// Optimistically replaces [original] with [replacement] in the current
+-  /// playlist state without re-querying the DB.  Call this after a smart-
+-  /// replace operation when the DB has already been updated elsewhere, so the
+-  /// UI reflects the change instantly.
++    final loaded = await ensureAllTracksLoaded();
++    final tracks = List<Track>.of(loaded.tracks);
++    if (oldIndex < 0 ||
++        oldIndex >= tracks.length ||
++        newIndex < 0 ||
++        newIndex >= tracks.length)
++      return;
++    final item = tracks.removeAt(oldIndex);
++    tracks.insert(newIndex, item);
++    await updatePlaylist(tracks);
++  }
++
+   void replaceTrack(Track original, Track replacement) {
+     if (_playlist == null) return;
+-    final updated = state.playlist.tracks
++    _playlist = _playlist!.copyWith(
++      tracks: state.playlist.tracks
+         .map((t) => t.id == original.id ? replacement : t)
+-        .toList(growable: false);
+-    _playlist = _playlist!.copyWith(tracks: updated);
++        .toList(),
++    );
+     emit(state.copyWith(playlist: _playlist));
+   }
+ 
+-  /// Returns the name of the currently loaded playlist, or null if none.
+   String? get currentPlaylistName => _playlist?.title;
++
++  @override
++  Future<void> close() {
++    _loadRevision++;
++    return super.close();
++  }
+ }
+--- a/lib/screens/screen/library_views/cubit/current_playlist_state.dart
++++ b/lib/screens/screen/library_views/cubit/current_playlist_state.dart
+@@ -6,10 +6,10 @@
+   loading,
+   partial,
+   success,
+-  error,
+-}
++  error }
+ 
+ class CurrentPlaylistState extends Equatable {
++  final PlaylistSortMode sortMode;
+   final bool isFetched;
+   final Playlist playlist;
+   final CurrentPlaylistLoadStatus status;
+@@ -20,6 +20,7 @@
+ 
+   const CurrentPlaylistState({
+     required this.isFetched,
++    this.sortMode = PlaylistSortMode.oldestAdded,
+     required this.playlist,
+     this.status = CurrentPlaylistLoadStatus.initial,
+     this.totalTracks = 0,
+@@ -30,6 +31,7 @@
+ 
+   CurrentPlaylistState copyWith({
+     bool? isFetched,
++    PlaylistSortMode? sortMode,
+     Playlist? playlist,
+     CurrentPlaylistLoadStatus? status,
+     int? totalTracks,
+@@ -39,6 +41,7 @@
+   }) {
+     return CurrentPlaylistState(
+       isFetched: isFetched ?? this.isFetched,
++      sortMode: sortMode ?? this.sortMode,
+       playlist: playlist ?? this.playlist,
+       status: status ?? this.status,
+       totalTracks: totalTracks ?? this.totalTracks,
+@@ -51,6 +54,7 @@
+   @override
+   List<Object?> get props => [
+         isFetched,
++    sortMode,
+         playlist,
+         playlist.title,
+         status,
+--- a/lib/screens/screen/library_views/more_opts_sheet.dart
++++ b/lib/screens/screen/library_views/more_opts_sheet.dart
+@@ -34,7 +34,8 @@
+         if (!context.mounted || !sheetContext.mounted) return;
+         Navigator.pop(sheetContext);
+         Navigator.push(context,
+-            MaterialPageRoute(builder: (context) => const PlaylistEditView()));
++            MaterialPageRoute(builder: (context) => const PlaylistEditView()),
++        );
+       },
+     ),
+   );
+@@ -95,7 +96,9 @@
+                 color: Default_Theme.themeColor.withValues(alpha: 0.85),
+                 border: Border(
+                     top: BorderSide(
+-                        color: Colors.white.withValues(alpha: 0.08), width: 1)),
++                        color: Colors.white.withValues(alpha: 0.08), width: 1,
++                  ),
++                ),
+               ),
+               child: SafeArea(
+                 child: Column(
+@@ -114,7 +117,8 @@
+                     ),
+                     Padding(
+                       padding: const EdgeInsets.symmetric(
+-                          horizontal: 24, vertical: 8),
++                          horizontal: 24, vertical: 8,
++                      ),
+                       child: Text(
+                         title,
+                         style: TextStyle(
+@@ -148,15 +152,18 @@
+                                           ctx.read<LibraryItemsCubit>();
+                                       final playerCubit =
+                                           ctx.read<BloomeePlayerCubit>();
+-                                      final list = await libraryCubit
+-                                          .getPlaylistTracks(title);
+-                                      if (list != null && list.isNotEmpty) {
++                                      final saved = await libraryCubit
++                                          .getSavedPlaylistForPlayback(title);
++                                      if (saved != null &&
++                                          saved.$2.tracks.isNotEmpty) {
+                                         playerCubit.bloomeePlayer.loadPlaylist(
+-                                            Playlist(
+-                                                tracks: list, title: title),
+-                                            doPlay: true);
++                                          saved.$2,
++                                          sourcePlaylistId: saved.$1,
++                                            doPlay: true,
++                                        );
+                                         SnackbarService.showMessage(
+-                                            l10n.snackbarNowPlaying(title));
++                                            l10n.snackbarNowPlaying(title),
++                                        );
+                                       }
+                                     },
+                                   ),
+@@ -175,7 +182,9 @@
+                                             .addQueueTracks(list);
+                                         SnackbarService.showMessage(
+                                             l10n.snackbarPlaylistAddedToQueue(
+-                                                title));
++                                                title,
++                                          ),
++                                        );
+                                       }
+                                     },
+                                   ),
+@@ -190,15 +199,18 @@
+                                       : l10n.playlistShare,
+                                   onTap: () async {
+                                     SnackbarService.showMessage(
+-                                        l10n.snackbarPreparingShare(title));
++                                        l10n.snackbarPreparingShare(title),
++                                    );
+                                     final tmpPath = await ImportExportService
+-                                        .exportPlaylist(title);
++                                        .exportPlaylist(title,
++                                        );
+                                     if (tmpPath != null) {
+                                       await SharePlus.instance
+                                           .share(ShareParams(
+                                         files: [XFile(tmpPath)],
+                                         text: title,
+-                                      ));
++                                      ),
++                                      );
+                                     }
+                                   },
+                                 ),
+@@ -215,12 +227,15 @@
+                                             .toString();
+                                       }
+                                       SnackbarService.showMessage(
+-                                          l10n.snackbarPreparingExport(title));
++                                          l10n.snackbarPreparingExport(title),
++                                      );
+                                       final tmpPath = await ImportExportService
+                                           .exportPlaylist(title,
+-                                              filePath: path);
++                                              filePath: path,
++                                          );
+                                       SnackbarService.showMessage(l10n
+-                                          .snackbarExportedTo(tmpPath ?? ''));
++                                          .snackbarExportedTo(tmpPath ?? ''),
++                                      );
+                                     },
+                                   ),
+                               ],
+@@ -248,7 +263,8 @@
+                                       if (playlistId != null) {
+                                         ctx
+                                             .read<LibraryItemsCubit>()
+-                                            .togglePin(playlistId!);
++                                            .togglePin(playlistId!,
++                                        );
+                                       }
+                                     },
+                                   ),
+@@ -298,8 +314,7 @@
+         child: Material(
+           color: Colors.transparent,
+           child: Column(
+-            children: _buildChildrenWithDividers(),
+-          ),
++            children: _buildChildrenWithDividers()),
+         ),
+       ),
+     );
+@@ -314,7 +329,8 @@
+           Divider(
+             height: 1,
+             color:
+-                Colors.white.withValues(alpha: 0.04), // Ultra subtle separator
++                Colors.white.withValues(alpha: 0.04,
++            ), // Ultra subtle separator
+             indent: 52, // Perfectly aligns with the start of the text
+           ),
+         );
+@@ -362,8 +378,7 @@
+             Icon(
+               icon,
+               color: effectiveIconColor,
+-              size: 20,
+-            ),
++              size: 20),
+             const SizedBox(width: 16),
+             Expanded(
+               child: Text(
+--- a/lib/screens/screen/library_views/playlist_screen.dart
++++ b/lib/screens/screen/library_views/playlist_screen.dart
+@@ -1,4 +1,6 @@
+ import 'dart:ui';
++
++import 'package:fukatsongs/services/playlist_sort/playlist_sort_data.dart';
+ import 'dart:math' as math;
+ import 'package:flutter/material.dart';
+ import 'package:flutter/services.dart';
+@@ -95,17 +97,36 @@
+ 
+   Future<void> _playFromPlaylist(
+       BuildContext context, CurrentPlaylistState state,
+-      {int? index, bool shuffle = false}) async {
+-    final fullPlaylist =
+-        await context.read<CurrentPlaylistCubit>().ensureAllTracksLoaded();
+-    if (!mounted || fullPlaylist.tracks.isEmpty) return;
+-
+-    context.read<BloomeePlayerCubit>().bloomeePlayer.loadPlaylist(
+-          Playlist(tracks: fullPlaylist.tracks, title: fullPlaylist.title),
+-          idx: index ?? 0,
++      {int? index, bool shuffle = false,
++  }) async {
++    final cubit = context.read<CurrentPlaylistCubit>();
++    final revision = cubit.loadRevision;
++    final sourcePlaylistId = cubit.playlistId;
++    final tappedId = index != null && index < state.playlist.tracks.length
++        ? state.playlist.tracks[index].id
++        : null;
++    try {
++      final fullPlaylist = await cubit.ensureAllTracksLoaded();
++    if (!mounted ||
++          revision != cubit.loadRevision ||
++          sourcePlaylistId != cubit.playlistId ||
++          fullPlaylist.tracks.isEmpty) return;
++      final start = tappedId == null
++          ? 0
++          : fullPlaylist.tracks.indexWhere((t) => t.id == tappedId);
++      if (start < 0) return;
++      await context.read<BloomeePlayerCubit>().bloomeePlayer.loadPlaylist(
++          Playlist(tracks: List<Track>.of(fullPlaylist.tracks), title: fullPlaylist.title,
++        ),
++          idx: start,
+           doPlay: true,
+           shuffling: shuffle,
+-        );
++        sourcePlaylistId: sourcePlaylistId,
++      );
++    } catch (error) {
++      if (mounted)
++        SnackbarService.showMessage('Could not load playlist: $error');
++    }
+   }
+ 
+   List<Color> _getOptimizedPalette(BuildContext context) {
+@@ -119,11 +140,13 @@
+     if (bgColor.computeLuminance() / fgColor.computeLuminance() > 0.05) {
+       fgColor = HSLColor.fromColor(fgColor)
+           .withLightness(
+-              (HSLColor.fromColor(fgColor).lightness + 0.1).clamp(0.0, 1.0))
++              (HSLColor.fromColor(fgColor).lightness + 0.1).clamp(0.0, 1.0),
++          )
+           .toColor();
+       bgColor = HSLColor.fromColor(bgColor)
+           .withLightness(
+-              (HSLColor.fromColor(bgColor).lightness - 0.1).clamp(0.0, 1.0))
++              (HSLColor.fromColor(bgColor).lightness - 0.1).clamp(0.0, 1.0),
++          )
+           .toColor();
+     }
+     return [fgColor, bgColor];
+@@ -147,14 +170,18 @@
+               state.status == CurrentPlaylistLoadStatus.loading) {
+             return const Center(
+                 child: CircularProgressIndicator(
+-                    color: Default_Theme.accentColor2));
++                    color: Default_Theme.accentColor2,
++              ),
++            );
+           }
+ 
+           if (state.status == CurrentPlaylistLoadStatus.error) {
+             return Center(
+                 child: SignBoardWidget(
+                     message: state.errorMessage ?? 'Failed to load playlist',
+-                    icon: MingCute.alert_line));
++                    icon: MingCute.alert_line,
++              ),
++            );
+           }
+ 
+           final colors = _getOptimizedPalette(context);
+@@ -174,10 +201,12 @@
+                   _buildAmbientBackground(imageUrl, bgColor, isMobile),
+                   if (isMobile)
+                     _buildMobileLayout(
+-                        state, fgColor, bgColor, imageUrl, l10n, constraints)
++                        state, fgColor, bgColor, imageUrl, l10n, constraints,
++                    )
+                   else
+                     _buildDesktopLayout(
+-                        state, fgColor, bgColor, imageUrl, l10n, constraints),
++                        state, fgColor, bgColor, imageUrl, l10n, constraints,
++                    ),
+                 ],
+               );
+             },
+@@ -192,6 +221,39 @@
+       backgroundColor: Colors.transparent,
+       elevation: 0,
+       scrolledUnderElevation: 0,
++      actions: [
++        BlocBuilder<CurrentPlaylistCubit, CurrentPlaylistState>(
++          builder: (context, state) => PopupMenuButton<PlaylistSortMode>(
++            tooltip: 'Sort: ${state.sortMode.label}',
++            enabled:
++                state.isFetched &&
++                state.status != CurrentPlaylistLoadStatus.loading,
++            icon: const Icon(Icons.sort_rounded),
++            initialValue: state.sortMode,
++            itemBuilder: (_) => PlaylistSortMode.values
++                .map(
++                  (mode) => CheckedPopupMenuItem<PlaylistSortMode>(
++                    value: mode,
++                    checked: state.sortMode == mode,
++                    child: Text(mode.label),
++                  ),
++                )
++                .toList(),
++            onSelected: (mode) async {
++              try {
++                await context.read<CurrentPlaylistCubit>().setSortMode(mode);
++                if (mounted && _scrollController.hasClients) {
++                  _scrollController.jumpTo(0);
++                }
++              } catch (error) {
++                if (mounted)
++                  SnackbarService.showMessage('Could not change sort: $error');
++              }
++            },
++          ),
++        ),
++        const SizedBox(width: 12),
++      ],
+       leadingWidth: 70,
+       leading: Padding(
+         padding: const EdgeInsets.only(left: 16.0),
+@@ -205,7 +267,8 @@
+                 border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+               ),
+               child: const Icon(Icons.arrow_back_rounded,
+-                  color: Colors.white, size: 20),
++                  color: Colors.white, size: 20,
++              ),
+             ),
+             onPressed: () => Navigator.of(context).pop(),
+           ),
+@@ -215,7 +278,8 @@
+   }
+ 
+   Widget _buildAmbientBackground(
+-      String imageUrl, Color dominantColor, bool isMobile) {
++      String imageUrl, Color dominantColor, bool isMobile,
++  ) {
+     return Positioned.fill(
+       child: RepaintBoundary(
+         child: Stack(
+@@ -233,7 +297,7 @@
+                   gradient: RadialGradient(
+                     colors: [
+                       dominantColor.withValues(alpha: 0.45),
+-                      Colors.transparent
++                      Colors.transparent,
+                     ],
+                   ),
+                 ),
+@@ -246,7 +310,8 @@
+                   child: ImageFiltered(
+                     imageFilter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                     child:
+-                        LoadImageCached(imageUrl: imageUrl, fit: BoxFit.cover),
++                        LoadImageCached(imageUrl: imageUrl, fit: BoxFit.cover,
++                    ),
+                   ),
+                 ),
+               ),
+@@ -278,7 +343,8 @@
+       Color bgColor,
+       String imageUrl,
+       AppLocalizations l10n,
+-      BoxConstraints constraints) {
++      BoxConstraints constraints,
++  ) {
+     return Row(
+       crossAxisAlignment: CrossAxisAlignment.start,
+       children: [
+@@ -317,7 +383,8 @@
+                   fit: BoxFit.scaleDown,
+                   alignment: Alignment.center,
+                   child:
+-                      _buildActions(state, fgColor, bgColor, isCentered: true),
++                      _buildActions(state, fgColor, bgColor, isCentered: true,
++                  ),
+                 ),
+ 
+                 const Spacer(flex: 2), // Bottom breathing room
+@@ -330,7 +397,8 @@
+         Expanded(
+           child: Container(
+             margin: const EdgeInsets.fromLTRB(
+-                20, 90, 40, 40), // Matches left panel gap
++                20, 90, 40, 40,
++            ), // Matches left panel gap
+             decoration: BoxDecoration(
+               color: Default_Theme.themeColor.withValues(alpha: 0.3),
+               borderRadius: BorderRadius.circular(24),
+@@ -339,7 +407,8 @@
+                 BoxShadow(
+                     color: Colors.black.withValues(alpha: 0.1),
+                     blurRadius: 40,
+-                    offset: const Offset(0, 15)),
++                    offset: const Offset(0, 15),
++                ),
+               ],
+             ),
+             child: ClipRRect(
+@@ -354,12 +423,15 @@
+                       child: Center(
+                           child: SignBoardWidget(
+                               message: l10n.playlistEmptyState,
+-                              icon: MingCute.playlist_line)),
++                              icon: MingCute.playlist_line,
++                        ),
++                      ),
+                     )
+                   else
+                     SliverPadding(
+                       padding: const EdgeInsets.symmetric(
+-                          vertical: 24, horizontal: 16),
++                          vertical: 24, horizontal: 16,
++                      ),
+                       sliver: _buildTrackList(state),
+                     ),
+                   if (state.isLoadingMore || state.hasMore)
+@@ -368,7 +440,9 @@
+                         padding: EdgeInsets.symmetric(vertical: 24),
+                         child: Center(
+                             child: CircularProgressIndicator(
+-                                color: Default_Theme.accentColor2)),
++                                color: Default_Theme.accentColor2,
++                          ),
++                        ),
+                       ),
+                     ),
+                 ],
+@@ -388,7 +462,8 @@
+       Color bgColor,
+       String imageUrl,
+       AppLocalizations l10n,
+-      BoxConstraints constraints) {
++      BoxConstraints constraints,
++  ) {
+     return CustomScrollView(
+       controller: _scrollController,
+       physics: const BouncingScrollPhysics(),
+@@ -411,7 +486,8 @@
+                   fit: BoxFit.scaleDown,
+                   alignment: Alignment.center,
+                   child:
+-                      _buildActions(state, fgColor, bgColor, isCentered: true),
++                      _buildActions(state, fgColor, bgColor, isCentered: true,
++                  ),
+                 ),
+               ],
+             ),
+@@ -423,7 +499,9 @@
+             child: Center(
+                 child: SignBoardWidget(
+                     message: l10n.playlistEmptyState,
+-                    icon: MingCute.playlist_line)),
++                    icon: MingCute.playlist_line,
++              ),
++            ),
+           )
+         else
+           SliverPadding(
+@@ -436,7 +514,9 @@
+               padding: EdgeInsets.symmetric(vertical: 24),
+               child: Center(
+                   child: CircularProgressIndicator(
+-                      color: Default_Theme.accentColor2)),
++                      color: Default_Theme.accentColor2,
++                ),
++              ),
+             ),
+           ),
+       ],
+@@ -453,15 +533,18 @@
+             BoxShadow(
+                 color: dominantColor.withValues(alpha: 0.35),
+                 blurRadius: 60,
+-                offset: const Offset(0, 20)),
++                offset: const Offset(0, 20),
++            ),
+             BoxShadow(
+                 color: Colors.black.withValues(alpha: 0.4),
+                 blurRadius: 20,
+-                offset: const Offset(0, 10)),
++                offset: const Offset(0, 10),
++            ),
+             BoxShadow(
+                 color: Colors.white.withValues(alpha: 0.1),
+                 blurRadius: 1,
+-                offset: const Offset(0, -1)),
++                offset: const Offset(0, -1),
++            ),
+           ],
+         ),
+         child: ClipRRect(
+@@ -471,7 +554,8 @@
+                   widthFactor: 0.3,
+                   heightFactor: 0.3,
+                   child: Icon(MingCute.music_2_line,
+-                      color: Colors.white.withValues(alpha: 0.3)),
++                      color: Colors.white.withValues(alpha: 0.3),
++                  ),
+                 )
+               : Stack(
+                   fit: StackFit.expand,
+@@ -479,7 +563,8 @@
+                     ImageFiltered(
+                       imageFilter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                       child: LoadImageCached(
+-                          imageUrl: imageUrl, fit: BoxFit.cover),
++                          imageUrl: imageUrl, fit: BoxFit.cover,
++                      ),
+                     ),
+                     Container(color: Colors.black.withValues(alpha: 0.3)),
+                     LoadImageCached(imageUrl: imageUrl, fit: BoxFit.contain),
+@@ -491,10 +576,12 @@
+   }
+ 
+   Widget _buildInfo(CurrentPlaylistState state, AppLocalizations l10n,
+-      {required bool isCentered}) {
++      {required bool isCentered,
++  }) {
+     final creatorText = l10n.playlistByCreator(
+         state.playlist.artists?.map((a) => a.name).join(', ') ??
+-            l10n.playlistYou);
++            l10n.playlistYou,
++    );
+ 
+     return Column(
+       crossAxisAlignment:
+@@ -538,7 +625,8 @@
+   }
+ 
+   Widget _buildActions(CurrentPlaylistState state, Color fgColor, Color bgColor,
+-      {required bool isCentered}) {
++      {required bool isCentered,
++  }) {
+     final isEmpty = state.playlist.tracks.isEmpty;
+     final l10n = AppLocalizations.of(context)!;
+ 
+@@ -571,7 +659,8 @@
+             final downloaded = ctx.watch<DownloaderCubit>().state.downloaded;
+             final allDownloaded = !isEmpty &&
+                 state.playlist.tracks
+-                    .every((s) => downloaded.any((d) => d.id == s.id));
++                    .every((s) => downloaded.any((d) => d.id == s.id),
++                  );
+ 
+             if (allDownloaded) {
+               return Tooltip(
+@@ -582,17 +671,21 @@
+                   decoration: BoxDecoration(
+                       shape: BoxShape.circle,
+                       color:
+-                          Default_Theme.accentColor2.withValues(alpha: 0.15)),
++                          Default_Theme.accentColor2.withValues(alpha: 0.15),
++                    ),
+                   child: const Icon(Icons.offline_pin_rounded,
+-                      color: Default_Theme.accentColor2, size: 20),
++                      color: Default_Theme.accentColor2, size: 20,
++                    ),
+                 ),
+               );
+             }
+             return _buildActionIcon(
+                 MingCute.download_2_fill,
+                 l10n.buttonDownload,
+-                isEmpty ? null : () => _handleDownload(context, state, l10n));
+-          }),
++                isEmpty ? null : () => _handleDownload(context, state, l10n),
++              );
++            },
++          ),
+ 
+           const SizedBox(width: 12),
+ 
+@@ -618,9 +711,11 @@
+                           boxShadow: [
+                             BoxShadow(
+                                 color: Default_Theme.accentColor2
+-                                    .withValues(alpha: 0.3),
++                                    .withValues(alpha: 0.3,
++                          ),
+                                 blurRadius: 20,
+-                                offset: const Offset(0, 8)),
++                                offset: const Offset(0, 8),
++                        ),
+                           ],
+                         ),
+                         child: PlayPauseButton(
+@@ -640,25 +735,31 @@
+                               .pause(),
+                         ),
+                       );
+-                    });
+-              }),
++                    },
++              );
++            },
++          ),
+ 
+           const SizedBox(width: 12),
+           _buildActionIcon(
+               MingCute.information_line,
+               l10n.buttonInfo,
+               () => showPlaylistInfo(context, state,
+-                  fgColor: fgColor, bgColor: bgColor)),
++                  fgColor: fgColor, bgColor: bgColor,
++            ),
++          ),
+ 
+           const SizedBox(width: 12),
+           _buildActionIcon(MingCute.more_2_line, l10n.buttonMore,
+-              () => showPlaylistOptsInrSheet(context, state.playlist)),
++              () => showPlaylistOptsInrSheet(context, state.playlist),
++          ),
+         ],
+       ),
+     );
+   }
+ 
+-  Widget _buildActionIcon(IconData icon, String tooltip, VoidCallback? onTap, {Color? iconColor}) {
++  Widget _buildActionIcon(IconData icon, String tooltip, VoidCallback? onTap, {Color? iconColor,
++  }) {
+     return Tooltip(
+       message: tooltip,
+       child: Material(
+@@ -677,7 +778,8 @@
+               border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+             ),
+             child: Icon(icon,
+-                color: iconColor ?? Colors.white.withValues(alpha: 0.85), size: 20),
++                color: iconColor ?? Colors.white.withValues(alpha: 0.85), size: 20,
++            ),
+           ),
+         ),
+       ),
+@@ -718,11 +820,13 @@
+     final l10n = AppLocalizations.of(context)!;
+     cubit.removeTrack(track);
+     SnackbarService.showMessage(
+-        l10n.playlistRemovedTrack(track.title, cubit.state.playlist.title));
++        l10n.playlistRemovedTrack(track.title, cubit.state.playlist.title),
++    );
+   }
+ 
+   Future<void> _handleDownload(BuildContext context, CurrentPlaylistState state,
+-      AppLocalizations l10n) async {
++      AppLocalizations l10n,
++  ) async {
+     final items =
+         (await context.read<CurrentPlaylistCubit>().ensureAllTracksLoaded())
+             .tracks;
+@@ -733,27 +837,34 @@
+       builder: (context) => AlertDialog(
+         backgroundColor: Default_Theme.themeColor,
+         title: Text(l10n.dialogDownloadPlaylist,
+-            style: const TextStyle(color: Colors.white)),
++            style: const TextStyle(color: Colors.white),
++        ),
+         content: Text(
+             l10n.dialogDownloadPlaylistMessage(
+-                items.length, state.playlist.title),
+-            style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
++                items.length, state.playlist.title,
++          ),
++            style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
++        ),
+         actions: [
+           TextButton(
+               onPressed: () => Navigator.pop(context, false),
+               child: Text(l10n.buttonCancel,
+                   style:
+-                      TextStyle(color: Colors.white.withValues(alpha: 0.7)))),
++                      TextStyle(color: Colors.white.withValues(alpha: 0.7)),
++            ),
++          ),
+           ElevatedButton(
+             style: ElevatedButton.styleFrom(
+               backgroundColor: Default_Theme.accentColor2,
+               foregroundColor: Colors.white,
+               shape: RoundedRectangleBorder(
+-                  borderRadius: BorderRadius.circular(12)),
++                  borderRadius: BorderRadius.circular(12),
++              ),
+             ),
+             onPressed: () => Navigator.pop(context, true),
+             child: Text(l10n.dialogDownloadAll,
+-                style: const TextStyle(fontWeight: FontWeight.bold)),
++                style: const TextStyle(fontWeight: FontWeight.bold),
++            ),
+           ),
+         ],
+       ),
+@@ -766,7 +877,8 @@
+   }
+ 
+   Future<void> _showAddToDownloadProgress(
+-      BuildContext context, List<Track> items, AppLocalizations l10n) async {
++      BuildContext context, List<Track> items, AppLocalizations l10n,
++  ) async {
+     await showDialog(
+       context: context,
+       barrierDismissible: false,
+@@ -781,7 +893,8 @@
+             try {
+               context
+                   .read<DownloaderCubit>()
+-                  .downloadSong(song, showSnackbar: false);
++                  .downloadSong(song, showSnackbar: false,
++              );
+             } catch (_) {}
+             await Future.delayed(const Duration(milliseconds: 100));
+             setStateRef(() => completed++);
+@@ -805,11 +918,15 @@
+                         style: const TextStyle(
+                             color: Colors.white,
+                             fontSize: 18,
+-                            fontWeight: FontWeight.bold)),
++                            fontWeight: FontWeight.bold,
++                      ),
++                    ),
+                     const SizedBox(height: 8),
+                     Text('$completed/${items.length} items',
+                         style: TextStyle(
+-                            color: Colors.white.withValues(alpha: 0.7))),
++                            color: Colors.white.withValues(alpha: 0.7),
++                      ),
++                    ),
+                     const SizedBox(height: 16),
+                     ClipRRect(
+                       borderRadius: BorderRadius.circular(4),
+@@ -820,7 +937,8 @@
+                         minHeight: 6,
+                         backgroundColor: Colors.white.withValues(alpha: 0.1),
+                         valueColor: const AlwaysStoppedAnimation<Color>(
+-                            Default_Theme.accentColor2),
++                            Default_Theme.accentColor2,
++                        ),
+                       ),
+                     ),
+                     const SizedBox(height: 12),
+@@ -829,7 +947,9 @@
+                         overflow: TextOverflow.ellipsis,
+                         style: TextStyle(
+                             color: Colors.white.withValues(alpha: 0.5),
+-                            fontSize: 12)),
++                            fontSize: 12,
++                      ),
++                    ),
+                   ],
+                 ),
+               ),
+--- a/lib/services/bloomee_player.dart
++++ b/lib/services/bloomee_player.dart
+@@ -1,4 +1,6 @@
+ import 'dart:developer';
++
++import 'package:fukatsongs/services/playlist_sort/playlist_play_tracker.dart';
+ import 'dart:async';
+ import 'dart:convert';
+ import 'dart:io' show exit;
+@@ -57,6 +59,7 @@
+   late QueueManager _queueManager;
+   late RelatedSongsManager _relatedSongsManager;
+   late RecentlyPlayedTracker _recentlyPlayedTracker;
++  late PlaylistPlayTracker _playlistPlayTracker;
+   late MediaResolverService _resolver;
+   late SmartTrackReplacementService _smartTrackReplacementService;
+ 
+@@ -88,7 +91,8 @@
+   BehaviorSubject<bool> fromPlaylist = BehaviorSubject<bool>.seeded(false);
+   BehaviorSubject<bool> isOffline = BehaviorSubject<bool>.seeded(false);
+   BehaviorSubject<LoopMode> loopMode =
+-      BehaviorSubject<LoopMode>.seeded(LoopMode.off);
++      BehaviorSubject<LoopMode>.seeded(LoopMode.off,
++  );
+   BehaviorSubject<bool> isResolving = BehaviorSubject<bool>.seeded(false);
+ 
+   bool _isDisposed = false;
+@@ -126,7 +130,8 @@
+   //
+   // All user-visible volume is STREAM_MUSIC. media_kit engine stays at 1.0.
+   static const MethodChannel _voiceChannel =
+-      MethodChannel('com.fukatsongs.app/voice_service');
++      MethodChannel('com.fukatsongs.app/voice_service',
++  );
+   double _cachedSystemVolume = 1.0;
+   Timer? _systemVolumePollTimer;
+ 
+@@ -144,7 +149,8 @@
+   Future<void> _setSystemVolumeSilent(double v) async {
+     try {
+       await _voiceChannel.invokeMethod(
+-          'duckMediaVolume', {'fraction': v.clamp(0.0, 1.0)});
++          'duckMediaVolume', {'fraction': v.clamp(0.0, 1.0),
++      });
+     } catch (_) {}
+   }
+ 
+@@ -152,11 +158,11 @@
+     _systemVolumePollTimer?.cancel();
+     _systemVolumePollTimer = Timer.periodic(
+       const Duration(milliseconds: 500),
+-      (_) async {
++      (_,
++    ) async {
+         final v = await _readSystemVolume();
+         _cachedSystemVolume = v;
+-      },
+-    );
++      });
+   }
+ 
+   Duration _savedPositionForRevive = Duration.zero;
+@@ -217,10 +223,12 @@
+       _audioNoisySub?.cancel();
+ 
+       _audioInterruptionSub =
+-          session.interruptionEventStream.listen(_handleInterruptionSync);
++          session.interruptionEventStream.listen(_handleInterruptionSync,
++      );
+ 
+       _audioNoisySub = session.becomingNoisyEventStream
+-          .listen((_) => _onHeadphonesUnplugged());
++          .listen((_) => _onHeadphonesUnplugged(),
++      );
+     });
+   }
+ 
+@@ -284,7 +292,8 @@
+     _activateAudioSession().then((granted) {
+       if (granted && !_isDisposed && !_teardownStarted) engine.play();
+     }).catchError((Object e) {
+-      log('Resume after interruption failed: $e', name: 'BloomeeMusicPlayer');
++      log('Resume after interruption failed: $e', name: 'BloomeeMusicPlayer',
++          );
+     });
+   }
+ 
+@@ -319,7 +328,8 @@
+ 
+       final cfStr = await dao.getSettingStr(SettingKeys.crossfadeDuration);
+       engine.crossfadeDuration =
+-          Duration(seconds: int.tryParse(cfStr ?? '0') ?? 0);
++          Duration(seconds: int.tryParse(cfStr ?? '0') ?? 0,
++      );
+ 
+       final eqSource = await dao.getSettingStr(SettingKeys.eqSource);
+       if (eqSource == EqSourceValues.device) {
+@@ -354,7 +364,8 @@
+     _relatedSongsManager = RelatedSongsManager(ServiceLocator.pluginService);
+     _resolver = MediaResolverService.create(ServiceLocator.pluginService);
+     _smartTrackReplacementService =
+-        SmartTrackReplacementService.create(ServiceLocator.pluginService);
++        SmartTrackReplacementService.create(ServiceLocator.pluginService,
++    );
+ 
+     _errorHandler.onSkipToNext = _internalSkipToNext;
+     _errorHandler.onRetryCurrentTrack = _retryCurrentTrack;
+@@ -366,13 +377,19 @@
+       playbackState.add(playbackState.value.copyWith(
+         processingState: AudioProcessingState.error,
+         playing: false,
+-      ));
++      ),
++      );
+       await engine.stop();
+       DiscordService.clearPresence();
+     };
+ 
+     _relatedSongsManager.onAddQueueItems =
+         (items, {bool atLast = false}) => addQueueTracks(items, atLast: atLast);
++
++    _playlistPlayTracker = PlaylistPlayTracker(
++      engine,
++      isLoopOne: () => loopMode.value == LoopMode.one,
++    );
+ 
+     _recentlyPlayedTracker = RecentlyPlayedTracker(
+       engine,
+@@ -412,7 +429,8 @@
+           engine.buffered,
+           engine.speed,
+         );
+-      });
++      },
++      );
+     });
+ 
+     _completionSub = engine.completionStream.listen((_) => _onTrackCompleted());
+@@ -442,7 +460,8 @@
+           if (active != null) session.failedIds.add(active.id);
+         }
+         _errorHandler.handleError(
+-            _errorHandler.categorizeError(error), error, track);
++            _errorHandler.categorizeError(error), error, track,
++        );
+       }
+     });
+ 
+@@ -464,7 +483,8 @@
+   // ─── Playback State Broadcast ────────────────────────────────────────────
+ 
+   void _broadcastPlaybackState(EngineState state, bool playing,
+-      Duration position, Duration buffered, double speed) {
++      Duration position, Duration buffered, double speed,
++  ) {
+     final processingState = switch (state) {
+       EngineState.idle => AudioProcessingState.idle,
+       EngineState.loading => AudioProcessingState.loading,
+@@ -498,11 +518,13 @@
+       shuffleMode: shuffleMode.value
+           ? AudioServiceShuffleMode.all
+           : AudioServiceShuffleMode.none,
+-    ));
++    ),
++    );
+ 
+     EasyThrottle.throttle('discord_rpc', const Duration(seconds: 1), () {
+       DiscordService.updatePresence(
+-          track: currentTrackInfo, isPlaying: playing);
++          track: currentTrackInfo, isPlaying: playing,
++      );
+     });
+   }
+ 
+@@ -554,23 +576,27 @@
+   @override
+   Future<void> seek(Duration position) async {
+     if (_isDisposed) return;
++    _playlistPlayTracker.seeked();
+     await engine.seek(position);
+   }
+ 
+   Future<void> seekNSecForward(Duration n) async {
+     if (_isDisposed) return;
+     final dur = engine.duration;
++    _playlistPlayTracker.seeked();
+     await engine.seek(engine.position + n > dur ? dur : engine.position + n);
+   }
+ 
+   Future<void> seekNSecBackward(Duration n) async {
+     if (_isDisposed) return;
+     final back = engine.position - n;
++    _playlistPlayTracker.seeked();
+     await engine.seek(back < Duration.zero ? Duration.zero : back);
+   }
+ 
+   @override
+   Future<void> stop() async {
++    _playlistPlayTracker.end();
+     _sourceSession = null;
+     _errorHandler.resetCircuitBreaker();
+     _shouldResumeAfterInterruption = false;
+@@ -583,7 +609,8 @@
+     playbackState.add(playbackState.value.copyWith(
+       processingState: AudioProcessingState.idle,
+       playing: false,
+-    ));
++    ),
++    );
+     await engine.stop();
+     await _deactivateAudioSession();
+     DiscordService.clearPresence();
+@@ -598,6 +625,7 @@
+     if (_isDisposed) return;
+     if (engine.state == EngineState.ready ||
+         engine.state == EngineState.buffering) {
++      _playlistPlayTracker.seeked();
+       await engine.seek(Duration.zero);
+     } else if (engine.state == EngineState.completed) {
+       final track = _queueManager.currentTrack;
+@@ -638,9 +666,15 @@
+     bool doPlay = true,
+     Duration? initialPosition,
+     bool preserveSourceSession = false,
++    bool attributeToPlaylist = true,
+   }) {
+     if (_isDisposed || _teardownStarted) return Future.value();
+     _errorHandler.cancelPendingRetry();
++    _playlistPlayTracker.begin(
++      attributeToPlaylist ? _queueManager.playlistOriginFor(track.id) : null,
++      track.id,
++      preserveAttempt: preserveSourceSession,
++    );
+     if (!preserveSourceSession || _sourceSession?.original.id != track.id) {
+       _sourceSession = _PlaybackSourceSession(track);
+     }
+@@ -648,7 +682,8 @@
+     final prev = _playCompleter;
+     final completer = CancelableCompleter<void>(
+       onCancel: () => log('Track load cancelled: ${track.title}',
+-          name: 'BloomeeMusicPlayer'),
++          name: 'BloomeeMusicPlayer',
++      ),
+     );
+     _playCompleter = completer;
+     prev?.operation.cancel();
+@@ -678,7 +713,8 @@
+         final granted = await _activateAudioSession();
+         if (!alive()) return;
+         if (!granted) {
+-          SnackbarService.showMessage('Audio focus denied. Cannot start playback.');
++          SnackbarService.showMessage('Audio focus denied. Cannot start playback.',
++          );
+           return;
+         }
+       }
+@@ -687,7 +723,8 @@
+       if (!alive()) return;
+       final allowFallback = enabled != false && !isLocalMediaId(track.id);
+       debugPrint('[FallbackPlay] REQUEST title="${track.title}" '
+-          'id=${track.id} enabled=$allowFallback autoPlay=$doPlay');
++          'id=${track.id} enabled=$allowFallback autoPlay=$doPlay',
++      );
+       _errorHandler.registerAttempt(track.id);
+       final canUsePreloaded = engine.isPreloaded &&
+           _preloadedTrackId == track.id && session.failedIds.isEmpty;
+@@ -707,7 +744,8 @@
+             session.searched = true;
+             final matches = await _smartTrackReplacementService
+                 .searchPlaybackCandidates(track,
+-                    excludeTrackIds: session.failedIds, limit: 3)
++                    excludeTrackIds: session.failedIds, limit: 3,
++                )
+                 .timeout(const Duration(seconds: 20));
+             if (!alive()) return;
+             session.pending.addAll(matches.map((c) => c.track));
+@@ -721,7 +759,8 @@
+         if (!alive()) return;
+         final current = candidate;
+         session.active = current;
+-        debugPrint('[FallbackPlay] TRY id=${current.id} title="${current.title}"');
++        debugPrint('[FallbackPlay] TRY id=${current.id} title="${current.title}"',
++        );
+         _errorHandler.registerAttempt(track.id);
+         var candidateOffline = false;
+         try {
+@@ -747,22 +786,27 @@
+             candidateOffline = resolved.$2.isOffline;
+             isOffline.add(candidateOffline);
+             result = await engine.openDirect(resolved.$2.uri,
+-                httpHeaders: resolved.$2.headers, autoPlay: doPlay);
++                httpHeaders: resolved.$2.headers, autoPlay: doPlay,
++            );
+             if (!alive()) return;
+           }
+           debugPrint('[FallbackPlay] RESULT id=${current.id} '
+-              'result=${result.runtimeType} position=${engine.position}');
++              'result=${result.runtimeType} position=${engine.position}',
++          );
+           if (result is EngineCanceled) return;
+           if (result is EngineFailure) throw result.error;
+           if (initialPosition != null && initialPosition > Duration.zero) {
++            _playlistPlayTracker.seeked();
+             await engine.seek(initialPosition);
+             if (!alive()) return;
+           }
++          _playlistPlayTracker.openSucceeded();
+           // Preserve original identity in queue, playlists and notification.
+           _errorHandler.clearError();
+           isResolving.add(false);
+           if (current.id != track.id) {
+-            SnackbarService.showMessage('Playing another source for ${track.title}.');
++            SnackbarService.showMessage('Playing another source for ${track.title}.',
++            );
+           }
+           _preResolveNextTrack();
+           _checkRelatedSongs();
+@@ -774,7 +818,8 @@
+               _isAutoResolvableError(error) && !candidateOffline;
+           debugPrint('[FallbackPlay] FAILED id=${current.id} '
+               'type=${error.runtimeType} category=${_errorHandler.categorizeError(error)} '
+-              'allowSourceSwitch=$retryableFailure offline=$candidateOffline');
++              'allowSourceSwitch=$retryableFailure offline=$candidateOffline',
++          );
+           if (!retryableFailure) break;
+           session.failedIds.add(current.id);
+           candidate = null;
+@@ -782,15 +827,18 @@
+       }
+       if (!alive()) return;
+       _errorHandler.handleError(_errorHandler.categorizeError(lastError),
+-          lastError.toString(), track, lastError);
++          lastError.toString(), track, lastError,
++      );
+     } catch (error, stack) {
+       if (!alive()) return;
+       // Search timeouts should not permanently consume the one search pass.
+       if (error is TimeoutException) session.searched = false;
+       log('Play failed: ${track.title}: $error',
+-          name: 'BloomeeMusicPlayer', stackTrace: stack);
++          name: 'BloomeeMusicPlayer', stackTrace: stack,
++      );
+       _errorHandler.handleError(_errorHandler.categorizeError(error),
+-          error.toString(), track, error);
++          error.toString(), track, error,
++      );
+     } finally {
+       if (identical(_openingToken, token)) _openingToken = null;
+       if (alive()) isResolving.add(false);
+@@ -833,7 +881,8 @@
+         return;
+       }
+       final ok =
+-          await engine.preloadNext(resolved.uri, httpHeaders: resolved.headers);
++          await engine.preloadNext(resolved.uri, httpHeaders: resolved.headers,
++          );
+       if (!_isDisposed && ok) {
+         _preloadedTrackId = expectedId;
+         _preloadedTrackOffline = resolved.isOffline;
+@@ -847,6 +896,7 @@
+   // ─── Completion / Auto-Next ──────────────────────────────────────────────
+ 
+   void _onTrackCompleted() {
++    _playlistPlayTracker.completed();
+     if (_isDisposed || _teardownStarted || loopMode.value == LoopMode.one || _isAdvancing) return;
+     _isAdvancing = true;
+     Future.microtask(() async {
+@@ -870,7 +920,8 @@
+     _errorHandler.clearError();
+     await _enqueuePlayTrack(track,
+         doPlay: true, initialPosition: engine.position,
+-        preserveSourceSession: true);
++        preserveSourceSession: true,
++    );
+   }
+ 
+   // ─── Related Songs ───────────────────────────────────────────────────────
+@@ -950,14 +1001,16 @@
+     playbackState.add(playbackState.value.copyWith(
+       processingState: AudioProcessingState.idle,
+       playing: false,
+-    ));
++    ),
++    );
+ 
+     final track = _queueManager.currentTrack;
+     if (track != null) {
+       Future.delayed(const Duration(milliseconds: 200), () async {
+         if (!_isDisposed) {
+           await _enqueuePlayTrack(track,
+-              doPlay: false, initialPosition: _savedPositionForRevive);
++              doPlay: false, initialPosition: _savedPositionForRevive,
++          );
+         }
+       });
+     }
+@@ -988,11 +1041,14 @@
+ 
+   @override
+   Future<void> playMediaItem(MediaItem mi,
+-      {bool doPlay = true, Duration? initialPosition}) async {
++      {bool doPlay = true, Duration? initialPosition,
++  }) async {
+     _errorHandler.resetCircuitBreaker();
+     _shouldResumeAfterInterruption = false;
+     await _enqueuePlayTrack(mediaItemToTrack(mi),
+-        doPlay: doPlay, initialPosition: initialPosition);
++        doPlay: doPlay, initialPosition: initialPosition,
++      attributeToPlaylist: false,
++    );
+   }
+ 
+   @override
+@@ -1031,7 +1087,8 @@
+     _isAdvancing = true;
+     try {
+       final advanced =
+-          _queueManager.advanceToPrevious(loopMode: loopMode.value);
++          _queueManager.advanceToPrevious(loopMode: loopMode.value,
++      );
+       if (advanced) {
+         final prev = _queueManager.currentTrack;
+         if (prev != null) await _enqueuePlayTrack(prev, doPlay: true);
+@@ -1064,6 +1121,7 @@
+     int idx = 0,
+     bool doPlay = false,
+     bool shuffling = false,
++    int? sourcePlaylistId,
+   }) async {
+     _errorHandler.resetCircuitBreaker();
+     _shouldResumeAfterInterruption = false;
+@@ -1083,7 +1141,8 @@
+ 
+       if (sanitized.isEmpty) {
+         SnackbarService.showMessage('This section has no playable tracks.',
+-            duration: const Duration(seconds: 2));
++            duration: const Duration(seconds: 2),
++        );
+         return;
+       }
+ 
+@@ -1094,7 +1153,9 @@
+       }
+ 
+       _queueManager.loadTracks(sanitized,
+-          playlistName: playlist.title, idx: newIdx, shuffling: shuffling);
++          playlistName: playlist.title, idx: newIdx, shuffling: shuffling,
++        sourcePlaylistId: sourcePlaylistId,
++      );
+       queueTitle.add(playlist.title);
+ 
+       if (doPlay || shuffling) {
+@@ -1115,16 +1176,20 @@
+ 
+   @override
+   Future<void> addQueueItems(List<MediaItem> items,
+-          {String queueName = 'Queue', bool atLast = false}) async =>
++          {String queueName = 'Queue', bool atLast = false,
++  }) async =>
+       _queueManager.addTracks(items.map(mediaItemToTrack).toList(),
+-          atLast: atLast);
++          atLast: atLast,
++  );
+ 
+   Future<void> addQueueTracks(List<Track> tracks,
+-          {bool atLast = false}) async =>
++          {bool atLast = false,
++  }) async =>
+       _queueManager.addTracks(tracks, atLast: atLast);
+ 
+   Future<void> updateQueueTracks(List<Track> tracks,
+-      {bool doPlay = false, int startIndex = 0}) async {
++      {bool doPlay = false, int startIndex = 0,
++  }) async {
+     _queueManager.updateQueue(tracks, startIndex: startIndex);
+     if (doPlay) {
+       final t = _queueManager.currentTrack;
+@@ -1156,7 +1221,8 @@
+ 
+   @override
+   Future<void> updateQueue(List<MediaItem> newQueue,
+-      {bool doPlay = false}) async {
++      {bool doPlay = false,
++  }) async {
+     _queueManager.updateQueue(newQueue.map(mediaItemToTrack).toList());
+     if (doPlay) {
+       final t = _queueManager.currentTrack;
+@@ -1206,7 +1272,8 @@
+       playbackState.add(playbackState.value.copyWith(
+         processingState: AudioProcessingState.idle,
+         playing: false,
+-      ));
++      ),
++      );
+     } catch (_) {}
+ 
+     // 3. Stop hands-free (Vosk recognizer + microphone FGS) if it was ON.
+@@ -1232,7 +1299,8 @@
+     //     cannot finish it while bound, so the FGS notification would linger.
+     //  3. Killing the process removes FGS + notification + media session
+     //     atomically, on every OEM, with no lifecycle races.
+-    await Future<void>.delayed(const Duration(milliseconds: 400)); // let Isar flush
++    await Future<void>.delayed(const Duration(milliseconds: 400),
++    ); // let Isar flush
+     exit(0);
+   }
+ 
+@@ -1267,6 +1335,7 @@
+     _queueManager.dispose();
+     _relatedSongsManager.dispose();
+     await _recentlyPlayedTracker.dispose();
++    _playlistPlayTracker.dispose();
+ 
+     DiscordService.clearPresence();
+     try {
+--- a/lib/services/db/dao/playlist_dao.dart
++++ b/lib/services/db/dao/playlist_dao.dart
+@@ -1,4 +1,6 @@
+ import 'dart:developer';
++
++import 'package:fukatsongs/services/playlist_sort/playlist_sort_store.dart';
+ 
+ import 'package:fukatsongs/core/models/exported.dart';
+ import 'package:fukatsongs/core/models/media_playlist_model.dart';
+@@ -41,7 +43,8 @@
+         isar.playlistDBs.filter().nameEqualTo(name).findFirstSync();
+     if (existing != null) {
+       log('Playlist "$name" already exists (id: ${existing.id})',
+-          name: 'PlaylistDAO');
++          name: 'PlaylistDAO',
++      );
+       return existing.id;
+     }
+ 
+@@ -107,6 +110,7 @@
+           .playlistIdEqualTo(playlistId)
+           .deleteAll();
+       await isar.playlistDBs.delete(playlistId);
++      await PlaylistSortStore.deleteInTransaction(isar, playlistId);
+     });
+     _trackDAO.purgeOrphanTracks();
+     log('Deleted playlist id=$playlistId', name: 'PlaylistDAO');
+@@ -151,7 +155,8 @@
+       final playlist = await isar.playlistDBs.get(playlistId);
+       if (playlist == null) {
+         log('addTrackToPlaylist: playlist $playlistId not found',
+-            name: 'PlaylistDAO');
++            name: 'PlaylistDAO',
++        );
+         return null;
+       }
+ 
+@@ -164,7 +169,8 @@
+           .findFirst();
+       if (existingEntry != null) {
+         log('Track ${track.id} already in playlist $playlistId',
+-            name: 'PlaylistDAO');
++            name: 'PlaylistDAO',
++        );
+         return null;
+       }
+ 
+@@ -179,10 +185,15 @@
+       final trackObj = await isar.trackDBs.get(trackId);
+       if (trackObj == null) {
+         log('addTrackToPlaylist: track ${track.id} not found after upsert',
+-            name: 'PlaylistDAO');
++            name: 'PlaylistDAO',
++        );
+         return null;
+       }
+ 
++      final sortData = await PlaylistSortStore.readInTransaction(
++        isar,
++        playlistId,
++      );
+       final entry = PlaylistEntryDB(playlistId: playlistId, position: nextPos)
+         ..playlist.value = playlist
+         ..track.value = trackObj;
+@@ -190,6 +201,8 @@
+       final entryId = await isar.playlistEntryDBs.put(entry);
+       await entry.playlist.save();
+       await entry.track.save();
++      sortData.add([track.id], PlaylistSortStore.newBatchToken());
++      await PlaylistSortStore.writeInTransaction(isar, playlistId, sortData);
+ 
+       playlist.updatedAt = DateTime.now();
+       await isar.playlistDBs.put(playlist);
+@@ -199,7 +212,8 @@
+ 
+   /// Convenience: Add track to playlist by name instead of ID.
+   Future<int?> addTrackToPlaylistByName(
+-      String playlistName, Track track) async {
++      String playlistName, Track track,
++  ) async {
+     final playlist = await getPlaylistByName(playlistName);
+     if (playlist == null) {
+       log('Playlist "$playlistName" not found', name: 'PlaylistDAO');
+@@ -211,7 +225,9 @@
+   /// Append multiple tracks in a single transaction.
+   ///
+   /// Accepts domain [Track] models. Deduplicates automatically.
+-  Future<void> addTracksToPlaylist(int playlistId, List<Track> tracks) async {
++  Future<void> addTracksToPlaylist(int playlistId, List<Track> tracks, {
++    String? importBatchToken,
++  }) async {
+     if (tracks.isEmpty) return;
+     final isar = await _db;
+     final trackIds = await _trackDAO.upsertTracks(tracks);
+@@ -235,9 +251,14 @@
+       final existingTrackIds =
+           existingEntries.map((e) => e.track.value?.id).toSet();
+ 
++      final sortData = await PlaylistSortStore.readInTransaction(
++        isar,
++        playlistId,
++      );
++
+       final newEntries = <PlaylistEntryDB>[];
+       for (final trackId in trackIds) {
+-        if (existingTrackIds.contains(trackId)) continue;
++        if (!existingTrackIds.add(trackId)) continue;
+         final trackObj = await isar.trackDBs.get(trackId);
+         if (trackObj == null) continue;
+         final entry =
+@@ -253,6 +274,11 @@
+         await e.playlist.save();
+         await e.track.save();
+       }
++      sortData.add(
++        newEntries.map((e) => e.track.value!.mediaId),
++        importBatchToken ?? PlaylistSortStore.newBatchToken(),
++      );
++      await PlaylistSortStore.writeInTransaction(isar, playlistId, sortData);
+ 
+       playlist.updatedAt = DateTime.now();
+       await isar.playlistDBs.put(playlist);
+@@ -275,24 +301,39 @@
+           .filter()
+           .playlistIdEqualTo(playlistId)
+           .findAll();
+-      if (existingEntries.isNotEmpty) {
+-        await isar.playlistEntryDBs
+-            .deleteAll(existingEntries.map((entry) => entry.id).toList());
+-      }
++      await Future.wait(existingEntries.map((e) => e.track.load()));
++      final originalEntries = {
++        for (final e in existingEntries)
++          if (e.track.value != null) e.track.value!.mediaId: e,
++      };
++      final sortData = await PlaylistSortStore.readInTransaction(
++        isar,
++        playlistId,
++      );
++      final retainedIds = trackIds.toSet();
++      await isar.playlistEntryDBs
++            .deleteAll(existingEntries.where((e) => !retainedIds.contains(e.track.value?.id))
++            .map((e) => e.id).toList(),
++      );
+ 
+       final newEntries = <PlaylistEntryDB>[];
+       for (int index = 0; index < trackIds.length; index++) {
+         final trackObj = await isar.trackDBs.get(trackIds[index]);
+         if (trackObj == null) continue;
+-        final entry = PlaylistEntryDB(
+-          playlistId: playlistId,
+-          position: index,
+-        )
+-          ..playlist.value = playlist
++        final entry =
++            (originalEntries[trackObj.mediaId] ??
++                  PlaylistEntryDB(
++          playlistId: playlistId))
++              ..position = index
++              ..playlist.value = playlist
+           ..track.value = trackObj;
+         newEntries.add(entry);
+       }
+ 
++      final finalIds = newEntries.map((e) => e.track.value!.mediaId).toList();
++      sortData.entries.removeWhere((id, _) => !finalIds.contains(id));
++      sortData.add(finalIds, PlaylistSortStore.newBatchToken());
++      await PlaylistSortStore.writeInTransaction(isar, playlistId, sortData);
+       if (newEntries.isNotEmpty) {
+         await isar.playlistEntryDBs.putAll(newEntries);
+         for (final entry in newEntries) {
+@@ -318,6 +359,11 @@
+     await isar.writeTxn(() async {
+       await isar.playlistEntryDBs.delete(entryId);
+       if (playlistId != null) {
++        final sortData = await PlaylistSortStore.readInTransaction(
++          isar,
++          playlistId,
++        );
++        await PlaylistSortStore.writeInTransaction(isar, playlistId, sortData);
+         final playlist = await isar.playlistDBs.get(playlistId);
+         if (playlist != null) {
+           playlist.updatedAt = DateTime.now();
+@@ -348,6 +394,63 @@
+     if (entry != null) await removeEntry(entry.id);
+   }
+ 
++  /// Snapshot the complete sorted ID list BEFORE paging. Counts changing while
++  /// scrolling cannot cause missing/duplicated rows in the current snapshot.
++  Future<PlaylistOrderSnapshot> getOrderSnapshot(int playlistId) async {
++    final isar = await _db;
++    return isar.writeTxn(() async {
++      if (await isar.playlistDBs.get(playlistId) == null) {
++        throw StateError('Playlist no longer exists');
++      }
++      final data = await PlaylistSortStore.readInTransaction(isar, playlistId);
++      await PlaylistSortStore.writeInTransaction(isar, playlistId, data);
++      final rows = await isar.playlistEntryDBs
++          .filter()
++          .playlistIdEqualTo(playlistId)
++          .findAll();
++      await Future.wait(rows.map((e) => e.track.load()));
++      final ids = {
++        for (final e in rows)
++          if (e.track.value != null) e.track.value!.mediaId: e.track.value!.id,
++      };
++      return PlaylistOrderSnapshot(
++        data.mode,
++        data
++            .sortedIds()
++            .map((id) => ids[id])
++            .whereType<int>()
++            .toList(growable: false),
++      );
++    });
++  }
++
++  Future<List<TrackDB>> getTracksByDbIds(List<int> ids) async {
++    final isar = await _db;
++    return (await isar.trackDBs.getAll(ids)).whereType<TrackDB>().toList();
++  }
++
++  Future<void> setSortMode(int playlistId, PlaylistSortMode mode) async {
++    final isar = await _db;
++    await isar.writeTxn(() async {
++      if (await isar.playlistDBs.get(playlistId) == null) return;
++      final data = await PlaylistSortStore.readInTransaction(isar, playlistId);
++      data.mode = mode;
++      await PlaylistSortStore.writeInTransaction(isar, playlistId, data);
++    });
++  }
++
++  Future<void> recordPlaylistPlay(int playlistId, String mediaId) async {
++    final isar = await _db;
++    await isar.writeTxn(() async {
++      if (await isar.playlistDBs.get(playlistId) == null) return;
++      final data = await PlaylistSortStore.readInTransaction(isar, playlistId);
++      final entry = data.entries[mediaId];
++      if (entry == null) return; // removed membership is never recreated
++      entry.plays++;
++      await PlaylistSortStore.writeInTransaction(isar, playlistId, data);
++    });
++  }
++
+   // ── Ordered track retrieval ────────────────────────────────────────────────
+ 
+   /// Return all tracks of [playlistId] in position order.
+@@ -369,7 +472,8 @@
+         await isar.playlistEntryDBs.deleteAll(brokenEntryIds);
+       });
+       log('Removed ${brokenEntryIds.length} broken playlist entries from playlist $playlistId',
+-          name: 'PlaylistDAO');
++          name: 'PlaylistDAO',
++      );
+     }
+ 
+     return entries.map((e) => e.track.value).whereType<TrackDB>().toList();
+@@ -474,7 +578,8 @@
+     await Future.wait(entries.map((e) async {
+       await e.track.load();
+       await e.playlist.load();
+-    }));
++    }),
++    );
+     return entries;
+   }
+ 
+@@ -485,7 +590,8 @@
+   /// Moving down (old < new): entries in ]old..new] shift up by -1.
+   /// Moving up   (old > new): entries in [new..old[ shift down by +1.
+   Future<void> reorderTrack(
+-      int playlistId, int oldPosition, int newPosition) async {
++      int playlistId, int oldPosition, int newPosition,
++  ) async {
+     if (oldPosition == newPosition) return;
+     final isar = await _db;
+ 
+@@ -498,7 +604,8 @@
+       final movedEntry = entries.firstWhere(
+         (e) => e.position == oldPosition,
+         orElse: () => throw StateError(
+-            'No entry at position $oldPosition in playlist $playlistId'),
++            'No entry at position $oldPosition in playlist $playlistId',
++        ),
+       );
+ 
+       final List<PlaylistEntryDB> toUpdate = [];
+@@ -701,7 +808,8 @@
+ 
+   /// Ensure a named playlist exists; return its id (creating it if needed).
+   Future<int> ensurePlaylist(String name,
+-      {PlaylistTypeDB type = PlaylistTypeDB.userPlaylist}) async {
++      {PlaylistTypeDB type = PlaylistTypeDB.userPlaylist,
++  }) async {
+     final isar = await _db;
+     final existing =
+         isar.playlistDBs.filter().nameEqualTo(name).findFirstSync();
+--- a/lib/services/player/queue_manager.dart
++++ b/lib/services/player/queue_manager.dart
+@@ -25,6 +25,11 @@
+   final BehaviorSubject<bool> shuffleMode = BehaviorSubject.seeded(false);
+   final BehaviorSubject<String> queueTitle = BehaviorSubject.seeded('Queue');
+ 
++  // Origins are bound when a saved playlist creates a queue, never inferred
++  // from the currently open page or from a display title.
++  final Map<String, int> _playlistOrigins = {};
++  int? playlistOriginFor(String mediaId) => _playlistOrigins[mediaId];
++
+   int _currentIndex = 0;
+   int _shuffleIndex = 0;
+   List<int> _shuffleList = [];
+@@ -111,12 +116,14 @@
+       if (_shuffleIndex < _shuffleList.length - 1) {
+         _shuffleIndex++;
+         _currentIndex =
+-            _shuffleList[_shuffleIndex].clamp(0, _queue.value.length - 1);
++            _shuffleList[_shuffleIndex].clamp(0, _queue.value.length - 1,
++        );
+         return true;
+       } else if (loopMode == LoopMode.all) {
+         _shuffleIndex = 0;
+         _currentIndex =
+-            _shuffleList[_shuffleIndex].clamp(0, _queue.value.length - 1);
++            _shuffleList[_shuffleIndex].clamp(0, _queue.value.length - 1,
++        );
+         return true;
+       }
+     }
+@@ -140,12 +147,14 @@
+       if (_shuffleIndex > 0) {
+         _shuffleIndex--;
+         _currentIndex =
+-            _shuffleList[_shuffleIndex].clamp(0, _queue.value.length - 1);
++            _shuffleList[_shuffleIndex].clamp(0, _queue.value.length - 1,
++        );
+         return true;
+       } else if (loopMode == LoopMode.all) {
+         _shuffleIndex = _shuffleList.length - 1;
+         _currentIndex =
+-            _shuffleList[_shuffleIndex].clamp(0, _queue.value.length - 1);
++            _shuffleList[_shuffleIndex].clamp(0, _queue.value.length - 1,
++        );
+         return true;
+       }
+     }
+@@ -156,7 +165,8 @@
+   void jumpTo(int index) {
+     if (index < 0 || index >= _queue.value.length) {
+       log('jumpTo: index $index out of bounds (len: ${_queue.value.length})',
+-          name: 'QueueManager');
++          name: 'QueueManager',
++      );
+       return;
+     }
+     _currentIndex = index;
+@@ -172,6 +182,7 @@
+   void loadTracks(
+     List<Track> tracks, {
+     String playlistName = 'Queue',
++    int? sourcePlaylistId,
+     int idx = 0,
+     bool shuffling = false,
+   }) {
+@@ -192,6 +203,12 @@
+       remappedIdx = pos != -1 ? pos : 0;
+     }
+ 
++    _playlistOrigins.clear();
++    if (sourcePlaylistId != null) {
++      for (final track in deduped) {
++        _playlistOrigins[track.id] = sourcePlaylistId;
++      }
++    }
+     _queue.add(deduped);
+     queueTitle.add(playlistName);
+ 
+@@ -212,7 +229,8 @@
+       _shuffleList = [];
+       _shuffleIndex = 0;
+       _currentIndex =
+-          remappedIdx.clamp(0, deduped.isEmpty ? 0 : deduped.length - 1);
++          remappedIdx.clamp(0, deduped.isEmpty ? 0 : deduped.length - 1,
++      );
+     }
+   }
+ 
+@@ -320,6 +338,7 @@
+   void removeTrackAt(int index) {
+     if (index >= _queue.value.length) return;
+ 
++    _playlistOrigins.remove(_queue.value[index].id);
+     final newQueue = List<Track>.from(_queue.value)..removeAt(index);
+     _queue.add(newQueue);
+ 
+@@ -333,7 +352,8 @@
+         } else if (posInShuffle == _shuffleIndex &&
+             _shuffleIndex >= _shuffleList.length) {
+           _shuffleIndex =
+-              (_shuffleList.length - 1).clamp(0, _shuffleList.length);
++              (_shuffleList.length - 1).clamp(0, _shuffleList.length,
++          );
+         }
+       }
+       for (int i = 0; i < _shuffleList.length; i++) {
+@@ -392,6 +412,7 @@
+   /// track so playback does not stop abruptly.
+   void clearQueue() {
+     final current = currentTrack;
++    _playlistOrigins.removeWhere((id, _) => id != current?.id);
+     if (current == null) {
+       _queue.add([]);
+       _currentIndex = 0;
+@@ -405,12 +426,14 @@
+ 
+   /// Replace the entire queue with new tracks.
+   void updateQueue(List<Track> tracks, {int startIndex = 0}) {
++    _playlistOrigins.clear();
+     final seenIds = <String>{};
+     final deduped =
+         tracks.where((t) => seenIds.add(t.id)).toList(growable: false);
+     _queue.add(deduped);
+     _currentIndex =
+-        startIndex.clamp(0, deduped.isEmpty ? 0 : deduped.length - 1);
++        startIndex.clamp(0, deduped.isEmpty ? 0 : deduped.length - 1,
++    );
+     if (shuffleMode.value && deduped.isNotEmpty) {
+       _shuffleList = generateRandomIndices(deduped.length);
+       _shuffleIndex = 0;
+@@ -471,9 +494,11 @@
+         'trackIds': tracks.map((t) => t.id).toList(),
+         'currentIndex': _currentIndex,
+         'queueTitle': queueTitle.value,
++        'playlistOrigins': _playlistOrigins,
+       };
+       await dao.putSettingStr(
+-          SettingKeys.lastQueueState, jsonEncode(queueData));
++          SettingKeys.lastQueueState, jsonEncode(queueData),
++      );
+     } catch (e) {
+       log('Failed to persist queue: $e', name: 'QueueManager');
+     }
+@@ -513,6 +538,17 @@
+           0;
+       _isRestoring = true;
+       loadTracks(tracks, idx: idx, playlistName: data['queueTitle'] ?? 'Queue');
++      final origins = data['playlistOrigins'];
++      if (origins is Map) {
++        final currentIds = tracks.map((t) => t.id).toSet();
++        for (final entry in origins.entries) {
++          if (entry.key is String &&
++              entry.value is int &&
++              currentIds.contains(entry.key)) {
++            _playlistOrigins[entry.key as String] = entry.value as int;
++          }
++        }
++      }
+       _isRestoring = false;
+       return true;
+     } catch (e) {
+--- a/lib/services/playlist_save_service.dart
++++ b/lib/services/playlist_save_service.dart
+@@ -1,4 +1,6 @@
+ import 'dart:convert';
++
++import 'package:fukatsongs/services/playlist_sort/playlist_sort_store.dart';
+ import 'dart:io';
+ import 'package:path_provider/path_provider.dart';
+ import 'package:fukatsongs/services/db/dao/playlist_dao.dart';
+@@ -21,6 +23,7 @@
+     String playlistName,
+     List<ImportTrackItem> tracks, {
+     int batchSize = 200,
++    String? importBatchToken,
+     ProgressCallback? onProgress,
+   }) async {
+     final totalToSave = tracks.length;
+@@ -30,7 +33,10 @@
+     final tempDir = await getTemporaryDirectory();
+     final safeName = playlistName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
+     final progressFile =
+-        File('${tempDir.path}/import_progress_${safeName}.json');
++        File('${tempDir.path}/import_progress_${safeName}.json',
++    );
++
++    var batchToken = importBatchToken ?? PlaylistSortStore.newBatchToken();
+ 
+     int resumeIndex = 0;
+     if (await progressFile.exists()) {
+@@ -38,8 +44,17 @@
+         final content = await progressFile.readAsString();
+         final map = jsonDecode(content) as Map<String, dynamic>;
+         if (map['nextIndex'] is int) resumeIndex = map['nextIndex'] as int;
++        if (importBatchToken == null && map['sortBatchToken'] is String) {
++          batchToken = map['sortBatchToken'] as String;
++        }
+       } catch (_) {}
+     }
++
++    // Persist token BEFORE the first write, so retry/resume keeps one batch.
++    await progressFile.writeAsString(
++      jsonEncode({'nextIndex': resumeIndex, 'sortBatchToken': batchToken}),
++      flush: true,
++    );
+ 
+     while (resumeIndex < tracks.length) {
+       final end = (resumeIndex + batchSize).clamp(0, tracks.length);
+@@ -50,7 +65,9 @@
+           batch.map((it) => _toTrack(it)).toList(growable: false);
+ 
+       final before = await playlistDao.getPlaylistTrackCount(playlistId);
+-      await playlistDao.addTracksToPlaylist(playlistId, domainTracks);
++      await playlistDao.addTracksToPlaylist(playlistId, domainTracks,
++        importBatchToken: batchToken,
++      );
+       final after = await playlistDao.getPlaylistTrackCount(playlistId);
+       final added = (after - before).clamp(0, domainTracks.length);
+ 
+@@ -61,7 +78,8 @@
+ 
+       try {
+         await progressFile
+-            .writeAsString(jsonEncode({'nextIndex': resumeIndex}));
++            .writeAsString(jsonEncode({'nextIndex': resumeIndex, 'sortBatchToken': batchToken}),
++        );
+       } catch (e) {
+         log('Failed to persist progress file: $e', name: 'PlaylistSaveService');
+       }
+@@ -92,7 +110,8 @@
+     final artists = it.artists.map((a) {
+       final aid = md5.convert(utf8.encode(a)).toString();
+       return ArtistSummary(
+-          id: aid, name: a, thumbnail: null, subtitle: null, url: null);
++          id: aid, name: a, thumbnail: null, subtitle: null, url: null,
++          );
+     }).toList(growable: false);
+ 
+     final artwork = Artwork(
+@@ -110,7 +129,8 @@
+             thumbnail: artwork,
+             subtitle: null,
+             year: null,
+-            url: null)
++            url: null,
++          )
+         : null;
+ 
+     return Track(
+@@ -133,6 +153,7 @@
+     String playlistName,
+     List<Track> tracks, {
+     int batchSize = 200,
++    String? importBatchToken,
+     ProgressCallback? onProgress,
+   }) async {
+     final totalToSave = tracks.length;
+@@ -142,7 +163,10 @@
+     final tempDir = await getTemporaryDirectory();
+     final safeName = playlistName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
+     final progressFile =
+-        File('${tempDir.path}/import_progress_${safeName}.json');
++        File('${tempDir.path}/import_progress_${safeName}.json',
++    );
++
++    var batchToken = importBatchToken ?? PlaylistSortStore.newBatchToken();
+ 
+     int resumeIndex = 0;
+     if (await progressFile.exists()) {
+@@ -150,15 +174,26 @@
+         final content = await progressFile.readAsString();
+         final map = jsonDecode(content) as Map<String, dynamic>;
+         if (map['nextIndex'] is int) resumeIndex = map['nextIndex'] as int;
++        if (importBatchToken == null && map['sortBatchToken'] is String) {
++          batchToken = map['sortBatchToken'] as String;
++        }
+       } catch (_) {}
+     }
++
++    // Persist token BEFORE the first write, so retry/resume keeps one batch.
++    await progressFile.writeAsString(
++      jsonEncode({'nextIndex': resumeIndex, 'sortBatchToken': batchToken}),
++      flush: true,
++    );
+ 
+     while (resumeIndex < tracks.length) {
+       final end = (resumeIndex + batchSize).clamp(0, tracks.length);
+       final batch = tracks.sublist(resumeIndex, end);
+ 
+       final before = await playlistDao.getPlaylistTrackCount(playlistId);
+-      await playlistDao.addTracksToPlaylist(playlistId, batch);
++      await playlistDao.addTracksToPlaylist(playlistId, batch,
++        importBatchToken: batchToken,
++      );
+       final after = await playlistDao.getPlaylistTrackCount(playlistId);
+       final added = (after - before).clamp(0, batch.length);
+ 
+@@ -169,7 +204,8 @@
+ 
+       try {
+         await progressFile
+-            .writeAsString(jsonEncode({'nextIndex': resumeIndex}));
++            .writeAsString(jsonEncode({'nextIndex': resumeIndex, 'sortBatchToken': batchToken}),
++        );
+       } catch (e) {
+         log('Failed to persist progress file: $e', name: 'PlaylistSaveService');
+       }
+--- /dev/null
++++ b/lib/services/playlist_sort/play_accumulator.dart
+@@ -0,0 +1,72 @@
++import 'dart:math' as math;
++
++/// Pure accounting, independent of UI/global history. Uses wall-clock time
++/// confirmed by forward playback progress; position jumps do not add time.
++class PlayAccumulator {
++  static const thresholdMs = 60000;
++  double listenedMs = 0;
++  bool counted = false;
++  bool hadSeek = false;
++  int? _lastNow;
++  int? _lastPosition;
++
++  void gap() {
++    _lastNow = null;
++    _lastPosition = null;
++  }
++
++  void seeked() {
++    hadSeek = true;
++    gap();
++  }
++
++  bool sample({
++    required int nowMs,
++    required int positionMs,
++    required bool playing,
++    double speed = 1,
++  }) {
++    if (!playing || speed <= 0 || !speed.isFinite) {
++      gap();
++      return false;
++    }
++    final previousTime = _lastNow;
++    final previousPosition = _lastPosition;
++    if (previousTime == null || previousPosition == null) {
++      _lastNow = nowMs;
++      _lastPosition = positionMs;
++      return false;
++    }
++    final wall = nowMs - previousTime;
++    final progress = positionMs - previousPosition;
++    if (progress == 0 && wall <= 2000) return false;
++    _lastNow = nowMs;
++    _lastPosition = positionMs;
++    if (wall <= 0 ||
++        wall > 2000 ||
++        progress <= 0 ||
++        progress > wall * speed + 1000)
++      return false;
++    listenedMs += math.min(wall.toDouble(), progress / speed);
++    if (!counted && listenedMs >= thresholdMs) {
++      counted = true;
++      return true;
++    }
++    return false;
++  }
++
++  bool completeShort({required int durationMs, double speed = 1}) {
++    if (counted ||
++        hadSeek ||
++        durationMs <= 0 ||
++        durationMs >= thresholdMs ||
++        speed <= 0 ||
++        !speed.isFinite)
++      return false;
++    // Natural completion must be supported by listening evidence, not a seek.
++    final minimum = math.max(1.0, durationMs / speed - 1500);
++    if (listenedMs < minimum) return false;
++    counted = true;
++    return true;
++  }
++}
+--- /dev/null
++++ b/lib/services/playlist_sort/playlist_play_tracker.dart
+@@ -0,0 +1,128 @@
++import 'dart:async';
++import 'dart:developer';
++
++import 'package:fukatsongs/services/player/player_engine.dart';
++import 'package:fukatsongs/services/db/dao/playlist_dao.dart';
++import 'package:fukatsongs/services/db/dao/track_dao.dart';
++import 'package:fukatsongs/services/db/db_provider.dart';
++
++import 'play_accumulator.dart';
++
++/// Separate from RecentlyPlayedTracker. Never changes global history thresholds.
++class PlaylistPlayTracker {
++  PlaylistPlayTracker(this.engine, {required this.isLoopOne}) {
++    _timer = Timer.periodic(
++      const Duration(milliseconds: 250),
++      (_) => _sample(),
++    );
++  }
++  final PlayerEngine engine;
++  final bool Function() isLoopOne;
++  final _clock = Stopwatch()..start();
++  late final Timer _timer;
++  PlayAccumulator _counter = PlayAccumulator();
++  int? _playlistId;
++  String? _mediaId;
++  bool _opened = false;
++  int? _lastLoopPosition;
++  int _durationMs = 0;
++  double _lastSpeed = 1;
++
++  void begin(int? playlistId, String mediaId, {bool preserveAttempt = false}) {
++    if (!preserveAttempt || _playlistId != playlistId || _mediaId != mediaId) {
++      _counter = PlayAccumulator();
++      _durationMs = 0;
++    }
++    _playlistId = playlistId;
++    _mediaId = mediaId;
++    _opened = false;
++    _counter.gap();
++    _lastLoopPosition = null;
++  }
++
++  void openSucceeded() {
++    _opened = true;
++    _counter.gap();
++  }
++
++  void seeked() {
++    _counter.seeked();
++    _lastLoopPosition = null;
++  }
++
++  void end() {
++    _opened = false;
++    _counter.gap();
++    _lastLoopPosition = null;
++  }
++
++  void _sample() {
++    if (!_opened || _playlistId == null || _mediaId == null) {
++      _counter.gap();
++      return;
++    }
++    final position = engine.position.inMilliseconds;
++    final duration = engine.duration.inMilliseconds;
++    if (duration > 0) _durationMs = duration;
++    _lastSpeed = engine.speed;
++    final progressing = engine.playing && engine.state == EngineState.ready;
++    final previous = _lastLoopPosition;
++    // Repeat-one is performed internally by the engine, without completionStream.
++    // Explicit seeks clear this evidence through seeked().
++    if (progressing &&
++        isLoopOne() &&
++        previous != null &&
++        _durationMs > 2000 &&
++        previous >= _durationMs - 1500 &&
++        position < 1500 &&
++        previous - position > 1000) {
++      if (_counter.completeShort(durationMs: _durationMs, speed: _lastSpeed))
++        _record();
++      _counter = PlayAccumulator();
++    }
++    _lastLoopPosition = progressing ? position : null;
++    if (_counter.sample(
++      nowMs: _clock.elapsedMilliseconds,
++      positionMs: position,
++      playing: progressing,
++      speed: _lastSpeed,
++    ))
++      _record();
++  }
++
++  void completed() {
++    if (!_opened) return;
++    if (_counter.completeShort(durationMs: _durationMs, speed: _lastSpeed))
++      _record();
++    end();
++  }
++
++  void _record() {
++    // Capture origin before awaiting: next-track/UI changes cannot redirect count.
++    final playlistId = _playlistId;
++    final mediaId = _mediaId;
++    if (playlistId == null || mediaId == null) return;
++    unawaited(_persist(playlistId, mediaId));
++  }
++
++  Future<void> _persist(int playlistId, String mediaId) async {
++    try {
++      await PlaylistDAO(
++        DBProvider.db,
++        TrackDAO(DBProvider.db),
++      ).recordPlaylistPlay(playlistId, mediaId);
++    } catch (error, stack) {
++      log(
++        'Could not record playlist play: $error',
++        name: 'PlaylistPlayTracker',
++        stackTrace: stack,
++      );
++    }
++  }
++
++  void dispose() {
++    _timer.cancel();
++    _clock.stop();
++    end();
++  }
++}
+--- /dev/null
++++ b/lib/services/playlist_sort/playlist_sort_data.dart
+@@ -0,0 +1,106 @@
++import 'dart:convert';
++
++enum PlaylistSortMode { recentlyAdded, oldestAdded, mostPlayed }
++
++extension PlaylistSortLabel on PlaylistSortMode {
++  String get label => switch (this) {
++    PlaylistSortMode.recentlyAdded => 'Recently added',
++    PlaylistSortMode.oldestAdded => 'Oldest added',
++    PlaylistSortMode.mostPlayed => 'Most played',
++  };
++}
++
++/// Metadata is independent of editable playlist positions and provider streams.
++class PlaylistSortEntry {
++  final int batch;
++  final int originalOrder;
++  int plays;
++  PlaylistSortEntry(this.batch, this.originalOrder, [this.plays = 0]);
++  Map<String, Object> toJson() => {
++    'batch': batch,
++    'order': originalOrder,
++    'plays': plays,
++  };
++}
++
++class PlaylistSortData {
++  PlaylistSortMode mode = PlaylistSortMode.oldestAdded;
++  int nextBatch = 1;
++  int nextOrder = 0;
++  final Map<String, int> batches = {};
++  final Map<String, PlaylistSortEntry> entries = {};
++
++  PlaylistSortData();
++
++  factory PlaylistSortData.decode(String? value) {
++    final result = PlaylistSortData();
++    if (value == null) return result;
++    final map = jsonDecode(value) as Map<String, dynamic>;
++    if (map['v'] != 1)
++      throw const FormatException('Unknown playlist sort metadata version');
++    result.mode = PlaylistSortMode.values.firstWhere(
++      (m) => m.name == map['mode'],
++      orElse: () => PlaylistSortMode.oldestAdded,
++    );
++    result.nextBatch = map['nextBatch'] as int;
++    result.nextOrder = map['nextOrder'] as int;
++    for (final item in (map['batches'] as Map<String, dynamic>).entries) {
++      result.batches[item.key] = item.value as int;
++    }
++    for (final item in (map['entries'] as Map<String, dynamic>).entries) {
++      final row = item.value as Map<String, dynamic>;
++      result.entries[item.key] = PlaylistSortEntry(
++        row['batch'] as int,
++        row['order'] as int,
++        row['plays'] as int,
++      );
++    }
++    return result;
++  }
++
++  /// First access preserves ALL old entries as one legacy batch. Later missing
++  /// rows are also treated conservatively; no import history is invented.
++  void reconcile(List<String> currentIds) {
++    final current = currentIds.toSet();
++    entries.removeWhere((id, _) => !current.contains(id));
++    for (final id in currentIds) {
++      entries.putIfAbsent(id, () => PlaylistSortEntry(0, nextOrder++));
++    }
++  }
++
++  /// Each single add gets its own token; all chunks of an import share a token.
++  void add(Iterable<String> ids, String batchToken) {
++    final fresh = ids.where((id) => !entries.containsKey(id)).toList();
++    if (fresh.isEmpty) return;
++    final batch = batches.putIfAbsent(batchToken, () => nextBatch++);
++    for (final id in fresh) {
++      entries.putIfAbsent(id, () => PlaylistSortEntry(batch, nextOrder++));
++    }
++  }
++
++  List<String> sortedIds() {
++    final ids = entries.keys.toList();
++    ids.sort((a, b) {
++      final left = entries[a]!;
++      final right = entries[b]!;
++      final primary = switch (mode) {
++        PlaylistSortMode.recentlyAdded => right.batch.compareTo(left.batch),
++        PlaylistSortMode.oldestAdded => left.batch.compareTo(right.batch),
++        PlaylistSortMode.mostPlayed => right.plays.compareTo(left.plays),
++      };
++      if (primary != 0) return primary;
++      final stable = left.originalOrder.compareTo(right.originalOrder);
++      return stable != 0 ? stable : a.compareTo(b);
++    });
++    return ids;
++  }
++
++  String encode() => jsonEncode({
++    'v': 1,
++    'mode': mode.name,
++    'nextBatch': nextBatch,
++    'nextOrder': nextOrder,
++    'batches': batches,
++    'entries': entries.map((id, row) => MapEntry(id, row.toJson())),
++  });
++}
+--- /dev/null
++++ b/lib/services/playlist_sort/playlist_sort_store.dart
+@@ -0,0 +1,59 @@
++import 'dart:math';
++
++import 'package:isar_community/isar.dart';
++import 'package:fukatsongs/services/db/global_db.dart';
++
++import 'playlist_sort_data.dart';
++export 'playlist_sort_data.dart';
++
++/// Reuses the existing versioned string-settings collection. No destructive
++/// migration or generated-schema edits. Every read/modify/write is inside the
++/// SAME Isar transaction as its playlist mutation.
++class PlaylistSortStore {
++  static final _random = Random.secure();
++  static String newBatchToken() =>
++      '${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 32)}';
++  static String key(int id) => 'playlist_sort_v1:$id';
++
++  /// Caller MUST hold a write transaction. Reconciles before adding new rows.
++  static Future<PlaylistSortData> readInTransaction(Isar isar, int id) async {
++    final setting = await isar.appSettingsStrDBs
++        .filter()
++        .settingNameEqualTo(key(id))
++        .findFirst();
++    final data = PlaylistSortData.decode(setting?.settingValue);
++    final entries = await isar.playlistEntryDBs
++        .filter()
++        .playlistIdEqualTo(id)
++        .sortByPosition()
++        .findAll();
++    await Future.wait(entries.map((e) => e.track.load()));
++    data.reconcile(
++      entries.map((e) => e.track.value?.mediaId).whereType<String>().toList(),
++    );
++    return data;
++  }
++
++  static Future<void> writeInTransaction(
++    Isar isar,
++    int id,
++    PlaylistSortData data,
++  ) async {
++    await isar.appSettingsStrDBs.put(
++      AppSettingsStrDB(settingName: key(id), settingValue: data.encode()),
++    );
++  }
++
++  static Future<void> deleteInTransaction(Isar isar, int id) async {
++    await isar.appSettingsStrDBs
++        .filter()
++        .settingNameEqualTo(key(id))
++        .deleteAll();
++  }
++}
++
++class PlaylistOrderSnapshot {
++  final PlaylistSortMode mode;
++  final List<int> trackDbIds;
++  const PlaylistOrderSnapshot(this.mode, this.trackDbIds);
++}
+--- /dev/null
++++ b/tool/playlist_sort_checks.dart
+@@ -0,0 +1,120 @@
++// No packages needed: dart run tool/playlist_sort_checks.dart
++import '../lib/services/playlist_sort/playlist_sort_data.dart';
++import '../lib/services/playlist_sort/play_accumulator.dart';
++
++void check(bool value, String name) {
++  if (!value) throw StateError('FAIL: $name');
++  print('PASS: $name');
++}
++
++void main() {
++  var data = PlaylistSortData()..reconcile(['legacyB', 'legacyA']);
++  data.add(['c', 'd', 'c'], 'import1');
++  data = PlaylistSortData.decode(data.encode());
++  data.add(['e'], 'import1');
++  data.add(['f'], 'import2');
++  data.mode = PlaylistSortMode.recentlyAdded;
++  check(
++    data.sortedIds().join(',') == 'f,c,d,e,legacyB,legacyA',
++    'recent batches/chunks/resume/duplicate/legacy order',
++  );
++  data.mode = PlaylistSortMode.oldestAdded;
++  check(
++    data.sortedIds().join(',') == 'legacyB,legacyA,c,d,e,f',
++    'oldest batches keep internal order',
++  );
++  data.entries['e']!.plays = 2;
++  data.entries['c']!.plays = 1;
++  data.mode = PlaylistSortMode.mostPlayed;
++  check(
++    data.sortedIds().join(',') == 'e,c,legacyB,legacyA,d,f',
++    'playlist counts and deterministic ties',
++  );
++  data.reconcile(['f', 'e', 'd', 'c', 'legacyA', 'legacyB']);
++  check(
++    data.sortedIds().join(',') == 'e,c,legacyB,legacyA,d,f',
++    'reorder preserves original tie order/counts',
++  );
++  data = PlaylistSortData.decode(data.encode());
++  check(
++    data.mode == PlaylistSortMode.mostPlayed && data.entries['e']!.plays == 2,
++    'persistence',
++  );
++  data.reconcile(['c', 'd']);
++  data.add(['e'], 'newMembership');
++  check(
++    data.entries['e']!.plays == 0,
++    'removed membership does not retain old count',
++  );
++  final large = PlaylistSortData()
++    ..add(List.generate(252, (i) => '$i'), 'batch');
++  large.add(['new'], 'later');
++  large.mode = PlaylistSortMode.recentlyAdded;
++  final snapshot = large.sortedIds();
++  check(
++    snapshot.take(40).first == 'new' &&
++        snapshot[40] == '39' &&
++        snapshot.toSet().length == 253,
++    'full sort before 40-row pagination',
++  );
++
++  PlayAccumulator normal() {
++    final a = PlayAccumulator();
++    for (int i = 0; i <= 59000; i += 250) {
++      a.sample(nowMs: i, positionMs: i, playing: true);
++    }
++    return a;
++  }
++
++  final a = normal();
++  check(!a.counted, '59 seconds never counts');
++  bool counted = false;
++  for (int i = 59250; i <= 60000; i += 250) {
++    counted = a.sample(nowMs: i, positionMs: i, playing: true) || counted;
++  }
++  check(counted && a.counted, '60 actual seconds counts');
++  check(
++    !a.sample(nowMs: 60250, positionMs: 60250, playing: true),
++    'once per attempt',
++  );
++  final paused = normal();
++  paused.sample(nowMs: 59250, positionMs: 59000, playing: false);
++  paused.sample(nowMs: 120000, positionMs: 59000, playing: true);
++  check(
++    !paused.counted && paused.listenedMs == 59000,
++    'pause/background wall gap adds nothing',
++  );
++  paused.seeked();
++  paused.sample(nowMs: 120250, positionMs: 200000, playing: true);
++  check(!paused.counted, 'seek jump adds nothing');
++  final short = PlayAccumulator();
++  for (int i = 0; i <= 29500; i += 250) {
++    short.sample(nowMs: i, positionMs: i, playing: true);
++  }
++  check(short.completeShort(durationMs: 30000), 'natural short completion');
++  check(!short.completeShort(durationMs: 30000), 'short completion only once');
++  final seek = PlayAccumulator()..seeked();
++  check(
++    !seek.completeShort(durationMs: 30000),
++    'seek-to-end cannot fake completion',
++  );
++  final failed = PlayAccumulator();
++  check(
++    !failed.completeShort(durationMs: 30000),
++    'failure/no listening cannot count',
++  );
++  final speed = PlayAccumulator();
++  for (int i = 0; i <= 30000; i += 250) {
++    speed.sample(nowMs: i, positionMs: i * 2, playing: true, speed: 2);
++  }
++  check(
++    !speed.counted && speed.listenedMs == 30000,
++    '2x speed uses actual wall listening',
++  );
++  final retry = normal()..gap();
++  retry.sample(nowMs: 100000, positionMs: 59000, playing: true);
++  check(
++    retry.listenedMs == 59000 && !retry.counted,
++    'retry gap preserves listening without adding downtime',
++  );
++}

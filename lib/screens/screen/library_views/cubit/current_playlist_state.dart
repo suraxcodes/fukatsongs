@@ -6,10 +6,10 @@ enum CurrentPlaylistLoadStatus {
   loading,
   partial,
   success,
-  error,
-}
+  error }
 
 class CurrentPlaylistState extends Equatable {
+  final PlaylistSortMode sortMode;
   final bool isFetched;
   final Playlist playlist;
   final CurrentPlaylistLoadStatus status;
@@ -20,6 +20,7 @@ class CurrentPlaylistState extends Equatable {
 
   const CurrentPlaylistState({
     required this.isFetched,
+    this.sortMode = PlaylistSortMode.oldestAdded,
     required this.playlist,
     this.status = CurrentPlaylistLoadStatus.initial,
     this.totalTracks = 0,
@@ -30,6 +31,7 @@ class CurrentPlaylistState extends Equatable {
 
   CurrentPlaylistState copyWith({
     bool? isFetched,
+    PlaylistSortMode? sortMode,
     Playlist? playlist,
     CurrentPlaylistLoadStatus? status,
     int? totalTracks,
@@ -39,6 +41,7 @@ class CurrentPlaylistState extends Equatable {
   }) {
     return CurrentPlaylistState(
       isFetched: isFetched ?? this.isFetched,
+      sortMode: sortMode ?? this.sortMode,
       playlist: playlist ?? this.playlist,
       status: status ?? this.status,
       totalTracks: totalTracks ?? this.totalTracks,
@@ -51,6 +54,7 @@ class CurrentPlaylistState extends Equatable {
   @override
   List<Object?> get props => [
         isFetched,
+    sortMode,
         playlist,
         playlist.title,
         status,

@@ -1,8 +1,11 @@
 // ignore_for_file: public_member_api_docs, sort_constructors_first
+import 'dart:async';
+
 import 'package:fukatsongs/core/models/exported.dart';
 import 'package:fukatsongs/core/models/media_playlist_model.dart';
 import 'package:fukatsongs/services/db/dao/playlist_dao.dart';
 import 'package:fukatsongs/services/db/mappers/media_item_mapper.dart';
+import 'package:fukatsongs/services/playlist_sort/playlist_sort_store.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:palette_generator/palette_generator.dart';
@@ -10,9 +13,8 @@ import 'package:fukatsongs/utils/pallete_generator.dart';
 
 part 'current_playlist_state.dart';
 
-/// Cubit for viewing / managing a single playlist.
-///
-/// Uses [PlaylistDAO.loadPlaylist] to get a fully-hydrated [Playlist].
+/// Uses one sorted ID snapshot per open/sort, then hydrates 40 tracks per page.
+/// Playback consumes this SAME snapshot, not a fresh differently ordered query.
 class CurrentPlaylistCubit extends Cubit<CurrentPlaylistState> {
   static const int _pageSize = 40;
 
@@ -20,31 +22,34 @@ class CurrentPlaylistCubit extends Cubit<CurrentPlaylistState> {
   PaletteGenerator? _paletteGenerator;
   final PlaylistDAO _playlistDao;
   int? _playlistId;
-  int _loadedCount = 0;
-  bool _isFetchingPage = false;
+  int _offset = 0;
+  int _loadRevision = 0;
+  List<int> _orderedIds = const [];
+  Future<void>? _pageFuture;
+
+  int? get playlistId => _playlistId;
+  int get loadRevision => _loadRevision;
 
   CurrentPlaylistCubit({
     Playlist? playlist,
-    required PlaylistDAO playlistDao,
-  })  : _playlist = playlist,
+    required PlaylistDAO playlistDao})  : _playlist = playlist,
         _playlistDao = playlistDao,
         super(const CurrentPlaylistInitial());
 
-  /// Load a playlist by [playlistName] and emit the loaded state.
-  ///
-  /// Maintains backward compatibility for existing callers.
-  Future<void> setupPlaylist(String playlistName) async {
-    await openPlaylist(playlistName);
-  }
+  bool _alive(int revision) => !isClosed && revision == _loadRevision;
 
-  /// Open a playlist with staged hydration:
-  /// 1) lightweight header state
-  /// 2) first page of tracks
-  /// 3) load more pages on demand
+  Future<void> setupPlaylist(String playlistName) => openPlaylist(playlistName);
+
   Future<void> openPlaylist(
     String playlistName, {
     bool deferFirstPage = false,
   }) async {
+    final revision = ++_loadRevision;
+    _pageFuture = null;
+    _paletteGenerator = null;
+    _offset = 0;
+    _orderedIds = const [];
+    _playlistId = null;
     emit(
       state.copyWith(
         isFetched: false,
@@ -53,220 +58,230 @@ class CurrentPlaylistCubit extends Cubit<CurrentPlaylistState> {
         totalTracks: 0,
         hasMore: false,
         isLoadingMore: false,
-        errorMessage: null,
       ),
     );
-
-    _paletteGenerator = null;
-    _loadedCount = 0;
-    _playlistId = null;
-
-    final playlistDB = await _playlistDao.getPlaylistByName(playlistName);
-    if (playlistDB == null) {
+    try {
+      final dbPlaylist = await _playlistDao.getPlaylistByName(playlistName);
+    if (!_alive(revision)) return;
+      if (dbPlaylist == null)
+        throw StateError('Playlist "$playlistName" not found');
+      final snapshot = await _playlistDao.getOrderSnapshot(dbPlaylist.id);
+      if (!_alive(revision)) return;
+      _playlistId = dbPlaylist.id;
+      _orderedIds = snapshot.trackDbIds;
+      _playlist = playlistDBToPlaylist(dbPlaylist).copyWith(tracks: const []);
       emit(
         state.copyWith(
-          status: CurrentPlaylistLoadStatus.error,
-          errorMessage: 'Playlist "$playlistName" not found',
+          isFetched: true,
+          playlist: _playlist,
+          sortMode: snapshot.mode,
+          totalTracks: _orderedIds.length,
+          hasMore: _orderedIds.isNotEmpty,
+          isLoadingMore: false,
+          status: _orderedIds.isEmpty
+              ? CurrentPlaylistLoadStatus.success
+              : CurrentPlaylistLoadStatus.partial,
         ),
       );
-      return;
-    }
-
-    _playlistId = playlistDB.id;
-    final totalTracks = await _playlistDao.getPlaylistTrackCount(playlistDB.id);
-    final basePlaylist =
-        playlistDBToPlaylist(playlistDB).copyWith(tracks: const []);
-
-    _playlist = basePlaylist;
-
-    emit(
-      state.copyWith(
-        isFetched: true,
-        status: totalTracks == 0
-            ? CurrentPlaylistLoadStatus.success
-            : CurrentPlaylistLoadStatus.partial,
-        playlist: basePlaylist,
-        totalTracks: totalTracks,
-        hasMore: totalTracks > 0,
-        isLoadingMore: false,
-        errorMessage: null,
-      ),
-    );
-
-    if (totalTracks > 0 && !deferFirstPage) {
-      await loadMoreTracks();
+      if (_orderedIds.isNotEmpty && !deferFirstPage) await loadMoreTracks();
+    } catch (error) {
+      if (_alive(revision))
+        emit(
+        state.copyWith(
+          status: CurrentPlaylistLoadStatus.error,
+          errorMessage: error.toString(),
+            isLoadingMore: false,
+        ),
+      );
     }
   }
 
-  /// Load the next track page if available.
-  Future<void> loadMoreTracks() async {
-    final playlistId = _playlistId;
-    if (playlistId == null || _isFetchingPage || !state.hasMore) return;
+  Future<void> loadMoreTracks() {
+    if (_pageFuture != null) return _pageFuture!;
+    if (_playlistId == null || !state.hasMore || isClosed)
+      return Future.value();
+    final revision = _loadRevision;
+    final completer = Completer<void>();
+    _pageFuture = completer.future;
+    unawaited(
+      _loadPage(revision).then(
+        (_) {
+          if (_alive(revision)) _pageFuture = null;
+          completer.complete();
+        },
+        onError: (Object error, StackTrace stack) {
+          if (_alive(revision)) _pageFuture = null;
+          completer.completeError(error, stack);
+        },
+      ),
+    );
+    return completer.future;
+  }
 
-    _isFetchingPage = true;
+  Future<void> _loadPage(int revision) async {
     emit(state.copyWith(isLoadingMore: true));
 
     try {
-      final page = await _playlistDao.getPlaylistTracksPage(
-        playlistId,
-        offset: _loadedCount,
-        limit: _pageSize,
-      );
-      final pageTracks = page.map(trackDBToTrack).toList(growable: false);
+      final end = (_offset + _pageSize).clamp(0, _orderedIds.length);
+      final ids = _orderedIds.sublist(_offset, end);
+      final rows = await _playlistDao.getTracksByDbIds(ids);
+      if (!_alive(revision)) return;
 
       final merged = <Track>[
         ...state.playlist.tracks,
-        ...pageTracks,
+        ...rows.map(trackDBToTrack),
       ];
-
-      _loadedCount = merged.length;
-      final hasMore = _loadedCount < state.totalTracks;
+      _offset = end;
+      final more = _offset < _orderedIds.length;
       _playlist = state.playlist.copyWith(tracks: merged);
 
       emit(
         state.copyWith(
           playlist: _playlist,
-          hasMore: hasMore,
+          hasMore: more,
+          totalTracks: more ? _orderedIds.length : merged.length,
           isLoadingMore: false,
-          status: hasMore
+          status: more
               ? CurrentPlaylistLoadStatus.partial
               : CurrentPlaylistLoadStatus.success,
-          errorMessage: null,
         ),
       );
 
       if (_paletteGenerator == null && merged.isNotEmpty) {
-        _generatePalette(merged.first.thumbnail.url);
+        unawaited(_generatePalette(merged.first.thumbnail.url, revision));
       }
     } catch (error) {
-      emit(
+      if (_alive(revision))
+        emit(
         state.copyWith(
           isLoadingMore: false,
           status: CurrentPlaylistLoadStatus.error,
           errorMessage: error.toString(),
         ),
       );
-    } finally {
-      _isFetchingPage = false;
     }
   }
 
-  Future<void> _generatePalette(String imageUrl) async {
+  Future<void> _generatePalette(String imageUrl, int revision) async {
     if (imageUrl.isEmpty) return;
-    final palette = await getPalleteFromImage(imageUrl);
+    try {
+      final palette = await getPalleteFromImage(imageUrl);
+      if (!_alive(revision)) return;
     _paletteGenerator = palette;
     emit(state.copyWith());
+  } catch (_) {
+      /* artwork failure must not block sorting/playback */
+    }
   }
 
-  /// Ensure all pages are loaded (needed for play-all / shuffle behavior).
   Future<Playlist> ensureAllTracksLoaded() async {
-    while (state.hasMore) {
+    final revision = _loadRevision;
+    while (_alive(revision) && state.hasMore) {
       await loadMoreTracks();
+      if (state.status == CurrentPlaylistLoadStatus.error) {
+        throw StateError(state.errorMessage ?? 'Could not load playlist');
+      }
     }
+    if (!_alive(revision)) throw StateError('Playlist changed while loading');
     return state.playlist;
   }
 
-  /// Optimistically removes a track from the playlist and persists to DB.
-  ///
-  /// Returns the removed [Track] and its index so the UI can animate removal.
-  Future<(Track, int)?> removeTrack(Track track) async {
-    if (_playlist == null || _playlistId == null) return null;
-    final tracks = List<Track>.from(state.playlist.tracks);
-    final index = tracks.indexWhere((t) => t.id == track.id);
-    if (index == -1) return null;
-
-    final removed = tracks.removeAt(index);
-    _playlist = _playlist!.copyWith(tracks: tracks);
-
-    // Emit immediately for responsive UI
+  Future<void> setSortMode(PlaylistSortMode mode) async {
+    final id = _playlistId;
+    final name = _playlist?.title;
+    if (id == null || name == null) return;
+    final revision = ++_loadRevision;
+    _pageFuture = null;
     emit(
       state.copyWith(
-        playlist: _playlist,
-        totalTracks: (state.totalTracks - 1).clamp(0, 1 << 30),
-        hasMore: _loadedCount < (state.totalTracks - 1),
+        isFetched: false,
+        isLoadingMore: false,
+        status: CurrentPlaylistLoadStatus.loading,
       ),
     );
+    try {
+      await _playlistDao.setSortMode(id, mode);
+      if (_alive(revision)) await openPlaylist(name);
+    } catch (error) {
+      if (_alive(revision))
+        emit(
+          state.copyWith(
+            isFetched: true,
+            status: CurrentPlaylistLoadStatus.error,
+            errorMessage: error.toString(),
+          ),
+        );
+      rethrow;
+    }
+  }
 
-    // Persist to DB
-    await _playlistDao.removeTrackFromPlaylist(_playlistId!, track.id);
-
-    _loadedCount = tracks.length;
-
-    return (removed, index);
+  Future<(Track, int)?> removeTrack(Track track) async {
+    final id = _playlistId;
+    final name = _playlist?.title;
+    final revision = _loadRevision;
+    if (id == null || name == null) return null;
+    final index = state.playlist.tracks.indexWhere((t) => t.id == track.id);
+    if (index < 0) return null;
+    await _playlistDao.removeTrackFromPlaylist(id, track.id);
+    if (_alive(revision)) await openPlaylist(name);
+    return (track, index);
   }
 
   String getTitle() => state.playlist.title;
 
   int getPlaylistLength() => _playlist?.tracks.length ?? 0;
 
-  String? getPlaylistCoverArt() {
-    if (_playlist != null && _playlist!.tracks.isNotEmpty) {
-      return _playlist!.tracks.first.thumbnail.url;
-    }
-    return '';
-  }
-
+  String? getPlaylistCoverArt() => _playlist?.tracks.isNotEmpty == true
+      ? _playlist!.tracks.first.thumbnail.url
+      : '';
   PaletteGenerator? getCurrentPlaylistPallete() => _paletteGenerator;
 
-  /// Persists a fully reordered track list, replacing the old DB order.
-  ///
-  /// This is the canonical save from the edit view: it does a clean
-  /// delete-then-re-insert so gaps from prior deletions never cause
-  /// the position-index mismatch that silently broke the old approach.
   Future<void> updatePlaylist(List<Track> reorderedTracks) async {
-    if (_playlist == null || _playlistId == null) return;
-    final fullyLoaded = await ensureAllTracksLoaded();
-    final existingTracks = fullyLoaded.tracks;
-
-    if (reorderedTracks.length != existingTracks.length) {
-      throw StateError(
-        'Refusing to save partial playlist reorder: expected '
-        '${existingTracks.length} tracks, got ${reorderedTracks.length}.',
-      );
+    final id = _playlistId;
+    final name = _playlist?.title;
+    final revision = _loadRevision;
+    if (id == null || name == null) return;
+    final loaded = await ensureAllTracksLoaded();
+    if (!_alive(revision)) return;
+    final expected = loaded.tracks.map((t) => t.id).toSet();
+    final provided = reorderedTracks.map((t) => t.id).toSet();
+    if (reorderedTracks.length != loaded.tracks.length ||
+        provided.length != expected.length ||
+        !expected.containsAll(provided)) {
+      throw StateError('Refusing partial or mismatched playlist reorder');
     }
-
-    final expectedIds = existingTracks.map((t) => t.id).toSet();
-    final providedIds = reorderedTracks.map((t) => t.id).toSet();
-    if (expectedIds.length != providedIds.length ||
-        !expectedIds.containsAll(providedIds)) {
-      throw StateError(
-        'Refusing to save playlist reorder with mismatched track set.',
-      );
-    }
-
-    // Optimistic in-memory update so callers see the new order immediately.
-    _playlist = _playlist!.copyWith(tracks: List<Track>.from(reorderedTracks));
-    _loadedCount = reorderedTracks.length;
-    emit(state.copyWith(
-      playlist: _playlist,
-      totalTracks: reorderedTracks.length,
-      hasMore: false,
-      status: CurrentPlaylistLoadStatus.success,
-    ));
-    // Persist: full replace keeps positions contiguous and correct.
-    await _playlistDao.setPlaylistTracks(_playlistId!, reorderedTracks);
+    await _playlistDao.setPlaylistTracks(id, reorderedTracks);
+    if (_alive(revision)) await openPlaylist(name);
   }
 
-  /// Reorder tracks. [oldIndex] and [newIndex] are 0-based UI positions.
   Future<void> reorderTrack(int oldIndex, int newIndex) async {
-    if (_playlist == null || _playlistId == null) return;
-    await _playlistDao.reorderTrack(_playlistId!, oldIndex, newIndex);
-    await openPlaylist(_playlist!.title);
+    final loaded = await ensureAllTracksLoaded();
+    final tracks = List<Track>.of(loaded.tracks);
+    if (oldIndex < 0 ||
+        oldIndex >= tracks.length ||
+        newIndex < 0 ||
+        newIndex >= tracks.length)
+      return;
+    final item = tracks.removeAt(oldIndex);
+    tracks.insert(newIndex, item);
+    await updatePlaylist(tracks);
   }
 
-  /// Optimistically replaces [original] with [replacement] in the current
-  /// playlist state without re-querying the DB.  Call this after a smart-
-  /// replace operation when the DB has already been updated elsewhere, so the
-  /// UI reflects the change instantly.
   void replaceTrack(Track original, Track replacement) {
     if (_playlist == null) return;
-    final updated = state.playlist.tracks
+    _playlist = _playlist!.copyWith(
+      tracks: state.playlist.tracks
         .map((t) => t.id == original.id ? replacement : t)
-        .toList(growable: false);
-    _playlist = _playlist!.copyWith(tracks: updated);
+        .toList(),
+    );
     emit(state.copyWith(playlist: _playlist));
   }
 
-  /// Returns the name of the currently loaded playlist, or null if none.
   String? get currentPlaylistName => _playlist?.title;
+
+  @override
+  Future<void> close() {
+    _loadRevision++;
+    return super.close();
+  }
 }

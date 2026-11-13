@@ -1,4 +1,6 @@
 import 'dart:convert';
+
+import 'package:fukatsongs/services/playlist_sort/playlist_sort_store.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:fukatsongs/services/db/dao/playlist_dao.dart';
@@ -21,6 +23,7 @@ class PlaylistSaveService {
     String playlistName,
     List<ImportTrackItem> tracks, {
     int batchSize = 200,
+    String? importBatchToken,
     ProgressCallback? onProgress,
   }) async {
     final totalToSave = tracks.length;
@@ -30,7 +33,10 @@ class PlaylistSaveService {
     final tempDir = await getTemporaryDirectory();
     final safeName = playlistName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
     final progressFile =
-        File('${tempDir.path}/import_progress_${safeName}.json');
+        File('${tempDir.path}/import_progress_${safeName}.json',
+    );
+
+    var batchToken = importBatchToken ?? PlaylistSortStore.newBatchToken();
 
     int resumeIndex = 0;
     if (await progressFile.exists()) {
@@ -38,8 +44,17 @@ class PlaylistSaveService {
         final content = await progressFile.readAsString();
         final map = jsonDecode(content) as Map<String, dynamic>;
         if (map['nextIndex'] is int) resumeIndex = map['nextIndex'] as int;
+        if (importBatchToken == null && map['sortBatchToken'] is String) {
+          batchToken = map['sortBatchToken'] as String;
+        }
       } catch (_) {}
     }
+
+    // Persist token BEFORE the first write, so retry/resume keeps one batch.
+    await progressFile.writeAsString(
+      jsonEncode({'nextIndex': resumeIndex, 'sortBatchToken': batchToken}),
+      flush: true,
+    );
 
     while (resumeIndex < tracks.length) {
       final end = (resumeIndex + batchSize).clamp(0, tracks.length);
@@ -50,7 +65,9 @@ class PlaylistSaveService {
           batch.map((it) => _toTrack(it)).toList(growable: false);
 
       final before = await playlistDao.getPlaylistTrackCount(playlistId);
-      await playlistDao.addTracksToPlaylist(playlistId, domainTracks);
+      await playlistDao.addTracksToPlaylist(playlistId, domainTracks,
+        importBatchToken: batchToken,
+      );
       final after = await playlistDao.getPlaylistTrackCount(playlistId);
       final added = (after - before).clamp(0, domainTracks.length);
 
@@ -61,7 +78,8 @@ class PlaylistSaveService {
 
       try {
         await progressFile
-            .writeAsString(jsonEncode({'nextIndex': resumeIndex}));
+            .writeAsString(jsonEncode({'nextIndex': resumeIndex, 'sortBatchToken': batchToken}),
+        );
       } catch (e) {
         log('Failed to persist progress file: $e', name: 'PlaylistSaveService');
       }
@@ -92,7 +110,8 @@ class PlaylistSaveService {
     final artists = it.artists.map((a) {
       final aid = md5.convert(utf8.encode(a)).toString();
       return ArtistSummary(
-          id: aid, name: a, thumbnail: null, subtitle: null, url: null);
+          id: aid, name: a, thumbnail: null, subtitle: null, url: null,
+          );
     }).toList(growable: false);
 
     final artwork = Artwork(
@@ -110,7 +129,8 @@ class PlaylistSaveService {
             thumbnail: artwork,
             subtitle: null,
             year: null,
-            url: null)
+            url: null,
+          )
         : null;
 
     return Track(
@@ -133,6 +153,7 @@ class PlaylistSaveService {
     String playlistName,
     List<Track> tracks, {
     int batchSize = 200,
+    String? importBatchToken,
     ProgressCallback? onProgress,
   }) async {
     final totalToSave = tracks.length;
@@ -142,7 +163,10 @@ class PlaylistSaveService {
     final tempDir = await getTemporaryDirectory();
     final safeName = playlistName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
     final progressFile =
-        File('${tempDir.path}/import_progress_${safeName}.json');
+        File('${tempDir.path}/import_progress_${safeName}.json',
+    );
+
+    var batchToken = importBatchToken ?? PlaylistSortStore.newBatchToken();
 
     int resumeIndex = 0;
     if (await progressFile.exists()) {
@@ -150,15 +174,26 @@ class PlaylistSaveService {
         final content = await progressFile.readAsString();
         final map = jsonDecode(content) as Map<String, dynamic>;
         if (map['nextIndex'] is int) resumeIndex = map['nextIndex'] as int;
+        if (importBatchToken == null && map['sortBatchToken'] is String) {
+          batchToken = map['sortBatchToken'] as String;
+        }
       } catch (_) {}
     }
+
+    // Persist token BEFORE the first write, so retry/resume keeps one batch.
+    await progressFile.writeAsString(
+      jsonEncode({'nextIndex': resumeIndex, 'sortBatchToken': batchToken}),
+      flush: true,
+    );
 
     while (resumeIndex < tracks.length) {
       final end = (resumeIndex + batchSize).clamp(0, tracks.length);
       final batch = tracks.sublist(resumeIndex, end);
 
       final before = await playlistDao.getPlaylistTrackCount(playlistId);
-      await playlistDao.addTracksToPlaylist(playlistId, batch);
+      await playlistDao.addTracksToPlaylist(playlistId, batch,
+        importBatchToken: batchToken,
+      );
       final after = await playlistDao.getPlaylistTrackCount(playlistId);
       final added = (after - before).clamp(0, batch.length);
 
@@ -169,7 +204,8 @@ class PlaylistSaveService {
 
       try {
         await progressFile
-            .writeAsString(jsonEncode({'nextIndex': resumeIndex}));
+            .writeAsString(jsonEncode({'nextIndex': resumeIndex, 'sortBatchToken': batchToken}),
+        );
       } catch (e) {
         log('Failed to persist progress file: $e', name: 'PlaylistSaveService');
       }

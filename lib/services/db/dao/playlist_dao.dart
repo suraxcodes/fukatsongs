@@ -1,5 +1,7 @@
 import 'dart:developer';
 
+import 'package:fukatsongs/services/playlist_sort/playlist_sort_store.dart';
+
 import 'package:fukatsongs/core/models/exported.dart';
 import 'package:fukatsongs/core/models/media_playlist_model.dart';
 import 'package:fukatsongs/services/db/dao/track_dao.dart';
@@ -41,7 +43,8 @@ class PlaylistDAO {
         isar.playlistDBs.filter().nameEqualTo(name).findFirstSync();
     if (existing != null) {
       log('Playlist "$name" already exists (id: ${existing.id})',
-          name: 'PlaylistDAO');
+          name: 'PlaylistDAO',
+      );
       return existing.id;
     }
 
@@ -107,6 +110,7 @@ class PlaylistDAO {
           .playlistIdEqualTo(playlistId)
           .deleteAll();
       await isar.playlistDBs.delete(playlistId);
+      await PlaylistSortStore.deleteInTransaction(isar, playlistId);
     });
     _trackDAO.purgeOrphanTracks();
     log('Deleted playlist id=$playlistId', name: 'PlaylistDAO');
@@ -151,7 +155,8 @@ class PlaylistDAO {
       final playlist = await isar.playlistDBs.get(playlistId);
       if (playlist == null) {
         log('addTrackToPlaylist: playlist $playlistId not found',
-            name: 'PlaylistDAO');
+            name: 'PlaylistDAO',
+        );
         return null;
       }
 
@@ -164,7 +169,8 @@ class PlaylistDAO {
           .findFirst();
       if (existingEntry != null) {
         log('Track ${track.id} already in playlist $playlistId',
-            name: 'PlaylistDAO');
+            name: 'PlaylistDAO',
+        );
         return null;
       }
 
@@ -179,10 +185,15 @@ class PlaylistDAO {
       final trackObj = await isar.trackDBs.get(trackId);
       if (trackObj == null) {
         log('addTrackToPlaylist: track ${track.id} not found after upsert',
-            name: 'PlaylistDAO');
+            name: 'PlaylistDAO',
+        );
         return null;
       }
 
+      final sortData = await PlaylistSortStore.readInTransaction(
+        isar,
+        playlistId,
+      );
       final entry = PlaylistEntryDB(playlistId: playlistId, position: nextPos)
         ..playlist.value = playlist
         ..track.value = trackObj;
@@ -190,6 +201,8 @@ class PlaylistDAO {
       final entryId = await isar.playlistEntryDBs.put(entry);
       await entry.playlist.save();
       await entry.track.save();
+      sortData.add([track.id], PlaylistSortStore.newBatchToken());
+      await PlaylistSortStore.writeInTransaction(isar, playlistId, sortData);
 
       playlist.updatedAt = DateTime.now();
       await isar.playlistDBs.put(playlist);
@@ -199,7 +212,8 @@ class PlaylistDAO {
 
   /// Convenience: Add track to playlist by name instead of ID.
   Future<int?> addTrackToPlaylistByName(
-      String playlistName, Track track) async {
+      String playlistName, Track track,
+  ) async {
     final playlist = await getPlaylistByName(playlistName);
     if (playlist == null) {
       log('Playlist "$playlistName" not found', name: 'PlaylistDAO');
@@ -211,7 +225,9 @@ class PlaylistDAO {
   /// Append multiple tracks in a single transaction.
   ///
   /// Accepts domain [Track] models. Deduplicates automatically.
-  Future<void> addTracksToPlaylist(int playlistId, List<Track> tracks) async {
+  Future<void> addTracksToPlaylist(int playlistId, List<Track> tracks, {
+    String? importBatchToken,
+  }) async {
     if (tracks.isEmpty) return;
     final isar = await _db;
     final trackIds = await _trackDAO.upsertTracks(tracks);
@@ -235,9 +251,14 @@ class PlaylistDAO {
       final existingTrackIds =
           existingEntries.map((e) => e.track.value?.id).toSet();
 
+      final sortData = await PlaylistSortStore.readInTransaction(
+        isar,
+        playlistId,
+      );
+
       final newEntries = <PlaylistEntryDB>[];
       for (final trackId in trackIds) {
-        if (existingTrackIds.contains(trackId)) continue;
+        if (!existingTrackIds.add(trackId)) continue;
         final trackObj = await isar.trackDBs.get(trackId);
         if (trackObj == null) continue;
         final entry =
@@ -253,6 +274,11 @@ class PlaylistDAO {
         await e.playlist.save();
         await e.track.save();
       }
+      sortData.add(
+        newEntries.map((e) => e.track.value!.mediaId),
+        importBatchToken ?? PlaylistSortStore.newBatchToken(),
+      );
+      await PlaylistSortStore.writeInTransaction(isar, playlistId, sortData);
 
       playlist.updatedAt = DateTime.now();
       await isar.playlistDBs.put(playlist);
@@ -275,24 +301,39 @@ class PlaylistDAO {
           .filter()
           .playlistIdEqualTo(playlistId)
           .findAll();
-      if (existingEntries.isNotEmpty) {
-        await isar.playlistEntryDBs
-            .deleteAll(existingEntries.map((entry) => entry.id).toList());
-      }
+      await Future.wait(existingEntries.map((e) => e.track.load()));
+      final originalEntries = {
+        for (final e in existingEntries)
+          if (e.track.value != null) e.track.value!.mediaId: e,
+      };
+      final sortData = await PlaylistSortStore.readInTransaction(
+        isar,
+        playlistId,
+      );
+      final retainedIds = trackIds.toSet();
+      await isar.playlistEntryDBs
+            .deleteAll(existingEntries.where((e) => !retainedIds.contains(e.track.value?.id))
+            .map((e) => e.id).toList(),
+      );
 
       final newEntries = <PlaylistEntryDB>[];
       for (int index = 0; index < trackIds.length; index++) {
         final trackObj = await isar.trackDBs.get(trackIds[index]);
         if (trackObj == null) continue;
-        final entry = PlaylistEntryDB(
-          playlistId: playlistId,
-          position: index,
-        )
-          ..playlist.value = playlist
+        final entry =
+            (originalEntries[trackObj.mediaId] ??
+                  PlaylistEntryDB(
+          playlistId: playlistId))
+              ..position = index
+              ..playlist.value = playlist
           ..track.value = trackObj;
         newEntries.add(entry);
       }
 
+      final finalIds = newEntries.map((e) => e.track.value!.mediaId).toList();
+      sortData.entries.removeWhere((id, _) => !finalIds.contains(id));
+      sortData.add(finalIds, PlaylistSortStore.newBatchToken());
+      await PlaylistSortStore.writeInTransaction(isar, playlistId, sortData);
       if (newEntries.isNotEmpty) {
         await isar.playlistEntryDBs.putAll(newEntries);
         for (final entry in newEntries) {
@@ -318,6 +359,11 @@ class PlaylistDAO {
     await isar.writeTxn(() async {
       await isar.playlistEntryDBs.delete(entryId);
       if (playlistId != null) {
+        final sortData = await PlaylistSortStore.readInTransaction(
+          isar,
+          playlistId,
+        );
+        await PlaylistSortStore.writeInTransaction(isar, playlistId, sortData);
         final playlist = await isar.playlistDBs.get(playlistId);
         if (playlist != null) {
           playlist.updatedAt = DateTime.now();
@@ -348,6 +394,63 @@ class PlaylistDAO {
     if (entry != null) await removeEntry(entry.id);
   }
 
+  /// Snapshot the complete sorted ID list BEFORE paging. Counts changing while
+  /// scrolling cannot cause missing/duplicated rows in the current snapshot.
+  Future<PlaylistOrderSnapshot> getOrderSnapshot(int playlistId) async {
+    final isar = await _db;
+    return isar.writeTxn(() async {
+      if (await isar.playlistDBs.get(playlistId) == null) {
+        throw StateError('Playlist no longer exists');
+      }
+      final data = await PlaylistSortStore.readInTransaction(isar, playlistId);
+      await PlaylistSortStore.writeInTransaction(isar, playlistId, data);
+      final rows = await isar.playlistEntryDBs
+          .filter()
+          .playlistIdEqualTo(playlistId)
+          .findAll();
+      await Future.wait(rows.map((e) => e.track.load()));
+      final ids = {
+        for (final e in rows)
+          if (e.track.value != null) e.track.value!.mediaId: e.track.value!.id,
+      };
+      return PlaylistOrderSnapshot(
+        data.mode,
+        data
+            .sortedIds()
+            .map((id) => ids[id])
+            .whereType<int>()
+            .toList(growable: false),
+      );
+    });
+  }
+
+  Future<List<TrackDB>> getTracksByDbIds(List<int> ids) async {
+    final isar = await _db;
+    return (await isar.trackDBs.getAll(ids)).whereType<TrackDB>().toList();
+  }
+
+  Future<void> setSortMode(int playlistId, PlaylistSortMode mode) async {
+    final isar = await _db;
+    await isar.writeTxn(() async {
+      if (await isar.playlistDBs.get(playlistId) == null) return;
+      final data = await PlaylistSortStore.readInTransaction(isar, playlistId);
+      data.mode = mode;
+      await PlaylistSortStore.writeInTransaction(isar, playlistId, data);
+    });
+  }
+
+  Future<void> recordPlaylistPlay(int playlistId, String mediaId) async {
+    final isar = await _db;
+    await isar.writeTxn(() async {
+      if (await isar.playlistDBs.get(playlistId) == null) return;
+      final data = await PlaylistSortStore.readInTransaction(isar, playlistId);
+      final entry = data.entries[mediaId];
+      if (entry == null) return; // removed membership is never recreated
+      entry.plays++;
+      await PlaylistSortStore.writeInTransaction(isar, playlistId, data);
+    });
+  }
+
   // ── Ordered track retrieval ────────────────────────────────────────────────
 
   /// Return all tracks of [playlistId] in position order.
@@ -369,7 +472,8 @@ class PlaylistDAO {
         await isar.playlistEntryDBs.deleteAll(brokenEntryIds);
       });
       log('Removed ${brokenEntryIds.length} broken playlist entries from playlist $playlistId',
-          name: 'PlaylistDAO');
+          name: 'PlaylistDAO',
+      );
     }
 
     return entries.map((e) => e.track.value).whereType<TrackDB>().toList();
@@ -474,7 +578,8 @@ class PlaylistDAO {
     await Future.wait(entries.map((e) async {
       await e.track.load();
       await e.playlist.load();
-    }));
+    }),
+    );
     return entries;
   }
 
@@ -485,7 +590,8 @@ class PlaylistDAO {
   /// Moving down (old < new): entries in ]old..new] shift up by -1.
   /// Moving up   (old > new): entries in [new..old[ shift down by +1.
   Future<void> reorderTrack(
-      int playlistId, int oldPosition, int newPosition) async {
+      int playlistId, int oldPosition, int newPosition,
+  ) async {
     if (oldPosition == newPosition) return;
     final isar = await _db;
 
@@ -498,7 +604,8 @@ class PlaylistDAO {
       final movedEntry = entries.firstWhere(
         (e) => e.position == oldPosition,
         orElse: () => throw StateError(
-            'No entry at position $oldPosition in playlist $playlistId'),
+            'No entry at position $oldPosition in playlist $playlistId',
+        ),
       );
 
       final List<PlaylistEntryDB> toUpdate = [];
@@ -701,7 +808,8 @@ class PlaylistDAO {
 
   /// Ensure a named playlist exists; return its id (creating it if needed).
   Future<int> ensurePlaylist(String name,
-      {PlaylistTypeDB type = PlaylistTypeDB.userPlaylist}) async {
+      {PlaylistTypeDB type = PlaylistTypeDB.userPlaylist,
+  }) async {
     final isar = await _db;
     final existing =
         isar.playlistDBs.filter().nameEqualTo(name).findFirstSync();

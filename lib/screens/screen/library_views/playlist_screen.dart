@@ -1,4 +1,6 @@
 import 'dart:ui';
+
+import 'package:fukatsongs/services/playlist_sort/playlist_sort_data.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -95,17 +97,36 @@ class _PlaylistViewState extends State<PlaylistView> {
 
   Future<void> _playFromPlaylist(
       BuildContext context, CurrentPlaylistState state,
-      {int? index, bool shuffle = false}) async {
-    final fullPlaylist =
-        await context.read<CurrentPlaylistCubit>().ensureAllTracksLoaded();
-    if (!mounted || fullPlaylist.tracks.isEmpty) return;
-
-    context.read<BloomeePlayerCubit>().bloomeePlayer.loadPlaylist(
-          Playlist(tracks: fullPlaylist.tracks, title: fullPlaylist.title),
-          idx: index ?? 0,
+      {int? index, bool shuffle = false,
+  }) async {
+    final cubit = context.read<CurrentPlaylistCubit>();
+    final revision = cubit.loadRevision;
+    final sourcePlaylistId = cubit.playlistId;
+    final tappedId = index != null && index < state.playlist.tracks.length
+        ? state.playlist.tracks[index].id
+        : null;
+    try {
+      final fullPlaylist = await cubit.ensureAllTracksLoaded();
+    if (!mounted ||
+          revision != cubit.loadRevision ||
+          sourcePlaylistId != cubit.playlistId ||
+          fullPlaylist.tracks.isEmpty) return;
+      final start = tappedId == null
+          ? 0
+          : fullPlaylist.tracks.indexWhere((t) => t.id == tappedId);
+      if (start < 0) return;
+      await context.read<BloomeePlayerCubit>().bloomeePlayer.loadPlaylist(
+          Playlist(tracks: List<Track>.of(fullPlaylist.tracks), title: fullPlaylist.title,
+        ),
+          idx: start,
           doPlay: true,
           shuffling: shuffle,
-        );
+        sourcePlaylistId: sourcePlaylistId,
+      );
+    } catch (error) {
+      if (mounted)
+        SnackbarService.showMessage('Could not load playlist: $error');
+    }
   }
 
   List<Color> _getOptimizedPalette(BuildContext context) {
@@ -119,11 +140,13 @@ class _PlaylistViewState extends State<PlaylistView> {
     if (bgColor.computeLuminance() / fgColor.computeLuminance() > 0.05) {
       fgColor = HSLColor.fromColor(fgColor)
           .withLightness(
-              (HSLColor.fromColor(fgColor).lightness + 0.1).clamp(0.0, 1.0))
+              (HSLColor.fromColor(fgColor).lightness + 0.1).clamp(0.0, 1.0),
+          )
           .toColor();
       bgColor = HSLColor.fromColor(bgColor)
           .withLightness(
-              (HSLColor.fromColor(bgColor).lightness - 0.1).clamp(0.0, 1.0))
+              (HSLColor.fromColor(bgColor).lightness - 0.1).clamp(0.0, 1.0),
+          )
           .toColor();
     }
     return [fgColor, bgColor];
@@ -147,14 +170,18 @@ class _PlaylistViewState extends State<PlaylistView> {
               state.status == CurrentPlaylistLoadStatus.loading) {
             return const Center(
                 child: CircularProgressIndicator(
-                    color: Default_Theme.accentColor2));
+                    color: Default_Theme.accentColor2,
+              ),
+            );
           }
 
           if (state.status == CurrentPlaylistLoadStatus.error) {
             return Center(
                 child: SignBoardWidget(
                     message: state.errorMessage ?? 'Failed to load playlist',
-                    icon: MingCute.alert_line));
+                    icon: MingCute.alert_line,
+              ),
+            );
           }
 
           final colors = _getOptimizedPalette(context);
@@ -174,10 +201,12 @@ class _PlaylistViewState extends State<PlaylistView> {
                   _buildAmbientBackground(imageUrl, bgColor, isMobile),
                   if (isMobile)
                     _buildMobileLayout(
-                        state, fgColor, bgColor, imageUrl, l10n, constraints)
+                        state, fgColor, bgColor, imageUrl, l10n, constraints,
+                    )
                   else
                     _buildDesktopLayout(
-                        state, fgColor, bgColor, imageUrl, l10n, constraints),
+                        state, fgColor, bgColor, imageUrl, l10n, constraints,
+                    ),
                 ],
               );
             },
@@ -192,6 +221,39 @@ class _PlaylistViewState extends State<PlaylistView> {
       backgroundColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
+      actions: [
+        BlocBuilder<CurrentPlaylistCubit, CurrentPlaylistState>(
+          builder: (context, state) => PopupMenuButton<PlaylistSortMode>(
+            tooltip: 'Sort: ${state.sortMode.label}',
+            enabled:
+                state.isFetched &&
+                state.status != CurrentPlaylistLoadStatus.loading,
+            icon: const Icon(Icons.sort_rounded),
+            initialValue: state.sortMode,
+            itemBuilder: (_) => PlaylistSortMode.values
+                .map(
+                  (mode) => CheckedPopupMenuItem<PlaylistSortMode>(
+                    value: mode,
+                    checked: state.sortMode == mode,
+                    child: Text(mode.label),
+                  ),
+                )
+                .toList(),
+            onSelected: (mode) async {
+              try {
+                await context.read<CurrentPlaylistCubit>().setSortMode(mode);
+                if (mounted && _scrollController.hasClients) {
+                  _scrollController.jumpTo(0);
+                }
+              } catch (error) {
+                if (mounted)
+                  SnackbarService.showMessage('Could not change sort: $error');
+              }
+            },
+          ),
+        ),
+        const SizedBox(width: 12),
+      ],
       leadingWidth: 70,
       leading: Padding(
         padding: const EdgeInsets.only(left: 16.0),
@@ -205,7 +267,8 @@ class _PlaylistViewState extends State<PlaylistView> {
                 border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
               ),
               child: const Icon(Icons.arrow_back_rounded,
-                  color: Colors.white, size: 20),
+                  color: Colors.white, size: 20,
+              ),
             ),
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -215,7 +278,8 @@ class _PlaylistViewState extends State<PlaylistView> {
   }
 
   Widget _buildAmbientBackground(
-      String imageUrl, Color dominantColor, bool isMobile) {
+      String imageUrl, Color dominantColor, bool isMobile,
+  ) {
     return Positioned.fill(
       child: RepaintBoundary(
         child: Stack(
@@ -233,7 +297,7 @@ class _PlaylistViewState extends State<PlaylistView> {
                   gradient: RadialGradient(
                     colors: [
                       dominantColor.withValues(alpha: 0.45),
-                      Colors.transparent
+                      Colors.transparent,
                     ],
                   ),
                 ),
@@ -246,7 +310,8 @@ class _PlaylistViewState extends State<PlaylistView> {
                   child: ImageFiltered(
                     imageFilter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
                     child:
-                        LoadImageCached(imageUrl: imageUrl, fit: BoxFit.cover),
+                        LoadImageCached(imageUrl: imageUrl, fit: BoxFit.cover,
+                    ),
                   ),
                 ),
               ),
@@ -278,7 +343,8 @@ class _PlaylistViewState extends State<PlaylistView> {
       Color bgColor,
       String imageUrl,
       AppLocalizations l10n,
-      BoxConstraints constraints) {
+      BoxConstraints constraints,
+  ) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -317,7 +383,8 @@ class _PlaylistViewState extends State<PlaylistView> {
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.center,
                   child:
-                      _buildActions(state, fgColor, bgColor, isCentered: true),
+                      _buildActions(state, fgColor, bgColor, isCentered: true,
+                  ),
                 ),
 
                 const Spacer(flex: 2), // Bottom breathing room
@@ -330,7 +397,8 @@ class _PlaylistViewState extends State<PlaylistView> {
         Expanded(
           child: Container(
             margin: const EdgeInsets.fromLTRB(
-                20, 90, 40, 40), // Matches left panel gap
+                20, 90, 40, 40,
+            ), // Matches left panel gap
             decoration: BoxDecoration(
               color: Default_Theme.themeColor.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(24),
@@ -339,7 +407,8 @@ class _PlaylistViewState extends State<PlaylistView> {
                 BoxShadow(
                     color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 40,
-                    offset: const Offset(0, 15)),
+                    offset: const Offset(0, 15),
+                ),
               ],
             ),
             child: ClipRRect(
@@ -354,12 +423,15 @@ class _PlaylistViewState extends State<PlaylistView> {
                       child: Center(
                           child: SignBoardWidget(
                               message: l10n.playlistEmptyState,
-                              icon: MingCute.playlist_line)),
+                              icon: MingCute.playlist_line,
+                        ),
+                      ),
                     )
                   else
                     SliverPadding(
                       padding: const EdgeInsets.symmetric(
-                          vertical: 24, horizontal: 16),
+                          vertical: 24, horizontal: 16,
+                      ),
                       sliver: _buildTrackList(state),
                     ),
                   if (state.isLoadingMore || state.hasMore)
@@ -368,7 +440,9 @@ class _PlaylistViewState extends State<PlaylistView> {
                         padding: EdgeInsets.symmetric(vertical: 24),
                         child: Center(
                             child: CircularProgressIndicator(
-                                color: Default_Theme.accentColor2)),
+                                color: Default_Theme.accentColor2,
+                          ),
+                        ),
                       ),
                     ),
                 ],
@@ -388,7 +462,8 @@ class _PlaylistViewState extends State<PlaylistView> {
       Color bgColor,
       String imageUrl,
       AppLocalizations l10n,
-      BoxConstraints constraints) {
+      BoxConstraints constraints,
+  ) {
     return CustomScrollView(
       controller: _scrollController,
       physics: const BouncingScrollPhysics(),
@@ -411,7 +486,8 @@ class _PlaylistViewState extends State<PlaylistView> {
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.center,
                   child:
-                      _buildActions(state, fgColor, bgColor, isCentered: true),
+                      _buildActions(state, fgColor, bgColor, isCentered: true,
+                  ),
                 ),
               ],
             ),
@@ -423,7 +499,9 @@ class _PlaylistViewState extends State<PlaylistView> {
             child: Center(
                 child: SignBoardWidget(
                     message: l10n.playlistEmptyState,
-                    icon: MingCute.playlist_line)),
+                    icon: MingCute.playlist_line,
+              ),
+            ),
           )
         else
           SliverPadding(
@@ -436,7 +514,9 @@ class _PlaylistViewState extends State<PlaylistView> {
               padding: EdgeInsets.symmetric(vertical: 24),
               child: Center(
                   child: CircularProgressIndicator(
-                      color: Default_Theme.accentColor2)),
+                      color: Default_Theme.accentColor2,
+                ),
+              ),
             ),
           ),
       ],
@@ -453,15 +533,18 @@ class _PlaylistViewState extends State<PlaylistView> {
             BoxShadow(
                 color: dominantColor.withValues(alpha: 0.35),
                 blurRadius: 60,
-                offset: const Offset(0, 20)),
+                offset: const Offset(0, 20),
+            ),
             BoxShadow(
                 color: Colors.black.withValues(alpha: 0.4),
                 blurRadius: 20,
-                offset: const Offset(0, 10)),
+                offset: const Offset(0, 10),
+            ),
             BoxShadow(
                 color: Colors.white.withValues(alpha: 0.1),
                 blurRadius: 1,
-                offset: const Offset(0, -1)),
+                offset: const Offset(0, -1),
+            ),
           ],
         ),
         child: ClipRRect(
@@ -471,7 +554,8 @@ class _PlaylistViewState extends State<PlaylistView> {
                   widthFactor: 0.3,
                   heightFactor: 0.3,
                   child: Icon(MingCute.music_2_line,
-                      color: Colors.white.withValues(alpha: 0.3)),
+                      color: Colors.white.withValues(alpha: 0.3),
+                  ),
                 )
               : Stack(
                   fit: StackFit.expand,
@@ -479,7 +563,8 @@ class _PlaylistViewState extends State<PlaylistView> {
                     ImageFiltered(
                       imageFilter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
                       child: LoadImageCached(
-                          imageUrl: imageUrl, fit: BoxFit.cover),
+                          imageUrl: imageUrl, fit: BoxFit.cover,
+                      ),
                     ),
                     Container(color: Colors.black.withValues(alpha: 0.3)),
                     LoadImageCached(imageUrl: imageUrl, fit: BoxFit.contain),
@@ -491,10 +576,12 @@ class _PlaylistViewState extends State<PlaylistView> {
   }
 
   Widget _buildInfo(CurrentPlaylistState state, AppLocalizations l10n,
-      {required bool isCentered}) {
+      {required bool isCentered,
+  }) {
     final creatorText = l10n.playlistByCreator(
         state.playlist.artists?.map((a) => a.name).join(', ') ??
-            l10n.playlistYou);
+            l10n.playlistYou,
+    );
 
     return Column(
       crossAxisAlignment:
@@ -538,7 +625,8 @@ class _PlaylistViewState extends State<PlaylistView> {
   }
 
   Widget _buildActions(CurrentPlaylistState state, Color fgColor, Color bgColor,
-      {required bool isCentered}) {
+      {required bool isCentered,
+  }) {
     final isEmpty = state.playlist.tracks.isEmpty;
     final l10n = AppLocalizations.of(context)!;
 
@@ -571,7 +659,8 @@ class _PlaylistViewState extends State<PlaylistView> {
             final downloaded = ctx.watch<DownloaderCubit>().state.downloaded;
             final allDownloaded = !isEmpty &&
                 state.playlist.tracks
-                    .every((s) => downloaded.any((d) => d.id == s.id));
+                    .every((s) => downloaded.any((d) => d.id == s.id),
+                  );
 
             if (allDownloaded) {
               return Tooltip(
@@ -582,17 +671,21 @@ class _PlaylistViewState extends State<PlaylistView> {
                   decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color:
-                          Default_Theme.accentColor2.withValues(alpha: 0.15)),
+                          Default_Theme.accentColor2.withValues(alpha: 0.15),
+                    ),
                   child: const Icon(Icons.offline_pin_rounded,
-                      color: Default_Theme.accentColor2, size: 20),
+                      color: Default_Theme.accentColor2, size: 20,
+                    ),
                 ),
               );
             }
             return _buildActionIcon(
                 MingCute.download_2_fill,
                 l10n.buttonDownload,
-                isEmpty ? null : () => _handleDownload(context, state, l10n));
-          }),
+                isEmpty ? null : () => _handleDownload(context, state, l10n),
+              );
+            },
+          ),
 
           const SizedBox(width: 12),
 
@@ -618,9 +711,11 @@ class _PlaylistViewState extends State<PlaylistView> {
                           boxShadow: [
                             BoxShadow(
                                 color: Default_Theme.accentColor2
-                                    .withValues(alpha: 0.3),
+                                    .withValues(alpha: 0.3,
+                          ),
                                 blurRadius: 20,
-                                offset: const Offset(0, 8)),
+                                offset: const Offset(0, 8),
+                        ),
                           ],
                         ),
                         child: PlayPauseButton(
@@ -640,25 +735,31 @@ class _PlaylistViewState extends State<PlaylistView> {
                               .pause(),
                         ),
                       );
-                    });
-              }),
+                    },
+              );
+            },
+          ),
 
           const SizedBox(width: 12),
           _buildActionIcon(
               MingCute.information_line,
               l10n.buttonInfo,
               () => showPlaylistInfo(context, state,
-                  fgColor: fgColor, bgColor: bgColor)),
+                  fgColor: fgColor, bgColor: bgColor,
+            ),
+          ),
 
           const SizedBox(width: 12),
           _buildActionIcon(MingCute.more_2_line, l10n.buttonMore,
-              () => showPlaylistOptsInrSheet(context, state.playlist)),
+              () => showPlaylistOptsInrSheet(context, state.playlist),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildActionIcon(IconData icon, String tooltip, VoidCallback? onTap, {Color? iconColor}) {
+  Widget _buildActionIcon(IconData icon, String tooltip, VoidCallback? onTap, {Color? iconColor,
+  }) {
     return Tooltip(
       message: tooltip,
       child: Material(
@@ -677,7 +778,8 @@ class _PlaylistViewState extends State<PlaylistView> {
               border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
             child: Icon(icon,
-                color: iconColor ?? Colors.white.withValues(alpha: 0.85), size: 20),
+                color: iconColor ?? Colors.white.withValues(alpha: 0.85), size: 20,
+            ),
           ),
         ),
       ),
@@ -718,11 +820,13 @@ class _PlaylistViewState extends State<PlaylistView> {
     final l10n = AppLocalizations.of(context)!;
     cubit.removeTrack(track);
     SnackbarService.showMessage(
-        l10n.playlistRemovedTrack(track.title, cubit.state.playlist.title));
+        l10n.playlistRemovedTrack(track.title, cubit.state.playlist.title),
+    );
   }
 
   Future<void> _handleDownload(BuildContext context, CurrentPlaylistState state,
-      AppLocalizations l10n) async {
+      AppLocalizations l10n,
+  ) async {
     final items =
         (await context.read<CurrentPlaylistCubit>().ensureAllTracksLoaded())
             .tracks;
@@ -733,27 +837,34 @@ class _PlaylistViewState extends State<PlaylistView> {
       builder: (context) => AlertDialog(
         backgroundColor: Default_Theme.themeColor,
         title: Text(l10n.dialogDownloadPlaylist,
-            style: const TextStyle(color: Colors.white)),
+            style: const TextStyle(color: Colors.white),
+        ),
         content: Text(
             l10n.dialogDownloadPlaylistMessage(
-                items.length, state.playlist.title),
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
+                items.length, state.playlist.title,
+          ),
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+        ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
               child: Text(l10n.buttonCancel,
                   style:
-                      TextStyle(color: Colors.white.withValues(alpha: 0.7)))),
+                      TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+            ),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Default_Theme.accentColor2,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+              ),
             ),
             onPressed: () => Navigator.pop(context, true),
             child: Text(l10n.dialogDownloadAll,
-                style: const TextStyle(fontWeight: FontWeight.bold)),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -766,7 +877,8 @@ class _PlaylistViewState extends State<PlaylistView> {
   }
 
   Future<void> _showAddToDownloadProgress(
-      BuildContext context, List<Track> items, AppLocalizations l10n) async {
+      BuildContext context, List<Track> items, AppLocalizations l10n,
+  ) async {
     await showDialog(
       context: context,
       barrierDismissible: false,
@@ -781,7 +893,8 @@ class _PlaylistViewState extends State<PlaylistView> {
             try {
               context
                   .read<DownloaderCubit>()
-                  .downloadSong(song, showSnackbar: false);
+                  .downloadSong(song, showSnackbar: false,
+              );
             } catch (_) {}
             await Future.delayed(const Duration(milliseconds: 100));
             setStateRef(() => completed++);
@@ -805,11 +918,15 @@ class _PlaylistViewState extends State<PlaylistView> {
                         style: const TextStyle(
                             color: Colors.white,
                             fontSize: 18,
-                            fontWeight: FontWeight.bold)),
+                            fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Text('$completed/${items.length} items',
                         style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.7))),
+                            color: Colors.white.withValues(alpha: 0.7),
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(4),
@@ -820,7 +937,8 @@ class _PlaylistViewState extends State<PlaylistView> {
                         minHeight: 6,
                         backgroundColor: Colors.white.withValues(alpha: 0.1),
                         valueColor: const AlwaysStoppedAnimation<Color>(
-                            Default_Theme.accentColor2),
+                            Default_Theme.accentColor2,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -829,7 +947,9 @@ class _PlaylistViewState extends State<PlaylistView> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.5),
-                            fontSize: 12)),
+                            fontSize: 12,
+                      ),
+                    ),
                   ],
                 ),
               ),

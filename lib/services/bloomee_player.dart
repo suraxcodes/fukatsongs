@@ -1,4 +1,6 @@
 import 'dart:developer';
+
+import 'package:fukatsongs/services/playlist_sort/playlist_play_tracker.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show exit;
@@ -57,6 +59,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   late QueueManager _queueManager;
   late RelatedSongsManager _relatedSongsManager;
   late RecentlyPlayedTracker _recentlyPlayedTracker;
+  late PlaylistPlayTracker _playlistPlayTracker;
   late MediaResolverService _resolver;
   late SmartTrackReplacementService _smartTrackReplacementService;
 
@@ -88,7 +91,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   BehaviorSubject<bool> fromPlaylist = BehaviorSubject<bool>.seeded(false);
   BehaviorSubject<bool> isOffline = BehaviorSubject<bool>.seeded(false);
   BehaviorSubject<LoopMode> loopMode =
-      BehaviorSubject<LoopMode>.seeded(LoopMode.off);
+      BehaviorSubject<LoopMode>.seeded(LoopMode.off,
+  );
   BehaviorSubject<bool> isResolving = BehaviorSubject<bool>.seeded(false);
 
   bool _isDisposed = false;
@@ -126,7 +130,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   //
   // All user-visible volume is STREAM_MUSIC. media_kit engine stays at 1.0.
   static const MethodChannel _voiceChannel =
-      MethodChannel('com.fukatsongs.app/voice_service');
+      MethodChannel('com.fukatsongs.app/voice_service',
+  );
   double _cachedSystemVolume = 1.0;
   Timer? _systemVolumePollTimer;
 
@@ -144,7 +149,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   Future<void> _setSystemVolumeSilent(double v) async {
     try {
       await _voiceChannel.invokeMethod(
-          'duckMediaVolume', {'fraction': v.clamp(0.0, 1.0)});
+          'duckMediaVolume', {'fraction': v.clamp(0.0, 1.0),
+      });
     } catch (_) {}
   }
 
@@ -152,11 +158,11 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     _systemVolumePollTimer?.cancel();
     _systemVolumePollTimer = Timer.periodic(
       const Duration(milliseconds: 500),
-      (_) async {
+      (_,
+    ) async {
         final v = await _readSystemVolume();
         _cachedSystemVolume = v;
-      },
-    );
+      });
   }
 
   Duration _savedPositionForRevive = Duration.zero;
@@ -217,10 +223,12 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       _audioNoisySub?.cancel();
 
       _audioInterruptionSub =
-          session.interruptionEventStream.listen(_handleInterruptionSync);
+          session.interruptionEventStream.listen(_handleInterruptionSync,
+      );
 
       _audioNoisySub = session.becomingNoisyEventStream
-          .listen((_) => _onHeadphonesUnplugged());
+          .listen((_) => _onHeadphonesUnplugged(),
+      );
     });
   }
 
@@ -284,7 +292,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     _activateAudioSession().then((granted) {
       if (granted && !_isDisposed && !_teardownStarted) engine.play();
     }).catchError((Object e) {
-      log('Resume after interruption failed: $e', name: 'BloomeeMusicPlayer');
+      log('Resume after interruption failed: $e', name: 'BloomeeMusicPlayer',
+          );
     });
   }
 
@@ -319,7 +328,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
       final cfStr = await dao.getSettingStr(SettingKeys.crossfadeDuration);
       engine.crossfadeDuration =
-          Duration(seconds: int.tryParse(cfStr ?? '0') ?? 0);
+          Duration(seconds: int.tryParse(cfStr ?? '0') ?? 0,
+      );
 
       final eqSource = await dao.getSettingStr(SettingKeys.eqSource);
       if (eqSource == EqSourceValues.device) {
@@ -354,7 +364,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     _relatedSongsManager = RelatedSongsManager(ServiceLocator.pluginService);
     _resolver = MediaResolverService.create(ServiceLocator.pluginService);
     _smartTrackReplacementService =
-        SmartTrackReplacementService.create(ServiceLocator.pluginService);
+        SmartTrackReplacementService.create(ServiceLocator.pluginService,
+    );
 
     _errorHandler.onSkipToNext = _internalSkipToNext;
     _errorHandler.onRetryCurrentTrack = _retryCurrentTrack;
@@ -366,13 +377,19 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       playbackState.add(playbackState.value.copyWith(
         processingState: AudioProcessingState.error,
         playing: false,
-      ));
+      ),
+      );
       await engine.stop();
       DiscordService.clearPresence();
     };
 
     _relatedSongsManager.onAddQueueItems =
         (items, {bool atLast = false}) => addQueueTracks(items, atLast: atLast);
+
+    _playlistPlayTracker = PlaylistPlayTracker(
+      engine,
+      isLoopOne: () => loopMode.value == LoopMode.one,
+    );
 
     _recentlyPlayedTracker = RecentlyPlayedTracker(
       engine,
@@ -412,7 +429,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
           engine.buffered,
           engine.speed,
         );
-      });
+      },
+      );
     });
 
     _completionSub = engine.completionStream.listen((_) => _onTrackCompleted());
@@ -442,7 +460,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
           if (active != null) session.failedIds.add(active.id);
         }
         _errorHandler.handleError(
-            _errorHandler.categorizeError(error), error, track);
+            _errorHandler.categorizeError(error), error, track,
+        );
       }
     });
 
@@ -464,7 +483,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   // ─── Playback State Broadcast ────────────────────────────────────────────
 
   void _broadcastPlaybackState(EngineState state, bool playing,
-      Duration position, Duration buffered, double speed) {
+      Duration position, Duration buffered, double speed,
+  ) {
     final processingState = switch (state) {
       EngineState.idle => AudioProcessingState.idle,
       EngineState.loading => AudioProcessingState.loading,
@@ -498,11 +518,13 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       shuffleMode: shuffleMode.value
           ? AudioServiceShuffleMode.all
           : AudioServiceShuffleMode.none,
-    ));
+    ),
+    );
 
     EasyThrottle.throttle('discord_rpc', const Duration(seconds: 1), () {
       DiscordService.updatePresence(
-          track: currentTrackInfo, isPlaying: playing);
+          track: currentTrackInfo, isPlaying: playing,
+      );
     });
   }
 
@@ -554,23 +576,27 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   @override
   Future<void> seek(Duration position) async {
     if (_isDisposed) return;
+    _playlistPlayTracker.seeked();
     await engine.seek(position);
   }
 
   Future<void> seekNSecForward(Duration n) async {
     if (_isDisposed) return;
     final dur = engine.duration;
+    _playlistPlayTracker.seeked();
     await engine.seek(engine.position + n > dur ? dur : engine.position + n);
   }
 
   Future<void> seekNSecBackward(Duration n) async {
     if (_isDisposed) return;
     final back = engine.position - n;
+    _playlistPlayTracker.seeked();
     await engine.seek(back < Duration.zero ? Duration.zero : back);
   }
 
   @override
   Future<void> stop() async {
+    _playlistPlayTracker.end();
     _sourceSession = null;
     _errorHandler.resetCircuitBreaker();
     _shouldResumeAfterInterruption = false;
@@ -583,7 +609,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     playbackState.add(playbackState.value.copyWith(
       processingState: AudioProcessingState.idle,
       playing: false,
-    ));
+    ),
+    );
     await engine.stop();
     await _deactivateAudioSession();
     DiscordService.clearPresence();
@@ -598,6 +625,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     if (_isDisposed) return;
     if (engine.state == EngineState.ready ||
         engine.state == EngineState.buffering) {
+      _playlistPlayTracker.seeked();
       await engine.seek(Duration.zero);
     } else if (engine.state == EngineState.completed) {
       final track = _queueManager.currentTrack;
@@ -638,9 +666,15 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     bool doPlay = true,
     Duration? initialPosition,
     bool preserveSourceSession = false,
+    bool attributeToPlaylist = true,
   }) {
     if (_isDisposed || _teardownStarted) return Future.value();
     _errorHandler.cancelPendingRetry();
+    _playlistPlayTracker.begin(
+      attributeToPlaylist ? _queueManager.playlistOriginFor(track.id) : null,
+      track.id,
+      preserveAttempt: preserveSourceSession,
+    );
     if (!preserveSourceSession || _sourceSession?.original.id != track.id) {
       _sourceSession = _PlaybackSourceSession(track);
     }
@@ -648,7 +682,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     final prev = _playCompleter;
     final completer = CancelableCompleter<void>(
       onCancel: () => log('Track load cancelled: ${track.title}',
-          name: 'BloomeeMusicPlayer'),
+          name: 'BloomeeMusicPlayer',
+      ),
     );
     _playCompleter = completer;
     prev?.operation.cancel();
@@ -678,7 +713,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
         final granted = await _activateAudioSession();
         if (!alive()) return;
         if (!granted) {
-          SnackbarService.showMessage('Audio focus denied. Cannot start playback.');
+          SnackbarService.showMessage('Audio focus denied. Cannot start playback.',
+          );
           return;
         }
       }
@@ -687,7 +723,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       if (!alive()) return;
       final allowFallback = enabled != false && !isLocalMediaId(track.id);
       debugPrint('[FallbackPlay] REQUEST title="${track.title}" '
-          'id=${track.id} enabled=$allowFallback autoPlay=$doPlay');
+          'id=${track.id} enabled=$allowFallback autoPlay=$doPlay',
+      );
       _errorHandler.registerAttempt(track.id);
       final canUsePreloaded = engine.isPreloaded &&
           _preloadedTrackId == track.id && session.failedIds.isEmpty;
@@ -707,7 +744,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
             session.searched = true;
             final matches = await _smartTrackReplacementService
                 .searchPlaybackCandidates(track,
-                    excludeTrackIds: session.failedIds, limit: 3)
+                    excludeTrackIds: session.failedIds, limit: 3,
+                )
                 .timeout(const Duration(seconds: 20));
             if (!alive()) return;
             session.pending.addAll(matches.map((c) => c.track));
@@ -721,7 +759,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
         if (!alive()) return;
         final current = candidate;
         session.active = current;
-        debugPrint('[FallbackPlay] TRY id=${current.id} title="${current.title}"');
+        debugPrint('[FallbackPlay] TRY id=${current.id} title="${current.title}"',
+        );
         _errorHandler.registerAttempt(track.id);
         var candidateOffline = false;
         try {
@@ -747,22 +786,27 @@ class BloomeeMusicPlayer extends BaseAudioHandler
             candidateOffline = resolved.$2.isOffline;
             isOffline.add(candidateOffline);
             result = await engine.openDirect(resolved.$2.uri,
-                httpHeaders: resolved.$2.headers, autoPlay: doPlay);
+                httpHeaders: resolved.$2.headers, autoPlay: doPlay,
+            );
             if (!alive()) return;
           }
           debugPrint('[FallbackPlay] RESULT id=${current.id} '
-              'result=${result.runtimeType} position=${engine.position}');
+              'result=${result.runtimeType} position=${engine.position}',
+          );
           if (result is EngineCanceled) return;
           if (result is EngineFailure) throw result.error;
           if (initialPosition != null && initialPosition > Duration.zero) {
+            _playlistPlayTracker.seeked();
             await engine.seek(initialPosition);
             if (!alive()) return;
           }
+          _playlistPlayTracker.openSucceeded();
           // Preserve original identity in queue, playlists and notification.
           _errorHandler.clearError();
           isResolving.add(false);
           if (current.id != track.id) {
-            SnackbarService.showMessage('Playing another source for ${track.title}.');
+            SnackbarService.showMessage('Playing another source for ${track.title}.',
+            );
           }
           _preResolveNextTrack();
           _checkRelatedSongs();
@@ -774,7 +818,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
               _isAutoResolvableError(error) && !candidateOffline;
           debugPrint('[FallbackPlay] FAILED id=${current.id} '
               'type=${error.runtimeType} category=${_errorHandler.categorizeError(error)} '
-              'allowSourceSwitch=$retryableFailure offline=$candidateOffline');
+              'allowSourceSwitch=$retryableFailure offline=$candidateOffline',
+          );
           if (!retryableFailure) break;
           session.failedIds.add(current.id);
           candidate = null;
@@ -782,15 +827,18 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       }
       if (!alive()) return;
       _errorHandler.handleError(_errorHandler.categorizeError(lastError),
-          lastError.toString(), track, lastError);
+          lastError.toString(), track, lastError,
+      );
     } catch (error, stack) {
       if (!alive()) return;
       // Search timeouts should not permanently consume the one search pass.
       if (error is TimeoutException) session.searched = false;
       log('Play failed: ${track.title}: $error',
-          name: 'BloomeeMusicPlayer', stackTrace: stack);
+          name: 'BloomeeMusicPlayer', stackTrace: stack,
+      );
       _errorHandler.handleError(_errorHandler.categorizeError(error),
-          error.toString(), track, error);
+          error.toString(), track, error,
+      );
     } finally {
       if (identical(_openingToken, token)) _openingToken = null;
       if (alive()) isResolving.add(false);
@@ -833,7 +881,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
         return;
       }
       final ok =
-          await engine.preloadNext(resolved.uri, httpHeaders: resolved.headers);
+          await engine.preloadNext(resolved.uri, httpHeaders: resolved.headers,
+          );
       if (!_isDisposed && ok) {
         _preloadedTrackId = expectedId;
         _preloadedTrackOffline = resolved.isOffline;
@@ -847,6 +896,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
   // ─── Completion / Auto-Next ──────────────────────────────────────────────
 
   void _onTrackCompleted() {
+    _playlistPlayTracker.completed();
     if (_isDisposed || _teardownStarted || loopMode.value == LoopMode.one || _isAdvancing) return;
     _isAdvancing = true;
     Future.microtask(() async {
@@ -870,7 +920,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     _errorHandler.clearError();
     await _enqueuePlayTrack(track,
         doPlay: true, initialPosition: engine.position,
-        preserveSourceSession: true);
+        preserveSourceSession: true,
+    );
   }
 
   // ─── Related Songs ───────────────────────────────────────────────────────
@@ -950,14 +1001,16 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     playbackState.add(playbackState.value.copyWith(
       processingState: AudioProcessingState.idle,
       playing: false,
-    ));
+    ),
+    );
 
     final track = _queueManager.currentTrack;
     if (track != null) {
       Future.delayed(const Duration(milliseconds: 200), () async {
         if (!_isDisposed) {
           await _enqueuePlayTrack(track,
-              doPlay: false, initialPosition: _savedPositionForRevive);
+              doPlay: false, initialPosition: _savedPositionForRevive,
+          );
         }
       });
     }
@@ -988,11 +1041,14 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
   @override
   Future<void> playMediaItem(MediaItem mi,
-      {bool doPlay = true, Duration? initialPosition}) async {
+      {bool doPlay = true, Duration? initialPosition,
+  }) async {
     _errorHandler.resetCircuitBreaker();
     _shouldResumeAfterInterruption = false;
     await _enqueuePlayTrack(mediaItemToTrack(mi),
-        doPlay: doPlay, initialPosition: initialPosition);
+        doPlay: doPlay, initialPosition: initialPosition,
+      attributeToPlaylist: false,
+    );
   }
 
   @override
@@ -1031,7 +1087,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     _isAdvancing = true;
     try {
       final advanced =
-          _queueManager.advanceToPrevious(loopMode: loopMode.value);
+          _queueManager.advanceToPrevious(loopMode: loopMode.value,
+      );
       if (advanced) {
         final prev = _queueManager.currentTrack;
         if (prev != null) await _enqueuePlayTrack(prev, doPlay: true);
@@ -1064,6 +1121,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     int idx = 0,
     bool doPlay = false,
     bool shuffling = false,
+    int? sourcePlaylistId,
   }) async {
     _errorHandler.resetCircuitBreaker();
     _shouldResumeAfterInterruption = false;
@@ -1083,7 +1141,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
       if (sanitized.isEmpty) {
         SnackbarService.showMessage('This section has no playable tracks.',
-            duration: const Duration(seconds: 2));
+            duration: const Duration(seconds: 2),
+        );
         return;
       }
 
@@ -1094,7 +1153,9 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       }
 
       _queueManager.loadTracks(sanitized,
-          playlistName: playlist.title, idx: newIdx, shuffling: shuffling);
+          playlistName: playlist.title, idx: newIdx, shuffling: shuffling,
+        sourcePlaylistId: sourcePlaylistId,
+      );
       queueTitle.add(playlist.title);
 
       if (doPlay || shuffling) {
@@ -1115,16 +1176,20 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
   @override
   Future<void> addQueueItems(List<MediaItem> items,
-          {String queueName = 'Queue', bool atLast = false}) async =>
+          {String queueName = 'Queue', bool atLast = false,
+  }) async =>
       _queueManager.addTracks(items.map(mediaItemToTrack).toList(),
-          atLast: atLast);
+          atLast: atLast,
+  );
 
   Future<void> addQueueTracks(List<Track> tracks,
-          {bool atLast = false}) async =>
+          {bool atLast = false,
+  }) async =>
       _queueManager.addTracks(tracks, atLast: atLast);
 
   Future<void> updateQueueTracks(List<Track> tracks,
-      {bool doPlay = false, int startIndex = 0}) async {
+      {bool doPlay = false, int startIndex = 0,
+  }) async {
     _queueManager.updateQueue(tracks, startIndex: startIndex);
     if (doPlay) {
       final t = _queueManager.currentTrack;
@@ -1156,7 +1221,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
 
   @override
   Future<void> updateQueue(List<MediaItem> newQueue,
-      {bool doPlay = false}) async {
+      {bool doPlay = false,
+  }) async {
     _queueManager.updateQueue(newQueue.map(mediaItemToTrack).toList());
     if (doPlay) {
       final t = _queueManager.currentTrack;
@@ -1206,7 +1272,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
       playbackState.add(playbackState.value.copyWith(
         processingState: AudioProcessingState.idle,
         playing: false,
-      ));
+      ),
+      );
     } catch (_) {}
 
     // 3. Stop hands-free (Vosk recognizer + microphone FGS) if it was ON.
@@ -1232,7 +1299,8 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     //     cannot finish it while bound, so the FGS notification would linger.
     //  3. Killing the process removes FGS + notification + media session
     //     atomically, on every OEM, with no lifecycle races.
-    await Future<void>.delayed(const Duration(milliseconds: 400)); // let Isar flush
+    await Future<void>.delayed(const Duration(milliseconds: 400),
+    ); // let Isar flush
     exit(0);
   }
 
@@ -1267,6 +1335,7 @@ class BloomeeMusicPlayer extends BaseAudioHandler
     _queueManager.dispose();
     _relatedSongsManager.dispose();
     await _recentlyPlayedTracker.dispose();
+    _playlistPlayTracker.dispose();
 
     DiscordService.clearPresence();
     try {

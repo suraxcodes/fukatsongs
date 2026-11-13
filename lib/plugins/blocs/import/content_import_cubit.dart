@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:developer';
+
+import 'package:fukatsongs/services/playlist_sort/playlist_sort_store.dart';
 import 'dart:convert';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:dio/dio.dart';
@@ -60,10 +62,12 @@ class ContentImportCubit extends Cubit<ContentImportState> {
         _paginationFetcher = paginationFetcher ??
             PlaylistPaginationFetcher(
                 spotify: spotifyService ??
-                    SpotifyApiService(clientId: '<YOUR_SPOTIFY_CLIENT_ID>')),
+                    SpotifyApiService(clientId: '<YOUR_SPOTIFY_CLIENT_ID>'),
+           ),
         _playlistSaveService = playlistSaveService ??
             PlaylistSaveService(
-                playlistDao: playlistDao ?? _defaultPlaylistDao()),
+                playlistDao: playlistDao ?? _defaultPlaylistDao(),
+           ),
         super(const ContentImportState());
 
   static PlaylistDAO _defaultPlaylistDao() {
@@ -80,7 +84,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
       pluginId: pluginId,
       url: url,
       clearError: true,
-    ));
+    ),
+    );
 
     // Force direct import for youtube and spotify because the WASM plugins are currently failing
     if (url.contains('youtube.com') || url.contains('youtu.be')) {
@@ -107,7 +112,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
         }
       } catch (e) {
         log('Plugin check failed: $e, falling back to direct check',
-            name: 'ContentImportCubit');
+            name: 'ContentImportCubit',
+        );
       }
     }
 
@@ -117,7 +123,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
       emit(state.copyWith(
         phase: ImportPhase.error,
         error: 'This URL cannot be handled by the selected importer.',
-      ));
+      ),
+      );
     }
   }
 
@@ -140,25 +147,29 @@ class ContentImportCubit extends Cubit<ContentImportState> {
         emit(state.copyWith(
           collectionInfo: response.field0,
           phase: ImportPhase.fetchingTracks,
-        ));
+        ),
+        );
         await _fetchTracks(pluginId, url);
       } else {
         emit(state.copyWith(
           phase: ImportPhase.error,
           error: 'Unexpected response when fetching collection info.',
-        ));
+        ),
+        );
       }
     } on TimeoutException {
       emit(state.copyWith(
         phase: ImportPhase.error,
         error: 'Timed out fetching collection info.',
-      ));
+      ),
+      );
     } catch (e) {
       log('_fetchCollectionInfo failed: $e', name: 'ContentImportCubit');
       emit(state.copyWith(
         phase: ImportPhase.error,
         error: 'Failed to fetch collection info: $e',
-      ));
+      ),
+      );
     }
   }
 
@@ -180,33 +191,39 @@ class ContentImportCubit extends Cubit<ContentImportState> {
             .map((t) => ImportTrackEntry(sourceTrack: t))
             .toList();
         log('Fetched ${entries.length} tracks from provider for url=$url',
-            name: 'ContentImportCubit');
+            name: 'ContentImportCubit',
+        );
         if (state.collectionInfo != null) {
           log('Provider reports total ${state.collectionInfo!.trackCount} tracks',
-              name: 'ContentImportCubit');
+              name: 'ContentImportCubit',
+          );
         }
         emit(state.copyWith(
           tracks: List.unmodifiable(entries),
           phase: ImportPhase.resolving,
-        ));
+        ),
+        );
         await _resolveTracks();
       } else {
         emit(state.copyWith(
           phase: ImportPhase.error,
           error: 'Unexpected response when fetching tracks.',
-        ));
+        ),
+        );
       }
     } on TimeoutException {
       emit(state.copyWith(
         phase: ImportPhase.error,
         error: 'Timed out fetching tracks.',
-      ));
+      ),
+      );
     } catch (e) {
       log('_fetchTracks failed: $e', name: 'ContentImportCubit');
       emit(state.copyWith(
         phase: ImportPhase.error,
         error: 'Failed to fetch tracks: $e',
-      ));
+      ),
+      );
     }
   }
 
@@ -216,7 +233,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
     final resolverPluginIds = await _getContentResolverPluginIds();
     if (resolverPluginIds.isEmpty) {
       log('No content-resolver plugins loaded; using fallback tracks directly.',
-          name: 'ContentImportCubit');
+          name: 'ContentImportCubit',
+      );
       final fallbackTracks = state.tracks.map((entry) {
         final fallback = _toTrack(entry.sourceTrack);
         return entry.copyWith(
@@ -230,7 +248,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
         resolvedCount: fallbackTracks.length,
         failedCount: 0,
         phase: ImportPhase.review,
-      ));
+      ),
+      );
       return;
     }
 
@@ -245,7 +264,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
               tracks: tracks,
               index: index,
               pluginIds: resolverPluginIds,
-            )),
+            ),
+        ),
       );
     }
 
@@ -263,7 +283,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
         resolvedCount: counts.resolved,
         failedCount: counts.failed,
         phase: ImportPhase.review,
-      ));
+      ),
+      );
     }
   }
 
@@ -339,7 +360,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
         tracks: List.unmodifiable(tracks),
         resolvedCount: counts.resolved,
         failedCount: counts.failed,
-      ));
+      ),
+      );
     }
   }
 
@@ -355,7 +377,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
       phase: ImportPhase.review,
       resolvedCount: counts.resolved,
       failedCount: counts.failed,
-    ));
+    ),
+    );
   }
 
   // ── User candidate selection ─────────────────────────────────────────────
@@ -373,7 +396,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
       tracks: List.unmodifiable(tracks),
       resolvedCount: counts.resolved,
       failedCount: counts.failed,
-    ));
+    ),
+    );
   }
 
   // ── Step 5: Save to Library ──────────────────────────────────────────────
@@ -407,7 +431,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
       final tempDir = await getTemporaryDirectory();
       final safeName = playlistName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
       final progressFile =
-          File('${tempDir.path}/import_progress_${safeName}.json');
+          File('${tempDir.path}/import_progress_${safeName}.json',
+      );
 
       int resumeIndex = 0;
       if (await progressFile.exists()) {
@@ -416,7 +441,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
           final map = jsonDecode(content) as Map<String, dynamic>;
           if (map['nextIndex'] is int) resumeIndex = map['nextIndex'] as int;
           log('Resuming import from index $resumeIndex for "$playlistName"',
-              name: 'ContentImportCubit');
+              name: 'ContentImportCubit',
+          );
         } catch (_) {
           // ignore and start from 0
         }
@@ -434,7 +460,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
         savingImported: importedSoFar,
         savingSkipped: userSkipped,
         savingFailed: 0,
-      ));
+      ),
+      );
 
       // Delegate to PlaylistSaveService which handles batching and resume.
       final result = await _playlistSaveService.saveDomainTracks(
@@ -447,7 +474,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
             savingImported: imported,
             savingTotal: total,
             savingSkipped: userSkipped + (skipped as int),
-          ));
+          ),
+          );
         },
       );
 
@@ -460,20 +488,23 @@ class ContentImportCubit extends Cubit<ContentImportState> {
       } catch (_) {}
 
       log('Saved $importedSoFar tracks to "$playlistName"; duplicatesSkipped=$duplicatesSkipped, userSkipped=$userSkipped',
-          name: 'ContentImportCubit');
+          name: 'ContentImportCubit',
+      );
 
       emit(state.copyWith(
         phase: ImportPhase.done,
         resolvedCount: importedSoFar,
         savingImported: importedSoFar,
         savingSkipped: userSkipped + duplicatesSkipped,
-      ));
+      ),
+      );
     } catch (e) {
       log('saveToLibrary failed: $e', name: 'ContentImportCubit');
       emit(state.copyWith(
         phase: ImportPhase.error,
         error: 'Failed to save playlist: $e',
-      ));
+      ),
+      );
     }
   }
 
@@ -502,7 +533,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
         tracks.map((t) => ImportTrackEntry(sourceTrack: t)).toList(),
       ),
       clearError: true,
-    ));
+    ),
+    );
     await _resolveTracks();
   }
 
@@ -547,7 +579,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
             savingImported: 0,
             savingSkipped: 0,
             clearError: true,
-          ));
+          ),
+          );
           
           final result = await _playlistSaveService.saveTracks(
             dbPlaylistId,
@@ -562,7 +595,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
             phase: ImportPhase.done,
             savingImported: imported,
             resolvedCount: imported,
-          ));
+          ),
+          );
           
           yt.close();
           return;
@@ -577,7 +611,28 @@ class ContentImportCubit extends Cubit<ContentImportState> {
       // Determine progress file for this playlist to resume imports
       final tempDir = await getTemporaryDirectory();
       final progressFile = File(
-          '${tempDir.path}/youtube_import_progress_$playlistId.json');
+          '${tempDir.path}/youtube_import_progress_$playlistId.json',
+      );
+      var sortBatchToken = PlaylistSortStore.newBatchToken();
+      if (await progressFile.exists()) {
+        try {
+          final saved = jsonDecode(await progressFile.readAsString());
+          if (saved is Map && saved['sortBatchToken'] is String) {
+            sortBatchToken = saved['sortBatchToken'] as String;
+          }
+        } catch (_) {}
+      }
+      // Only sorting metadata; existing fetching/parsing/resume logic remains.
+      Map<String, dynamic> sortProgress = {};
+      if (await progressFile.exists()) {
+        try {
+          sortProgress = Map<String, dynamic>.from(
+            jsonDecode(await progressFile.readAsString()) as Map,
+          );
+        } catch (_) {}
+      }
+      sortProgress['sortBatchToken'] = sortBatchToken;
+      await progressFile.writeAsString(jsonEncode(sortProgress), flush: true);
       int resumeIndex = 0;
       if (await progressFile.exists()) {
         try {
@@ -585,7 +640,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
           final map = jsonDecode(content) as Map<String, dynamic>;
           if (map['nextIndex'] is int) resumeIndex = map['nextIndex'] as int;
           log('Resuming YouTube import from index $resumeIndex for playlist $playlistId',
-              name: 'ContentImportCubit');
+              name: 'ContentImportCubit',
+          );
         } catch (_) {
           // ignore malformed progress file
         }
@@ -734,7 +790,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
         savingImported: 0,
         savingSkipped: 0,
         clearError: true,
-      ));
+      ),
+      );
 
       Future<void> saveBatch(List<Map<String, dynamic>> videosBatch) async {
         if (videosBatch.isEmpty) return;
@@ -756,6 +813,7 @@ class ContentImportCubit extends Cubit<ContentImportState> {
           playlistName,
           tracks,
           batchSize: 500,
+          importBatchToken: sortBatchToken,
           onProgress: null, // We handle state updates manually below
         );
 
@@ -777,7 +835,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
           savingSkipped: duplicatesSkipped,
           savingTotal: uniqueVideos.length, // update total
           resolvedCount: importedSoFar,
-        ));
+        ),
+        );
       }
 
       // Save initial batch
@@ -823,11 +882,11 @@ class ContentImportCubit extends Cubit<ContentImportState> {
       }
 
       log('YouTube playlist $title imported $importedSoFar tracks, $duplicatesSkipped duplicates skipped',
-          name: 'ContentImportCubit');
+          name: 'ContentImportCubit',
+      );
 
       emit(state.copyWith(
-        phase: ImportPhase.done,
-      ));
+        phase: ImportPhase.done));
 
       // Cleanup progress file after successful import
       try {
@@ -838,7 +897,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
       emit(state.copyWith(
         phase: ImportPhase.error,
         error: 'YouTube Import Error: $e',
-      ));
+      ),
+      );
     }
   }
 
@@ -864,7 +924,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
           }
         } catch (apiError) {
           log('Spotify API failed, falling back to embed scraper: $apiError',
-              name: 'ContentImportCubit');
+              name: 'ContentImportCubit',
+          );
         }
       }
 
@@ -947,7 +1008,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
               isExplicit: track['explicit'] as bool? ?? false,
               url: uri,
               sourceId: trackId,
-            ));
+            ),
+            );
           } else {
             // New format (trackList)
             final name = item['title'] as String? ?? 'Unknown Title';
@@ -970,7 +1032,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
               isExplicit: isExplicit,
               url: uri,
               sourceId: trackId,
-            ));
+            ),
+            );
           }
         }
       }
@@ -996,7 +1059,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
           items.map((t) => ImportTrackEntry(sourceTrack: t)).toList(),
         ),
         clearError: true,
-      ));
+      ),
+      );
 
       await _resolveTracks();
     } catch (e) {
@@ -1004,7 +1068,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
       emit(state.copyWith(
         phase: ImportPhase.error,
         error: 'Spotify Import Error: $e',
-      ));
+      ),
+      );
     }
   }
 
@@ -1017,7 +1082,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
     return available
         .where((p) =>
             p.pluginType == PluginType.contentResolver &&
-            loadedIds.contains(p.manifest.id))
+            loadedIds.contains(p.manifest.id),
+        )
         .map((p) => p.manifest.id)
         .toList(growable: false);
   }
@@ -1051,7 +1117,8 @@ class ContentImportCubit extends Cubit<ContentImportState> {
     final artists = it.artists.map((a) {
       final aid = md5.convert(utf8.encode(a)).toString();
       return ArtistSummary(
-          id: aid, name: a, thumbnail: null, subtitle: null, url: null);
+          id: aid, name: a, thumbnail: null, subtitle: null, url: null,
+          );
     }).toList(growable: false);
 
     final artwork = Artwork(

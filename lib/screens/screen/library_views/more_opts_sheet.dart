@@ -34,7 +34,8 @@ void showPlaylistOptsInrSheet(BuildContext context, Playlist playlist) {
         if (!context.mounted || !sheetContext.mounted) return;
         Navigator.pop(sheetContext);
         Navigator.push(context,
-            MaterialPageRoute(builder: (context) => const PlaylistEditView()));
+            MaterialPageRoute(builder: (context) => const PlaylistEditView()),
+        );
       },
     ),
   );
@@ -95,7 +96,9 @@ class _PlaylistOptionsSheet extends StatelessWidget {
                 color: Default_Theme.themeColor.withValues(alpha: 0.85),
                 border: Border(
                     top: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.08), width: 1)),
+                        color: Colors.white.withValues(alpha: 0.08), width: 1,
+                  ),
+                ),
               ),
               child: SafeArea(
                 child: Column(
@@ -114,7 +117,8 @@ class _PlaylistOptionsSheet extends StatelessWidget {
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 8),
+                          horizontal: 24, vertical: 8,
+                      ),
                       child: Text(
                         title,
                         style: TextStyle(
@@ -148,15 +152,18 @@ class _PlaylistOptionsSheet extends StatelessWidget {
                                           ctx.read<LibraryItemsCubit>();
                                       final playerCubit =
                                           ctx.read<BloomeePlayerCubit>();
-                                      final list = await libraryCubit
-                                          .getPlaylistTracks(title);
-                                      if (list != null && list.isNotEmpty) {
+                                      final saved = await libraryCubit
+                                          .getSavedPlaylistForPlayback(title);
+                                      if (saved != null &&
+                                          saved.$2.tracks.isNotEmpty) {
                                         playerCubit.bloomeePlayer.loadPlaylist(
-                                            Playlist(
-                                                tracks: list, title: title),
-                                            doPlay: true);
+                                          saved.$2,
+                                          sourcePlaylistId: saved.$1,
+                                            doPlay: true,
+                                        );
                                         SnackbarService.showMessage(
-                                            l10n.snackbarNowPlaying(title));
+                                            l10n.snackbarNowPlaying(title),
+                                        );
                                       }
                                     },
                                   ),
@@ -175,7 +182,9 @@ class _PlaylistOptionsSheet extends StatelessWidget {
                                             .addQueueTracks(list);
                                         SnackbarService.showMessage(
                                             l10n.snackbarPlaylistAddedToQueue(
-                                                title));
+                                                title,
+                                          ),
+                                        );
                                       }
                                     },
                                   ),
@@ -190,15 +199,18 @@ class _PlaylistOptionsSheet extends StatelessWidget {
                                       : l10n.playlistShare,
                                   onTap: () async {
                                     SnackbarService.showMessage(
-                                        l10n.snackbarPreparingShare(title));
+                                        l10n.snackbarPreparingShare(title),
+                                    );
                                     final tmpPath = await ImportExportService
-                                        .exportPlaylist(title);
+                                        .exportPlaylist(title,
+                                        );
                                     if (tmpPath != null) {
                                       await SharePlus.instance
                                           .share(ShareParams(
                                         files: [XFile(tmpPath)],
                                         text: title,
-                                      ));
+                                      ),
+                                      );
                                     }
                                   },
                                 ),
@@ -215,12 +227,15 @@ class _PlaylistOptionsSheet extends StatelessWidget {
                                             .toString();
                                       }
                                       SnackbarService.showMessage(
-                                          l10n.snackbarPreparingExport(title));
+                                          l10n.snackbarPreparingExport(title),
+                                      );
                                       final tmpPath = await ImportExportService
                                           .exportPlaylist(title,
-                                              filePath: path);
+                                              filePath: path,
+                                          );
                                       SnackbarService.showMessage(l10n
-                                          .snackbarExportedTo(tmpPath ?? ''));
+                                          .snackbarExportedTo(tmpPath ?? ''),
+                                      );
                                     },
                                   ),
                               ],
@@ -248,7 +263,8 @@ class _PlaylistOptionsSheet extends StatelessWidget {
                                       if (playlistId != null) {
                                         ctx
                                             .read<LibraryItemsCubit>()
-                                            .togglePin(playlistId!);
+                                            .togglePin(playlistId!,
+                                        );
                                       }
                                     },
                                   ),
@@ -298,8 +314,7 @@ class _OptionGroup extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: Column(
-            children: _buildChildrenWithDividers(),
-          ),
+            children: _buildChildrenWithDividers()),
         ),
       ),
     );
@@ -314,7 +329,8 @@ class _OptionGroup extends StatelessWidget {
           Divider(
             height: 1,
             color:
-                Colors.white.withValues(alpha: 0.04), // Ultra subtle separator
+                Colors.white.withValues(alpha: 0.04,
+            ), // Ultra subtle separator
             indent: 52, // Perfectly aligns with the start of the text
           ),
         );
@@ -362,8 +378,7 @@ class _BottomSheetTile extends StatelessWidget {
             Icon(
               icon,
               color: effectiveIconColor,
-              size: 20,
-            ),
+              size: 20),
             const SizedBox(width: 16),
             Expanded(
               child: Text(

@@ -169,16 +169,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
           body: Stack(
             fit: StackFit.expand,
             children: [
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Image.asset(
-                    'assets/images/home_background.png',
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                    excludeFromSemantics: true,
-                  ),
-                ),
-              ),
               RefreshIndicator(
                 onRefresh: () async {
                   final pluginId = _effectiveHomePluginId(
@@ -532,11 +522,8 @@ class CustomDiscoverBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return SliverAppBar(
       floating: true,
-      surfaceTintColor: Colors.transparent,
-      backgroundColor: Colors.transparent,
-      shadowColor: Colors.transparent,
-      elevation: 0,
-      scrolledUnderElevation: 0,
+      surfaceTintColor: Default_Theme.themeColor,
+      backgroundColor: Default_Theme.themeColor,
       title: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [

@@ -74,7 +74,8 @@ class LibraryItemsCubit extends Cubit<LibraryItemsState> {
 
   /// Convert DB rows to view-model items using only domain types.
   Future<List<PlaylistItemProperties>> _toItemProperties(
-      List<PlaylistDB> dbs) async {
+      List<PlaylistDB> dbs,
+  ) async {
     final items = <PlaylistItemProperties>[];
 
     for (final p in dbs) {
@@ -165,7 +166,8 @@ class LibraryItemsCubit extends Cubit<LibraryItemsState> {
 
   /// Add a [Track] to a named playlist.
   Future<void> addToPlaylist(Track track, String playlistName,
-      {bool showSnackbar = true}) async {
+      {bool showSnackbar = true,
+  }) async {
     if (playlistName == 'Null' || playlistName.isEmpty) return;
     try {
       await _playlistDao.addTrackToPlaylistByName(playlistName, track);
@@ -174,17 +176,20 @@ class LibraryItemsCubit extends Cubit<LibraryItemsState> {
       }
     } catch (e) {
       log('Failed to add "${track.title}" to "$playlistName": $e',
-          name: 'LibraryItemsCubit');
+          name: 'LibraryItemsCubit',
+      );
       if (showSnackbar) {
         SnackbarService.showMessage(
-            'Failed to add to playlist: ${e.toString().split('\n').first}');
+            'Failed to add to playlist: ${e.toString().split('\n').first}',
+        );
       }
     }
   }
 
   /// Remove a [Track] from a named playlist.
   Future<void> removeFromPlaylist(Track track, String playlistName,
-      {bool showSnackbar = true}) async {
+      {bool showSnackbar = true,
+  }) async {
     if (playlistName == 'Null' || playlistName.isEmpty) return;
     final playlist = await _playlistDao.getPlaylistByName(playlistName);
     if (playlist == null) return;
@@ -192,6 +197,19 @@ class LibraryItemsCubit extends Cubit<LibraryItemsState> {
     if (showSnackbar) {
       SnackbarService.showMessage('${track.title} removed from $playlistName');
     }
+  }
+
+  /// Resolve saved identity and sorted snapshot together for explicit playlist play.
+  Future<(int, Playlist)?> getSavedPlaylistForPlayback(String name) async {
+    final playlist = await _playlistDao.getPlaylistByName(name);
+    if (playlist == null) return null;
+    final snapshot = await _playlistDao.getOrderSnapshot(playlist.id);
+    final rows = await _playlistDao.getTracksByDbIds(snapshot.trackDbIds);
+    return (
+      playlist.id,
+      playlistDBToPlaylist(playlist)
+          .copyWith(tracks: rows.map(trackDBToTrack).toList()),
+    );
   }
 
   /// Get all tracks in a named playlist.
@@ -237,7 +255,8 @@ class LibraryItemsCubit extends Cubit<LibraryItemsState> {
   Future<void> saveRemoteArtist(
       {required ArtistSummary artist,
       required String sourceName,
-      bool showSnackbar = true}) async {
+      bool showSnackbar = true,
+  }) async {
     await _libraryDao.saveArtist(artist, sourceName: sourceName);
     if (showSnackbar) {
       SnackbarService.showMessage('Artist "${artist.name}" saved to library');
@@ -247,7 +266,8 @@ class LibraryItemsCubit extends Cubit<LibraryItemsState> {
   Future<void> saveRemoteAlbum(
       {required AlbumSummary album,
       required String sourceName,
-      bool showSnackbar = true}) async {
+      bool showSnackbar = true,
+  }) async {
     await _libraryDao.saveAlbum(album, sourceName: sourceName);
     if (showSnackbar) {
       SnackbarService.showMessage('Album "${album.title}" saved to library');
@@ -257,11 +277,13 @@ class LibraryItemsCubit extends Cubit<LibraryItemsState> {
   Future<void> saveRemotePlaylist(
       {required PlaylistSummary playlist,
       required String sourceName,
-      bool showSnackbar = true}) async {
+      bool showSnackbar = true,
+  }) async {
     await _libraryDao.saveRemotePlaylist(playlist, sourceName: sourceName);
     if (showSnackbar) {
       SnackbarService.showMessage(
-          'Playlist "${playlist.title}" saved to library');
+          'Playlist "${playlist.title}" saved to library',
+      );
     }
   }
 
