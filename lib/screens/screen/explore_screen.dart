@@ -166,276 +166,314 @@ class _ExploreScreenState extends State<ExploreScreen> {
           ),
         ],
         child: Scaffold(
-          body: RefreshIndicator(
-            onRefresh: () async {
-              final pluginId = _effectiveHomePluginId(
-                context.read<PluginBloc>().state.loadedContentResolvers,
-              );
-              _homeContentBloc.add(
-                GetHomeSections(pluginId: pluginId, bypassCache: true),
-              );
-            },
-            child: CustomScrollView(
-              shrinkWrap: true,
-              physics: const ClampingScrollPhysics(),
-              slivers: [
-                const CustomDiscoverBar(),
-                SliverList(
-                  delegate: SliverChildListDelegate(
-                    [
-                      const CaraouselWidget(),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 15.0),
-                        child: SizedBox(
-                          child: BlocBuilder<RecentlyCubit, RecentlyCubitState>(
-                            builder: (context, state) {
-                              if (state is RecentlyCubitInitial) {
-                                return const Center(
-                                  child: SizedBox(
-                                    height: 60,
-                                    width: 60,
-                                    child: CircularProgressIndicator(
-                                      color: Default_Theme.accentColor2,
-                                    ),
-                                  ),
-                                );
-                              }
-                              if (state.tracks.isNotEmpty) {
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            AppLocalizations.of(context)!.exploreRecently,
-                                            style: const TextStyle(
-                                              color: Default_Theme.primaryColor1,
-                                              fontSize: 22,
-                                              fontWeight: FontWeight.bold,
-                                              letterSpacing: -0.5,
-                                            ),
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Image.asset(
+                    'assets/images/home_background.png',
+                    fit: BoxFit.cover,
+                    alignment: Alignment.center,
+                    excludeFromSemantics: true,
+                  ),
+                ),
+              ),
+              RefreshIndicator(
+                onRefresh: () async {
+                  final pluginId = _effectiveHomePluginId(
+                    context.read<PluginBloc>().state.loadedContentResolvers,
+                  );
+                  _homeContentBloc.add(
+                    GetHomeSections(pluginId: pluginId, bypassCache: true),
+                  );
+                },
+                child: CustomScrollView(
+                  shrinkWrap: true,
+                  physics: const ClampingScrollPhysics(),
+                  slivers: [
+                    const CustomDiscoverBar(),
+                    SliverList(
+                      delegate: SliverChildListDelegate(
+                        [
+                          const CaraouselWidget(),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 15.0),
+                            child: SizedBox(
+                              child: BlocBuilder<RecentlyCubit,
+                                  RecentlyCubitState>(
+                                builder: (context, state) {
+                                  if (state is RecentlyCubitInitial) {
+                                    return const Center(
+                                      child: SizedBox(
+                                        height: 60,
+                                        width: 60,
+                                        child: CircularProgressIndicator(
+                                          color: Default_Theme.accentColor2,
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                  if (state.tracks.isNotEmpty) {
+                                    return Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 16.0),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Text(
+                                                AppLocalizations.of(context)!
+                                                    .exploreRecently,
+                                                style: const TextStyle(
+                                                  color: Default_Theme
+                                                      .primaryColor1,
+                                                  fontSize: 22,
+                                                  fontWeight: FontWeight.bold,
+                                                  letterSpacing: -0.5,
+                                                ),
+                                              ),
+                                              TextButton(
+                                                onPressed: () {
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (context) =>
+                                                          const HistoryView(),
+                                                    ),
+                                                  );
+                                                },
+                                                child: Text(
+                                                  'See All',
+                                                  style: TextStyle(
+                                                    color: Default_Theme
+                                                        .primaryColor2
+                                                        .withValues(alpha: 0.8),
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                          TextButton(
-                                            onPressed: () {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (context) => const HistoryView(),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        SizedBox(
+                                          height: 195,
+                                          child: ListView.builder(
+                                            scrollDirection: Axis.horizontal,
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12.0),
+                                            itemCount: state.tracks.length,
+                                            itemBuilder: (context, index) {
+                                              final track = state.tracks[index];
+                                              return Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 8.0),
+                                                child:
+                                                    RecentlyPlayedHorizontalCard(
+                                                  track: track,
+                                                  onTap: () {
+                                                    context
+                                                        .read<
+                                                            BloomeePlayerCubit>()
+                                                        .bloomeePlayer
+                                                        .loadPlaylist(
+                                                          Playlist(
+                                                            tracks:
+                                                                state.tracks,
+                                                            title:
+                                                                'Recently Played',
+                                                          ),
+                                                          idx: index,
+                                                          doPlay: true,
+                                                        );
+                                                  },
                                                 ),
                                               );
                                             },
-                                            child: Text(
-                                              'See All',
-                                              style: TextStyle(
-                                                color: Default_Theme.primaryColor2.withValues(alpha: 0.8),
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
                                           ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    SizedBox(
-                                      height: 195,
-                                      child: ListView.builder(
-                                        scrollDirection: Axis.horizontal,
-                                        padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                                        itemCount: state.tracks.length,
-                                        itemBuilder: (context, index) {
-                                          final track = state.tracks[index];
-                                          return Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                            child: RecentlyPlayedHorizontalCard(
-                                              track: track,
+                                        ),
+                                      ],
+                                    );
+                                  }
+                                  return const SizedBox();
+                                },
+                              ),
+                            ),
+                          ),
+                          BlocBuilder<SettingsCubit, SettingsState>(
+                            builder: (context, state) {
+                              if (state.lFMPicks) {
+                                return FutureBuilder(
+                                  future:
+                                      fetchLFMPicks(state.lFMPicks, context),
+                                  builder: (context, snapshot) {
+                                    if (snapshot.hasData &&
+                                        (snapshot.data?.isNotEmpty ?? false)) {
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets.only(top: 15.0),
+                                        child: TabSongListWidget(
+                                          list: snapshot.data!.map((e) {
+                                            return SongCardWidget(
+                                              song: e,
                                               onTap: () {
                                                 context
                                                     .read<BloomeePlayerCubit>()
                                                     .bloomeePlayer
                                                     .loadPlaylist(
                                                       Playlist(
-                                                        tracks: state.tracks,
-                                                        title: 'Recently Played',
+                                                        tracks: snapshot.data!,
+                                                        title: 'Last.Fm Picks',
                                                       ),
-                                                      idx: index,
+                                                      idx: snapshot.data!
+                                                          .indexOf(e),
                                                       doPlay: true,
                                                     );
                                               },
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  ],
+                                              onOptionsTap: () =>
+                                                  showMoreBottomSheet(
+                                                      context,
+                                                      showSinglePlay: true,
+                                                      e),
+                                            );
+                                          }).toList(),
+                                          category:
+                                              AppLocalizations.of(context)!
+                                                  .exploreLastFmPicks,
+                                          columnSize: 3,
+                                        ),
+                                      );
+                                    }
+                                    return const SizedBox.shrink();
+                                  },
                                 );
                               }
-                              return const SizedBox();
+                              return const SizedBox.shrink();
                             },
                           ),
-                        ),
-                      ),
-                      BlocBuilder<SettingsCubit, SettingsState>(
-                        builder: (context, state) {
-                          if (state.lFMPicks) {
-                            return FutureBuilder(
-                              future: fetchLFMPicks(state.lFMPicks, context),
-                              builder: (context, snapshot) {
-                                if (snapshot.hasData &&
-                                    (snapshot.data?.isNotEmpty ?? false)) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(top: 15.0),
-                                    child: TabSongListWidget(
-                                      list: snapshot.data!.map((e) {
-                                        return SongCardWidget(
-                                          song: e,
-                                          onTap: () {
-                                            context
-                                                .read<BloomeePlayerCubit>()
-                                                .bloomeePlayer
-                                                .loadPlaylist(
-                                                  Playlist(
-                                                    tracks: snapshot.data!,
-                                                    title: 'Last.Fm Picks',
-                                                  ),
-                                                  idx:
-                                                      snapshot.data!.indexOf(e),
-                                                  doPlay: true,
-                                                );
-                                          },
-                                          onOptionsTap: () =>
-                                              showMoreBottomSheet(
-                                                  context,
-                                                  showSinglePlay: true,
-                                                  e),
-                                        );
-                                      }).toList(),
-                                      category: AppLocalizations.of(context)!
-                                          .exploreLastFmPicks,
-                                      columnSize: 3,
-                                    ),
-                                  );
-                                }
-                                return const SizedBox.shrink();
-                              },
-                            );
-                          }
-                          return const SizedBox.shrink();
-                        },
-                      ),
-                      // Home sections from plugin
-                      BlocBuilder<ContentBloc, ContentState>(
-                        bloc: _homeContentBloc,
-                        builder: (context, state) {
-                          final loadedResolvers = context
-                              .read<PluginBloc>()
-                              .state
-                              .loadedContentResolvers;
-                          if (loadedResolvers.isEmpty) {
-                            return const SignBoardWidget(
-                              message:
-                                  'No content plugin loaded.\nLoad a Content Resolver in Plugin Manager.',
-                              icon: MingCute.plugin_2_line,
-                            );
-                          }
-
-                          final sections = state.homeSections ?? const [];
-                          final hasSections = sections.isNotEmpty;
-                          final activePluginId = state.activePluginId;
-                          if (activePluginId != null &&
-                              !context
+                          // Home sections from plugin
+                          BlocBuilder<ContentBloc, ContentState>(
+                            bloc: _homeContentBloc,
+                            builder: (context, state) {
+                              final loadedResolvers = context
                                   .read<PluginBloc>()
                                   .state
-                                  .loadedPluginIds
-                                  .contains(activePluginId) &&
-                              !hasSections) {
-                            return const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 16),
-                              child: SignBoardWidget(
-                                message:
-                                    'Refreshing Discover source...\nThe previous source is no longer available.',
-                                icon: MingCute.warning_line,
-                              ),
-                            );
-                          }
+                                  .loadedContentResolvers;
+                              if (loadedResolvers.isEmpty) {
+                                return const SignBoardWidget(
+                                  message:
+                                      'No content plugin loaded.\nLoad a Content Resolver in Plugin Manager.',
+                                  icon: MingCute.plugin_2_line,
+                                );
+                              }
 
-                          if (state.homeSectionsStatus ==
-                              DetailStatus.loading) {
-                            if (hasSections) {
-                              return _HomeSectionsList(
-                                sections: sections,
-                                contentBloc: _homeContentBloc,
-                                state: state,
-                              );
-                            }
+                              final sections = state.homeSections ?? const [];
+                              final hasSections = sections.isNotEmpty;
+                              final activePluginId = state.activePluginId;
+                              if (activePluginId != null &&
+                                  !context
+                                      .read<PluginBloc>()
+                                      .state
+                                      .loadedPluginIds
+                                      .contains(activePluginId) &&
+                                  !hasSections) {
+                                return const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 16),
+                                  child: SignBoardWidget(
+                                    message:
+                                        'Refreshing Discover source...\nThe previous source is no longer available.',
+                                    icon: MingCute.warning_line,
+                                  ),
+                                );
+                              }
 
-                            return BlocBuilder<ConnectivityCubit,
-                                ConnectivityState>(
-                              builder: (context, connState) {
-                                if (connState ==
-                                    ConnectivityState.disconnected) {
-                                  return const Padding(
-                                    padding: EdgeInsets.symmetric(vertical: 16),
-                                    child: SignBoardWidget(
-                                      message: 'No Internet Connection!',
-                                      icon: MingCute.wifi_off_line,
-                                    ),
+                              if (state.homeSectionsStatus ==
+                                  DetailStatus.loading) {
+                                if (hasSections) {
+                                  return _HomeSectionsList(
+                                    sections: sections,
+                                    contentBloc: _homeContentBloc,
+                                    state: state,
                                   );
                                 }
 
-                                return const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 40),
-                                  child: Center(
-                                    child: CircularProgressIndicator(
-                                      color: Default_Theme.accentColor2,
-                                    ),
+                                return BlocBuilder<ConnectivityCubit,
+                                    ConnectivityState>(
+                                  builder: (context, connState) {
+                                    if (connState ==
+                                        ConnectivityState.disconnected) {
+                                      return const Padding(
+                                        padding:
+                                            EdgeInsets.symmetric(vertical: 16),
+                                        child: SignBoardWidget(
+                                          message: 'No Internet Connection!',
+                                          icon: MingCute.wifi_off_line,
+                                        ),
+                                      );
+                                    }
+
+                                    return const Padding(
+                                      padding:
+                                          EdgeInsets.symmetric(vertical: 40),
+                                      child: Center(
+                                        child: CircularProgressIndicator(
+                                          color: Default_Theme.accentColor2,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                );
+                              }
+
+                              if (state.homeSectionsStatus ==
+                                  DetailStatus.error) {
+                                if (hasSections) {
+                                  return _HomeSectionsList(
+                                    sections: sections,
+                                    contentBloc: _homeContentBloc,
+                                    state: state,
+                                  );
+                                }
+
+                                return Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 16),
+                                  child: SignBoardWidget(
+                                    message: state.error ??
+                                        'Failed to load home sections.',
+                                    icon: MingCute.sweats_line,
                                   ),
                                 );
-                              },
-                            );
-                          }
+                              }
 
-                          if (state.homeSectionsStatus == DetailStatus.error) {
-                            if (hasSections) {
+                              if (!hasSections) {
+                                return const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  child: SizedBox.shrink(),
+                                );
+                              }
+
                               return _HomeSectionsList(
                                 sections: sections,
                                 contentBloc: _homeContentBloc,
                                 state: state,
                               );
-                            }
-
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              child: SignBoardWidget(
-                                message: state.error ??
-                                    'Failed to load home sections.',
-                                icon: MingCute.sweats_line,
-                              ),
-                            );
-                          }
-
-                          if (!hasSections) {
-                            return const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 8),
-                              child: SizedBox.shrink(),
-                            );
-                          }
-
-                          return _HomeSectionsList(
-                            sections: sections,
-                            contentBloc: _homeContentBloc,
-                            state: state,
-                          );
-                        },
+                            },
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           backgroundColor: Default_Theme.themeColor,
         ),
@@ -494,8 +532,11 @@ class CustomDiscoverBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return SliverAppBar(
       floating: true,
-      surfaceTintColor: Default_Theme.themeColor,
-      backgroundColor: Default_Theme.themeColor,
+      surfaceTintColor: Colors.transparent,
+      backgroundColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      elevation: 0,
+      scrolledUnderElevation: 0,
       title: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -680,7 +721,6 @@ class SiteIcon extends StatelessWidget {
   }
 }
 
-
 class VoiceCommandIcon extends StatelessWidget {
   const VoiceCommandIcon({super.key});
 
@@ -689,7 +729,7 @@ class VoiceCommandIcon extends StatelessWidget {
     return ValueListenableBuilder<bool>(
       valueListenable: ServiceLocator.voiceCommandService.isEnabled,
       builder: (context, isEnabled, child) {
-                return IconButton(
+        return IconButton(
           padding: const EdgeInsets.all(5),
           constraints: const BoxConstraints(),
           tooltip: isEnabled
@@ -697,7 +737,7 @@ class VoiceCommandIcon extends StatelessWidget {
               : 'Hands-Free Voice: OFF\nLong-press to see all commands',
           // Long-press = read-only help box. Never downloads, never toggles.
           onLongPress: () => showVoiceCommandsDialog(context),
-          onPressed: () async  {
+          onPressed: () async {
             final cubit = context.read<BloomeePlayerCubit>();
             if (!isEnabled) {
               final ready = await showVoiceModelDownloadDialog(context);
@@ -767,10 +807,12 @@ class RecentlyPlayedHorizontalCard extends StatelessWidget {
                         fit: BoxFit.cover,
                       )
                     : Container(
-                        color: Default_Theme.primaryColor2.withValues(alpha: 0.1),
+                        color:
+                            Default_Theme.primaryColor2.withValues(alpha: 0.1),
                         child: Icon(
                           MingCute.music_2_fill,
-                          color: Default_Theme.primaryColor1.withValues(alpha: 0.2),
+                          color: Default_Theme.primaryColor1
+                              .withValues(alpha: 0.2),
                           size: 40,
                         ),
                       ),
@@ -790,7 +832,9 @@ class RecentlyPlayedHorizontalCard extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(
-              track.artists.isNotEmpty ? track.artists.first.name : 'Unknown Artist',
+              track.artists.isNotEmpty
+                  ? track.artists.first.name
+                  : 'Unknown Artist',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(

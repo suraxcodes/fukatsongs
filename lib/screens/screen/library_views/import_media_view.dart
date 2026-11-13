@@ -142,16 +142,24 @@ class _ImportMediaFromPlatformsViewState
 
   // ─── Import Bloomee JSON/BLM files ────────────────────────────────────────
 
-  void _importBloomeeFile(BuildContext context) {
-    showDialog(
+  bool _isImportingFukatFile = false;
+
+  Future<void> _importBloomeeFile(BuildContext context) async {
+    if (_isImportingFukatFile) return;
+    _isImportingFukatFile = true;
+    Directory? temporaryDirectory;
+    final l10n = AppLocalizations.of(context)!;
+
+    try {
+      final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: Default_Theme.themeColor,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
         contentPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
         title: Text(
-          AppLocalizations.of(context)!.importNoteTitle,
+          l10n.importNoteTitle,
           style: Default_Theme.primaryTextStyle.merge(
             const TextStyle(
               color: Default_Theme.primaryColor1,
@@ -160,7 +168,7 @@ class _ImportMediaFromPlatformsViewState
           ),
         ),
         content: Text(
-          AppLocalizations.of(context)!.importNoteMessage,
+          l10n.importNoteMessage,
           style: TextStyle(
             color: Default_Theme.primaryColor2.withValues(alpha: 0.9),
             fontSize: 15,
@@ -170,12 +178,12 @@ class _ImportMediaFromPlatformsViewState
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
             child: Text(
-              AppLocalizations.of(context)!.buttonCancel,
+              l10n.buttonCancel,
               style: const TextStyle(
                 color: Default_Theme.primaryColor2,
                 fontWeight: FontWeight.w600,
@@ -183,29 +191,7 @@ class _ImportMediaFromPlatformsViewState
             ),
           ),
           FilledButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              FilePicker.platform.pickFiles().then((value) {
-                if (value != null && value.files[0].path != null) {
-                  final path = value.files[0].path!;
-                  if (path.endsWith('.blm') || path.endsWith('.json')) {
-                    SnackbarService.showMessage(
-                        AppLocalizations.of(context)!.snackbarImportingMedia);
-                    ImportExportService.importJSON(path).then((imported) {
-                      if (imported) {
-                        SnackbarService.showMessage(
-                            AppLocalizations.of(context)!
-                                .snackbarImportCompleted);
-                      }
-                    });
-                  } else {
-                    log('Invalid File Format', name: 'Import File');
-                    SnackbarService.showMessage(AppLocalizations.of(context)!
-                        .snackbarInvalidFileFormat);
-                  }
-                }
-              });
-            },
+            onPressed: () => Navigator.of(dialogContext).pop(true),
             style: FilledButton.styleFrom(
               backgroundColor: Default_Theme.accentColor2,
               foregroundColor: Colors.white,
@@ -215,13 +201,72 @@ class _ImportMediaFromPlatformsViewState
               elevation: 0,
             ),
             child: Text(
-              AppLocalizations.of(context)!.buttonOk,
+              l10n.buttonOk,
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
         ],
       ),
-    );
+      );
+      if (confirmed != true || !mounted || !context.mounted) return;
+
+      // Keep legacy .blm support. Validate the selected NAME rather than
+      // a provider/cache path whose extension may have changed.
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty ||
+          !mounted || !context.mounted) return;
+      final selected = result.files.single;
+      final name = selected.name.toLowerCase();
+      if (!name.endsWith('.json') && !name.endsWith('.blm')) {
+        SnackbarService.showMessage(l10n.snackbarInvalidFileFormat);
+        return;
+      }
+
+      var filePath = selected.path;
+      if (filePath == null || !await File(filePath).exists()) {
+        final bytes = selected.bytes;
+        if (bytes == null || bytes.isEmpty) {
+          SnackbarService.showMessage(
+              'Cannot read this file. Save it on your device and try again.');
+          return;
+        }
+        temporaryDirectory = await Directory.systemTemp.createTemp('fukat_import_');
+        final cachedFile = File('${temporaryDirectory.path}/playlist.json');
+        await cachedFile.writeAsBytes(bytes, flush: true);
+        filePath = cachedFile.path;
+      }
+      if (!mounted || !context.mounted) return;
+      SnackbarService.showMessage(l10n.snackbarImportingMedia);
+      final imported = await ImportExportService.importJSON(filePath);
+      if (!mounted || !context.mounted) return;
+      if (imported) {
+        SnackbarService.showMessage(l10n.snackbarImportCompleted);
+      } else {
+        SnackbarService.showMessage(
+            'Playlist import failed. The selected file could not be imported.');
+      }
+    } catch (error, stack) {
+      log('FukatMusic file import failed: $error',
+          name: 'Import File', stackTrace: stack);
+      if (mounted && context.mounted) {
+        SnackbarService.showMessage(
+            'Could not import this file. Please try again.');
+      }
+    } finally {
+      _isImportingFukatFile = false;
+      final temp = temporaryDirectory;
+      if (temp != null) {
+        try {
+          await temp.delete(recursive: true);
+        } catch (_) {
+          // Only the temporary copy is removed, never the selected file.
+        }
+      }
+    }
   }
 
   // ─── Import M3U playlist ──────────────────────────────────────────────────

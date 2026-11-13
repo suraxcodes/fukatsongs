@@ -139,6 +139,7 @@ flutter:
   assets:
     - assets/icons/fukat_logo.png
     - assets/icons/lazy_loading.png
+    - assets/images/home_background.png
     
   fonts:
     - family: Unageo
